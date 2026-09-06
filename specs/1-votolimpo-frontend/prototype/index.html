@@ -1,0 +1,2124 @@
+<!DOCTYPE html>
+<html lang="pt-BR" class="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Voto Limpo - Saiba quem você está votando</title>
+  <link rel="icon" type="image/png" href="https://s3.us-east-1.amazonaws.com/cdn.digital-ai.tech/prototypes/votolimpo/assets/favicon.png">
+  <link rel="apple-touch-icon" href="https://s3.us-east-1.amazonaws.com/cdn.digital-ai.tech/prototypes/votolimpo/assets/favicon.png">
+  <meta property="og:image" content="https://s3.us-east-1.amazonaws.com/cdn.digital-ai.tech/prototypes/votolimpo/assets/instagram.png">
+  <meta property="og:title" content="Voto Limpo - Saiba quem você está votando">
+  <meta property="og:description" content="Histórico completo de polêmicas e corrupção de políticos brasileiros. Com IA e score de veracidade.">
+  <meta property="og:type" content="website">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://d3js.org/d3.v7.min.js"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@500;600&display=swap" rel="stylesheet">
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          colors: {
+            brand: {
+              bg: '#0A0A0A',
+              card: '#1A1A2E',
+              cardHover: '#1E1E36',
+              accent: '#10B981',
+              accentDark: '#059669',
+              blue: '#3B82F6',
+              danger: '#EF4444',
+              warning: '#F59E0B',
+              orange: '#F97316',
+              textPrimary: '#F1F5F9',
+              textSecondary: '#94A3B8',
+              border: '#2D2D44',
+              borderLight: '#3D3D5C',
+            }
+          },
+          fontFamily: {
+            sans: ['Inter', 'sans-serif'],
+            mono: ['JetBrains Mono', 'monospace'],
+          }
+        }
+      }
+    }
+  </script>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; }
+    html { scroll-behavior: smooth; }
+    body { background: #0A0A0A; color: #F1F5F9; font-family: 'Inter', sans-serif; }
+
+    /* Scrollbar */
+    ::-webkit-scrollbar { width: 5px; height: 5px; }
+    ::-webkit-scrollbar-track { background: #0A0A0A; }
+    ::-webkit-scrollbar-thumb { background: #2D2D44; border-radius: 3px; }
+    ::-webkit-scrollbar-thumb:hover { background: #3D3D5C; }
+
+    /* Animations */
+    .fade-in { animation: fadeIn 0.25s ease-out; }
+    @keyframes fadeIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
+    .slide-up { animation: slideUp 0.3s ease-out; }
+    @keyframes slideUp { from { opacity: 0; transform: translateY(16px); } to { opacity: 1; transform: translateY(0); } }
+    .pulse-green { animation: pulseGreen 2s infinite; }
+    @keyframes pulseGreen { 0%,100% { opacity:1; } 50% { opacity:0.5; } }
+
+    /* Score ring */
+    .score-ring-wrap { position: relative; display: inline-flex; align-items: center; justify-content: center; }
+    .score-ring-svg { transform: rotate(-90deg); }
+    .score-ring-track { fill: none; stroke: #2D2D44; stroke-width: 5; }
+    .score-ring-fill { fill: none; stroke-width: 5; stroke-linecap: round; transition: stroke-dashoffset 1s ease; }
+
+    /* Badge chips */
+    .chip { display: inline-flex; align-items: center; gap: 4px; padding: 2px 8px; border-radius: 9999px; font-size: 11px; font-weight: 600; letter-spacing: 0.02em; }
+    .chip-green { background: rgba(16,185,129,0.15); color: #10B981; border: 1px solid rgba(16,185,129,0.25); }
+    .chip-blue { background: rgba(59,130,246,0.15); color: #3B82F6; border: 1px solid rgba(59,130,246,0.25); }
+    .chip-yellow { background: rgba(245,158,11,0.15); color: #F59E0B; border: 1px solid rgba(245,158,11,0.25); }
+    .chip-orange { background: rgba(249,115,22,0.15); color: #F97316; border: 1px solid rgba(249,115,22,0.25); }
+    .chip-red { background: rgba(239,68,68,0.15); color: #EF4444; border: 1px solid rgba(239,68,68,0.25); }
+    .chip-gray { background: rgba(148,163,184,0.1); color: #94A3B8; border: 1px solid rgba(148,163,184,0.2); }
+    .chip-gold { background: rgba(251,191,36,0.15); color: #FBB824; border: 1px solid rgba(251,191,36,0.25); }
+
+    /* Severity borders */
+    .sev-critico { border-left: 3px solid #EF4444; }
+    .sev-alto { border-left: 3px solid #F97316; }
+    .sev-medio { border-left: 3px solid #F59E0B; }
+    .sev-baixo { border-left: 3px solid #3B82F6; }
+
+    /* Nav active */
+    .nav-active { color: #10B981 !important; }
+    .nav-underline { border-bottom: 2px solid #10B981; }
+    .tab-active { color: #10B981 !important; border-bottom: 2px solid #10B981; }
+
+    /* Timeline */
+    .timeline-container { position: relative; }
+    .timeline-container::before {
+      content: '';
+      position: absolute;
+      left: 19px;
+      top: 0;
+      bottom: 0;
+      width: 2px;
+      background: linear-gradient(to bottom, #10B981, #2D2D44 80%);
+      border-radius: 1px;
+    }
+    .timeline-dot {
+      position: absolute;
+      left: -29px;
+      top: 6px;
+      width: 14px;
+      height: 14px;
+      border-radius: 50%;
+      border: 2px solid #0A0A0A;
+      box-shadow: 0 0 0 2px currentColor;
+    }
+    .milestone-dot {
+      position: absolute;
+      left: -36px;
+      top: 2px;
+      width: 28px;
+      height: 28px;
+      border-radius: 50%;
+      background: #1A1A2E;
+      border: 2px solid #FBB824;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 13px;
+      box-shadow: 0 0 12px rgba(251,184,36,0.3);
+    }
+
+    /* Cards */
+    .card { background: #1A1A2E; border: 1px solid #2D2D44; border-radius: 12px; }
+    .card:hover { border-color: #3D3D5C; }
+    .card-hover { transition: all 0.2s ease; cursor: pointer; }
+    .card-hover:hover { background: #1E1E36; transform: translateY(-1px); box-shadow: 0 8px 24px rgba(0,0,0,0.4); }
+
+    /* Input */
+    .input-base {
+      background: #1A1A2E;
+      border: 1px solid #2D2D44;
+      border-radius: 8px;
+      color: #F1F5F9;
+      outline: none;
+      transition: border-color 0.2s;
+    }
+    .input-base:focus { border-color: #10B981; box-shadow: 0 0 0 2px rgba(16,185,129,0.15); }
+    .input-base::placeholder { color: #94A3B8; }
+
+    /* Select */
+    select { appearance: none; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='%2394A3B8'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M19 9l-7 7-7-7'/%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: right 8px center; background-size: 14px; padding-right: 28px !important; }
+
+    /* Graph */
+    #graph-global-svg, #graph-mini-svg { width: 100%; overflow: visible; cursor: grab; }
+    #graph-global-svg:active, #graph-mini-svg:active { cursor: grabbing; }
+    .graph-node circle { transition: r 0.2s, opacity 0.2s; cursor: pointer; }
+    .graph-node:hover circle { opacity: 0.85; }
+    .graph-link { stroke: #2D2D44; stroke-opacity: 0.7; }
+    .graph-tooltip {
+      position: absolute;
+      background: #1A1A2E;
+      border: 1px solid #2D2D44;
+      border-radius: 8px;
+      padding: 8px 12px;
+      font-size: 12px;
+      pointer-events: none;
+      z-index: 100;
+      white-space: nowrap;
+      box-shadow: 0 4px 16px rgba(0,0,0,0.5);
+    }
+
+    /* Hero gradient */
+    .hero-gradient {
+      background: radial-gradient(ellipse 80% 60% at 50% -20%, rgba(16,185,129,0.1) 0%, transparent 70%);
+    }
+
+    /* Autocomplete */
+    #autocomplete-dropdown, #busca-autocomplete {
+      position: absolute;
+      top: calc(100% + 6px);
+      left: 0; right: 0;
+      background: #1A1A2E;
+      border: 1px solid #2D2D44;
+      border-radius: 12px;
+      overflow: hidden;
+      z-index: 50;
+      box-shadow: 0 16px 40px rgba(0,0,0,0.6);
+      max-height: 320px;
+      overflow-y: auto;
+    }
+    .autocomplete-item {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 10px 16px;
+      cursor: pointer;
+      transition: background 0.15s;
+      border-bottom: 1px solid rgba(45,45,68,0.5);
+    }
+    .autocomplete-item:last-child { border-bottom: none; }
+    .autocomplete-item:hover { background: #1E1E36; }
+
+    /* Horizontal scroll cards */
+    .scroll-x { display: flex; overflow-x: auto; gap: 12px; padding-bottom: 8px; scrollbar-width: thin; }
+    .scroll-x::-webkit-scrollbar { height: 4px; }
+    .scroll-x > * { flex-shrink: 0; }
+
+    /* Avatar initials */
+    .avatar { border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 14px; color: #F1F5F9; }
+
+    /* Related news expand */
+    .related-news { display: none; }
+    .related-news.open { display: block; }
+
+    /* Ranking medal */
+    .medal-gold { background: linear-gradient(135deg, #FFD700, #FFA500); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+    .medal-silver { background: linear-gradient(135deg, #C0C0C0, #A8A8A8); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+    .medal-bronze { background: linear-gradient(135deg, #CD7F32, #A0522D); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+
+    /* Score color helper */
+    .score-danger { color: #EF4444; }
+    .score-high { color: #F97316; }
+    .score-medium { color: #F59E0B; }
+    .score-low { color: #10B981; }
+
+    /* Page visibility */
+    .page { display: none; }
+    .page.active { display: block; }
+
+    /* Mobile bottom bar padding */
+    @media (max-width: 767px) { main { padding-bottom: 72px; } }
+
+    /* Graph sidebar */
+    #graph-sidebar {
+      position: absolute;
+      top: 0; right: 0;
+      width: 260px;
+      height: 100%;
+      background: rgba(26,26,46,0.95);
+      border-left: 1px solid #2D2D44;
+      border-radius: 0 12px 12px 0;
+      padding: 16px;
+      overflow-y: auto;
+      display: none;
+      backdrop-filter: blur(8px);
+    }
+    #graph-sidebar.open { display: block; }
+
+    /* Stat number animation */
+    .counting { transition: all 0.05s; }
+
+    /* Filter tag */
+    .filter-tag {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      background: rgba(16,185,129,0.1);
+      border: 1px solid rgba(16,185,129,0.3);
+      color: #10B981;
+      border-radius: 6px;
+      padding: 2px 8px;
+      font-size: 12px;
+      cursor: pointer;
+    }
+    .filter-tag:hover { background: rgba(16,185,129,0.2); }
+
+    /* Partido badge colors */
+    .partido-pt { background: rgba(255,50,50,0.15); color: #FF6B6B; border: 1px solid rgba(255,50,50,0.3); }
+    .partido-pl { background: rgba(59,130,246,0.15); color: #3B82F6; border: 1px solid rgba(59,130,246,0.3); }
+    .partido-mdb { background: rgba(245,158,11,0.15); color: #F59E0B; border: 1px solid rgba(245,158,11,0.3); }
+    .partido-pp { background: rgba(34,197,94,0.15); color: #22C55E; border: 1px solid rgba(34,197,94,0.3); }
+    .partido-psdb { background: rgba(59,130,246,0.15); color: #60A5FA; border: 1px solid rgba(59,130,246,0.3); }
+    .partido-psd { background: rgba(168,85,247,0.15); color: #A855F7; border: 1px solid rgba(168,85,247,0.3); }
+    .partido-uniao { background: rgba(6,182,212,0.15); color: #06B6D4; border: 1px solid rgba(6,182,212,0.3); }
+    .partido-default { background: rgba(148,163,184,0.1); color: #94A3B8; border: 1px solid rgba(148,163,184,0.2); }
+
+    /* Milestone card */
+    .milestone-card {
+      border: 1px solid rgba(251,184,36,0.4);
+      background: rgba(251,184,36,0.04);
+      border-radius: 10px;
+      position: relative;
+    }
+    .milestone-card::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      border-radius: 10px;
+      background: linear-gradient(135deg, rgba(251,184,36,0.06) 0%, transparent 60%);
+      pointer-events: none;
+    }
+
+    /* Veracidade bar */
+    .veracidade-bar { height: 4px; border-radius: 2px; background: #2D2D44; overflow: hidden; }
+    .veracidade-fill { height: 100%; border-radius: 2px; transition: width 0.6s ease; }
+
+    /* Tab buttons */
+    .tab-btn {
+      padding: 10px 16px;
+      font-size: 14px;
+      font-weight: 500;
+      color: #94A3B8;
+      border-bottom: 2px solid transparent;
+      cursor: pointer;
+      transition: all 0.2s;
+      white-space: nowrap;
+    }
+    .tab-btn:hover { color: #F1F5F9; }
+    .tab-btn.active { color: #10B981; border-bottom-color: #10B981; }
+
+    /* Table */
+    .data-table { width: 100%; border-collapse: collapse; }
+    .data-table th { text-align: left; padding: 8px 12px; font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; color: #94A3B8; border-bottom: 1px solid #2D2D44; }
+    .data-table td { padding: 10px 12px; font-size: 13px; border-bottom: 1px solid rgba(45,45,68,0.5); vertical-align: middle; }
+    .data-table tr:last-child td { border-bottom: none; }
+    .data-table tr:hover td { background: rgba(30,30,54,0.4); }
+    .data-table th.sortable { cursor: pointer; user-select: none; }
+    .data-table th.sortable:hover { color: #F1F5F9; }
+
+    /* Notification toast (readonly) */
+    .live-dot { width: 8px; height: 8px; background: #10B981; border-radius: 50%; animation: livePulse 1.5s infinite; }
+    @keyframes livePulse { 0%,100% { box-shadow: 0 0 0 0 rgba(16,185,129,0.4); } 50% { box-shadow: 0 0 0 6px transparent; } }
+
+    /* Progress bar */
+    .progress-wrap { background: #2D2D44; border-radius: 4px; overflow: hidden; }
+    .progress-bar { height: 6px; border-radius: 4px; background: linear-gradient(90deg, #10B981, #059669); transition: width 1s ease; }
+  </style>
+</head>
+<body>
+
+<!-- ========== HEADER ========== -->
+<header class="fixed top-0 left-0 right-0 z-50 bg-[#0A0A0A]/95 backdrop-blur-xl border-b border-[#2D2D44]">
+  <div class="max-w-7xl mx-auto px-4 h-14 flex items-center gap-4">
+    <!-- Logo -->
+    <a href="#" onclick="navigate('home')" class="flex items-center gap-2 shrink-0">
+      <img src="https://s3.us-east-1.amazonaws.com/cdn.digital-ai.tech/prototypes/votolimpo/assets/favicon.png" alt="Voto Limpo" class="w-7 h-7 object-contain">
+      <span class="text-base font-bold text-[#F1F5F9] hidden sm:block">Voto<span class="text-[#10B981]">Limpo</span></span>
+    </a>
+
+    <!-- Desktop search -->
+    <div class="hidden md:flex flex-1 max-w-sm relative" id="header-search-wrap">
+      <svg class="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[#94A3B8] pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
+      <input type="text" id="header-search-input" placeholder="Buscar político..." class="input-base w-full pl-9 pr-3 py-1.5 text-sm" autocomplete="off" oninput="headerAutocomplete(this.value)" onblur="setTimeout(()=>closeDropdown('header-ac'),200)">
+      <div id="header-ac" class="hidden" style="position:absolute;top:calc(100% + 4px);left:0;right:0;background:#1A1A2E;border:1px solid #2D2D44;border-radius:10px;overflow:hidden;z-index:200;box-shadow:0 16px 40px rgba(0,0,0,0.6);max-height:280px;overflow-y:auto;"></div>
+    </div>
+
+    <!-- Nav desktop -->
+    <nav class="hidden md:flex items-center gap-1 ml-auto text-sm">
+      <button onclick="navigate('home')" id="nav-home" class="px-3 py-1.5 rounded-lg font-medium text-[#94A3B8] hover:text-[#F1F5F9] hover:bg-[#1A1A2E] transition nav-btn">Home</button>
+      <button onclick="navigate('busca')" id="nav-busca" class="px-3 py-1.5 rounded-lg font-medium text-[#94A3B8] hover:text-[#F1F5F9] hover:bg-[#1A1A2E] transition nav-btn">Busca</button>
+      <button onclick="navigate('grafo')" id="nav-grafo" class="px-3 py-1.5 rounded-lg font-medium text-[#94A3B8] hover:text-[#F1F5F9] hover:bg-[#1A1A2E] transition nav-btn">Grafo</button>
+      <button onclick="navigate('ranking')" id="nav-ranking" class="px-3 py-1.5 rounded-lg font-medium text-[#94A3B8] hover:text-[#F1F5F9] hover:bg-[#1A1A2E] transition nav-btn">Ranking</button>
+    </nav>
+
+    <!-- Live badge -->
+    <div class="hidden lg:flex items-center gap-2 bg-[#1A1A2E] border border-[#2D2D44] rounded-full px-3 py-1">
+      <div class="live-dot"></div>
+      <span class="font-mono text-[#10B981] text-xs font-medium">5.847</span>
+      <span class="text-[#94A3B8] text-xs">políticos</span>
+    </div>
+
+    <!-- Mobile search icon -->
+    <button class="md:hidden ml-auto p-2 text-[#94A3B8] hover:text-[#F1F5F9]" onclick="navigate('busca')">
+      <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
+    </button>
+  </div>
+</header>
+
+<!-- ========== MOBILE BOTTOM NAV ========== -->
+<nav class="md:hidden fixed bottom-0 left-0 right-0 z-50 bg-[#0A0A0A]/95 backdrop-blur-xl border-t border-[#2D2D44]">
+  <div class="flex">
+    <button onclick="navigate('home')" id="mnav-home" class="flex-1 flex flex-col items-center gap-0.5 py-2.5 text-[#10B981] mobile-nav-btn">
+      <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-4 0h4"/></svg>
+      <span class="text-[10px] font-medium">Home</span>
+    </button>
+    <button onclick="navigate('busca')" id="mnav-busca" class="flex-1 flex flex-col items-center gap-0.5 py-2.5 text-[#94A3B8] mobile-nav-btn">
+      <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
+      <span class="text-[10px] font-medium">Busca</span>
+    </button>
+    <button onclick="navigate('grafo')" id="mnav-grafo" class="flex-1 flex flex-col items-center gap-0.5 py-2.5 text-[#94A3B8] mobile-nav-btn">
+      <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1"/></svg>
+      <span class="text-[10px] font-medium">Grafo</span>
+    </button>
+    <button onclick="navigate('ranking')" id="mnav-ranking" class="flex-1 flex flex-col items-center gap-0.5 py-2.5 text-[#94A3B8] mobile-nav-btn">
+      <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/></svg>
+      <span class="text-[10px] font-medium">Ranking</span>
+    </button>
+  </div>
+</nav>
+
+<main class="pt-14">
+
+<!-- ====================================================================== -->
+<!-- PAGE: HOME -->
+<!-- ====================================================================== -->
+<div id="page-home" class="page active fade-in">
+
+  <!-- Hero -->
+  <section class="hero-gradient relative overflow-hidden">
+    <div class="absolute inset-0" style="background:radial-gradient(circle 600px at 50% -100px, rgba(16,185,129,0.12) 0%, transparent 70%);"></div>
+    <div class="max-w-4xl mx-auto px-4 pt-10 pb-10 text-center relative z-10">
+      <img src="https://s3.us-east-1.amazonaws.com/cdn.digital-ai.tech/prototypes/votolimpo/assets/logo-site.png" alt="Voto Limpo" class="h-14 md:h-20 mx-auto mb-5 object-contain">
+
+      <div class="inline-flex items-center gap-2 bg-[#10B981]/10 border border-[#10B981]/25 rounded-full px-4 py-1.5 text-xs md:text-sm text-[#10B981] mb-5">
+        <div class="live-dot" style="width:6px;height:6px;"></div>
+        Eleições 2026 - Plataforma 100% aberta e gratuita
+      </div>
+
+      <h1 class="text-3xl md:text-5xl lg:text-6xl font-black mb-3 leading-tight tracking-tight">
+        Saiba quem você<br>está <span class="text-[#10B981]">votando</span>
+      </h1>
+      <p class="text-[#94A3B8] text-base md:text-lg mb-7 max-w-xl mx-auto leading-relaxed">
+        Histórico completo de polêmicas, corrupção e notícias negativas de políticos brasileiros. Com inteligência artificial e score de veracidade.
+      </p>
+
+      <!-- Hero search -->
+      <div class="relative max-w-lg mx-auto">
+        <svg class="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-[#94A3B8] pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
+        <input type="text" id="hero-search" placeholder="Nome do político..." class="input-base w-full pl-12 pr-4 py-3.5 text-base md:text-lg" autocomplete="off" oninput="heroAutocomplete(this.value)" onblur="setTimeout(()=>closeDropdown('hero-ac'),200)" onfocus="heroAutocomplete(this.value)">
+        <div id="hero-ac"></div>
+        <div class="absolute right-3 top-1/2 -translate-y-1/2">
+          <kbd class="hidden md:inline-flex items-center gap-1 bg-[#2D2D44] text-[#94A3B8] text-xs px-2 py-0.5 rounded">Enter</kbd>
+        </div>
+      </div>
+
+      <!-- Counters -->
+      <div class="flex justify-center gap-6 md:gap-12 mt-8">
+        <div class="text-center">
+          <div class="font-mono text-xl md:text-2xl font-bold text-[#10B981]" id="cnt-politicos">0</div>
+          <div class="text-xs text-[#94A3B8] mt-0.5">Políticos</div>
+        </div>
+        <div class="w-px bg-[#2D2D44]"></div>
+        <div class="text-center">
+          <div class="font-mono text-xl md:text-2xl font-bold text-[#10B981]" id="cnt-noticias">0</div>
+          <div class="text-xs text-[#94A3B8] mt-0.5">Notícias</div>
+        </div>
+        <div class="w-px bg-[#2D2D44]"></div>
+        <div class="text-center">
+          <div class="font-mono text-xl md:text-2xl font-bold text-[#10B981]" id="cnt-fontes">0</div>
+          <div class="text-xs text-[#94A3B8] mt-0.5">Fontes</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Top 10 ranking strip -->
+  <section class="border-t border-[#2D2D44] bg-[#1A1A2E]/30 py-6">
+    <div class="max-w-7xl mx-auto px-4">
+      <div class="flex items-center justify-between mb-4">
+        <div class="flex items-center gap-2">
+          <svg class="w-4 h-4 text-[#F59E0B]" fill="currentColor" viewBox="0 0 24 24"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
+          <h2 class="text-sm font-semibold text-[#F1F5F9]">Top 10 - Maior Score de Risco</h2>
+        </div>
+        <button onclick="navigate('ranking')" class="text-xs text-[#10B981] hover:underline">Ver ranking completo &rarr;</button>
+      </div>
+      <div class="scroll-x gap-3 pb-2" id="top10-strip"></div>
+    </div>
+  </section>
+
+  <!-- Casos recentes -->
+  <section class="max-w-7xl mx-auto px-4 py-8">
+    <div class="flex items-center justify-between mb-5">
+      <h2 class="text-lg font-bold text-[#F1F5F9]">Casos Recentes em Destaque</h2>
+      <button onclick="navigate('busca')" class="text-xs text-[#10B981] hover:underline">Ver todos &rarr;</button>
+    </div>
+    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4" id="casos-recentes"></div>
+  </section>
+
+  <!-- Stats section -->
+  <section class="max-w-7xl mx-auto px-4 pb-8">
+    <div class="card p-5 md:p-8">
+      <div class="grid grid-cols-2 md:grid-cols-4 gap-6 text-center">
+        <div>
+          <div class="text-2xl md:text-3xl font-black font-mono text-[#EF4444] mb-1">R$ 4,7 bi</div>
+          <div class="text-xs text-[#94A3B8]">Em desvios documentados</div>
+        </div>
+        <div>
+          <div class="text-2xl md:text-3xl font-black font-mono text-[#F59E0B] mb-1">312</div>
+          <div class="text-xs text-[#94A3B8]">Processos ativos</div>
+        </div>
+        <div>
+          <div class="text-2xl md:text-3xl font-black font-mono text-[#3B82F6] mb-1">89</div>
+          <div class="text-xs text-[#94A3B8]">Condenações em 2024</div>
+        </div>
+        <div>
+          <div class="text-2xl md:text-3xl font-black font-mono text-[#10B981] mb-1">1.204</div>
+          <div class="text-xs text-[#94A3B8]">Políticos monitorados</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Footer -->
+  <footer class="border-t border-[#2D2D44] py-8 mt-4">
+    <div class="max-w-7xl mx-auto px-4">
+      <div class="flex flex-col md:flex-row items-center justify-between gap-4">
+        <div class="flex items-center gap-2">
+          <img src="https://s3.us-east-1.amazonaws.com/cdn.digital-ai.tech/prototypes/votolimpo/assets/favicon.png" alt="Voto Limpo" class="w-6 h-6 object-contain">
+          <span class="text-sm font-bold text-[#F1F5F9]">Voto<span class="text-[#10B981]">Limpo</span></span>
+        </div>
+        <p class="text-xs text-[#94A3B8] text-center max-w-md">
+          Plataforma educacional e de transparência pública. As informações são compiladas de fontes jornalísticas públicas e decisões judiciais. Score calculado por IA com margem de erro. Não constitui acusação formal.
+        </p>
+        <div class="flex items-center gap-3 text-xs text-[#94A3B8]">
+          <span>votolimpo.com.br</span>
+          <span>&bull;</span>
+          <span>&copy; 2026</span>
+        </div>
+      </div>
+    </div>
+  </footer>
+
+</div><!-- /page-home -->
+
+<!-- ====================================================================== -->
+<!-- PAGE: BUSCA -->
+<!-- ====================================================================== -->
+<div id="page-busca" class="page fade-in">
+  <div class="max-w-7xl mx-auto px-4 py-6">
+    <h1 class="text-xl font-bold mb-5">Buscar Políticos</h1>
+
+    <!-- Search bar -->
+    <div class="relative mb-4">
+      <svg class="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-[#94A3B8] pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
+      <input type="text" id="busca-input" placeholder="Nome do político..." class="input-base w-full pl-10 pr-4 py-3 text-base" autocomplete="off" oninput="buscaFiltrar()">
+    </div>
+
+    <!-- Filters -->
+    <div class="card p-4 mb-5">
+      <div class="grid grid-cols-2 md:grid-cols-4 gap-3">
+        <div>
+          <label class="text-xs text-[#94A3B8] block mb-1.5">Partido</label>
+          <select id="f-partido" class="input-base w-full px-3 py-2 text-sm" onchange="buscaFiltrar()">
+            <option value="">Todos</option>
+            <option>PT</option><option>PL</option><option>MDB</option><option>PP</option>
+            <option>PSDB</option><option>PSD</option><option>UNIAO</option><option>REPUBLICANOS</option>
+          </select>
+        </div>
+        <div>
+          <label class="text-xs text-[#94A3B8] block mb-1.5">Estado</label>
+          <select id="f-estado" class="input-base w-full px-3 py-2 text-sm" onchange="buscaFiltrar()">
+            <option value="">Todos</option>
+            <option>AC</option><option>AL</option><option>AM</option><option>BA</option><option>CE</option>
+            <option>DF</option><option>ES</option><option>GO</option><option>MA</option><option>MG</option>
+            <option>MS</option><option>MT</option><option>PA</option><option>PB</option><option>PE</option>
+            <option>PI</option><option>PR</option><option>RJ</option><option>RN</option><option>RO</option>
+            <option>RS</option><option>SC</option><option>SE</option><option>SP</option><option>TO</option>
+          </select>
+        </div>
+        <div>
+          <label class="text-xs text-[#94A3B8] block mb-1.5">Cargo</label>
+          <select id="f-cargo" class="input-base w-full px-3 py-2 text-sm" onchange="buscaFiltrar()">
+            <option value="">Todos</option>
+            <option>Senador</option><option>Deputado Federal</option>
+            <option>Governador</option><option>Vereador</option><option>Prefeito</option>
+          </select>
+        </div>
+        <div>
+          <label class="text-xs text-[#94A3B8] block mb-1.5">Severidade mínima</label>
+          <select id="f-severidade" class="input-base w-full px-3 py-2 text-sm" onchange="buscaFiltrar()">
+            <option value="0">Qualquer</option>
+            <option value="50">Média (50+)</option>
+            <option value="70">Alta (70+)</option>
+            <option value="85">Crítica (85+)</option>
+          </select>
+        </div>
+      </div>
+      <div class="flex items-center justify-between mt-3 pt-3 border-t border-[#2D2D44]">
+        <div class="flex items-center gap-2">
+          <label class="text-xs text-[#94A3B8]">Ordenar por</label>
+          <select id="f-ordem" class="input-base px-2 py-1 text-xs" onchange="buscaFiltrar()">
+            <option value="score">Maior score</option>
+            <option value="nome">A-Z</option>
+            <option value="noticias">Mais notícias</option>
+          </select>
+        </div>
+        <button onclick="buscaLimpar()" class="text-xs text-[#94A3B8] hover:text-[#F1F5F9] transition">Limpar filtros</button>
+      </div>
+    </div>
+
+    <!-- Results header -->
+    <div class="flex items-center justify-between mb-3">
+      <span class="text-sm text-[#94A3B8]"><span id="busca-count" class="font-semibold text-[#F1F5F9]">0</span> políticos encontrados</span>
+    </div>
+
+    <!-- Results grid -->
+    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4" id="busca-results"></div>
+
+    <!-- Load more -->
+    <div class="text-center mt-6">
+      <button id="busca-more" onclick="buscaLoadMore()" class="hidden px-6 py-2.5 bg-[#1A1A2E] border border-[#2D2D44] text-sm rounded-lg hover:border-[#10B981] hover:text-[#10B981] transition">Carregar mais</button>
+    </div>
+  </div>
+</div><!-- /page-busca -->
+
+<!-- ====================================================================== -->
+<!-- PAGE: PERFIL -->
+<!-- ====================================================================== -->
+<div id="page-perfil" class="page fade-in">
+  <div id="perfil-content"></div>
+</div>
+
+<!-- ====================================================================== -->
+<!-- PAGE: GRAFO GLOBAL -->
+<!-- ====================================================================== -->
+<div id="page-grafo" class="page fade-in">
+  <div class="max-w-7xl mx-auto px-4 py-6">
+    <div class="flex flex-col md:flex-row md:items-center justify-between gap-3 mb-4">
+      <div>
+        <h1 class="text-xl font-bold">Grafo de Conexões</h1>
+        <p class="text-xs text-[#94A3B8] mt-0.5">Relações entre políticos, partidos, empresas e organizações</p>
+      </div>
+      <div class="flex items-center gap-2">
+        <div class="relative">
+          <svg class="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-[#94A3B8]" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
+          <input type="text" id="grafo-search" placeholder="Buscar no grafo..." class="input-base pl-8 pr-3 py-1.5 text-xs w-40" oninput="grafoSearch(this.value)">
+        </div>
+        <button onclick="grafoReset()" class="px-3 py-1.5 bg-[#1A1A2E] border border-[#2D2D44] text-xs rounded-lg hover:border-[#10B981] transition">Resetar</button>
+      </div>
+    </div>
+
+    <!-- Filters -->
+    <div class="flex flex-wrap gap-2 mb-4">
+      <label class="filter-tag cursor-pointer"><input type="checkbox" id="gf-politico" checked onchange="renderGrafo()" class="hidden"><span>&#9679; Políticos</span></label>
+      <label class="filter-tag cursor-pointer" style="background:rgba(59,130,246,0.1);border-color:rgba(59,130,246,0.3);color:#3B82F6"><input type="checkbox" id="gf-partido" checked onchange="renderGrafo()" class="hidden"><span>&#9679; Partidos</span></label>
+      <label class="filter-tag cursor-pointer" style="background:rgba(148,163,184,0.1);border-color:rgba(148,163,184,0.2);color:#94A3B8"><input type="checkbox" id="gf-empresa" checked onchange="renderGrafo()" class="hidden"><span>&#9679; Empresas</span></label>
+      <label class="filter-tag cursor-pointer" style="background:rgba(245,158,11,0.1);border-color:rgba(245,158,11,0.3);color:#F59E0B"><input type="checkbox" id="gf-org" checked onchange="renderGrafo()" class="hidden"><span>&#9679; Organizações</span></label>
+    </div>
+
+    <!-- Graph container -->
+    <div class="card relative overflow-hidden" style="height: min(70vh, 560px);">
+      <svg id="graph-global-svg" style="width:100%;height:100%;"></svg>
+      <div id="graph-tooltip" class="graph-tooltip" style="display:none;"></div>
+
+      <!-- Sidebar -->
+      <div id="graph-sidebar">
+        <div class="flex items-center justify-between mb-3">
+          <h3 class="text-sm font-semibold" id="sidebar-name">Selecione um nó</h3>
+          <button onclick="closeSidebar()" class="text-[#94A3B8] hover:text-[#F1F5F9]">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+          </button>
+        </div>
+        <div id="sidebar-content"></div>
+      </div>
+
+      <!-- Zoom controls -->
+      <div class="absolute bottom-3 left-3 flex gap-1">
+        <button onclick="grafoZoom(1.3)" class="w-7 h-7 bg-[#1A1A2E] border border-[#2D2D44] rounded-lg text-sm text-[#94A3B8] hover:text-[#F1F5F9] flex items-center justify-center">+</button>
+        <button onclick="grafoZoom(0.77)" class="w-7 h-7 bg-[#1A1A2E] border border-[#2D2D44] rounded-lg text-sm text-[#94A3B8] hover:text-[#F1F5F9] flex items-center justify-center">-</button>
+      </div>
+    </div>
+
+    <!-- Legend -->
+    <div class="flex flex-wrap gap-4 mt-3">
+      <div class="flex items-center gap-1.5 text-xs text-[#94A3B8]"><span class="w-3 h-3 rounded-full" style="background:#10B981"></span>Político</div>
+      <div class="flex items-center gap-1.5 text-xs text-[#94A3B8]"><span class="w-3 h-3 rounded-full" style="background:#3B82F6"></span>Partido</div>
+      <div class="flex items-center gap-1.5 text-xs text-[#94A3B8]"><span class="w-3 h-3 rounded-full" style="background:#94A3B8"></span>Empresa</div>
+      <div class="flex items-center gap-1.5 text-xs text-[#94A3B8]"><span class="w-3 h-3 rounded-full" style="background:#F59E0B"></span>Organização</div>
+      <div class="flex items-center gap-1.5 text-xs text-[#94A3B8]"><span class="w-6 h-0.5" style="background:#2D2D44"></span>Conexão</div>
+    </div>
+  </div>
+</div><!-- /page-grafo -->
+
+<!-- ====================================================================== -->
+<!-- PAGE: RANKING -->
+<!-- ====================================================================== -->
+<div id="page-ranking" class="page fade-in">
+  <div class="max-w-7xl mx-auto px-4 py-6">
+    <div class="flex flex-col md:flex-row md:items-center justify-between gap-3 mb-5">
+      <div>
+        <h1 class="text-xl font-bold">Ranking de Risco</h1>
+        <p class="text-xs text-[#94A3B8] mt-0.5">Políticos com maior score de envolvimento em irregularidades</p>
+      </div>
+      <div class="flex flex-wrap gap-2">
+        <select id="rk-partido" class="input-base px-3 py-1.5 text-xs" onchange="rankingFiltrar()">
+          <option value="">Todos os partidos</option>
+          <option>PT</option><option>PL</option><option>MDB</option><option>PP</option><option>PSDB</option><option>PSD</option><option>UNIAO</option>
+        </select>
+        <select id="rk-estado" class="input-base px-3 py-1.5 text-xs" onchange="rankingFiltrar()">
+          <option value="">Todos os estados</option>
+          <option>SP</option><option>RJ</option><option>MG</option><option>BA</option><option>RS</option><option>DF</option><option>GO</option><option>CE</option>
+        </select>
+        <select id="rk-cargo" class="input-base px-3 py-1.5 text-xs" onchange="rankingFiltrar()">
+          <option value="">Todos os cargos</option>
+          <option>Senador</option><option>Deputado Federal</option><option>Governador</option>
+        </select>
+      </div>
+    </div>
+
+    <!-- Top 3 -->
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6" id="rk-top3"></div>
+
+    <!-- Table desktop / cards mobile -->
+    <div class="card overflow-hidden">
+      <div class="hidden md:block overflow-x-auto">
+        <table class="data-table" id="rk-table">
+          <thead>
+            <tr>
+              <th class="w-12">#</th>
+              <th class="sortable" onclick="rankingSort('nome')">Político</th>
+              <th class="sortable" onclick="rankingSort('partido')">Partido</th>
+              <th>Estado</th>
+              <th>Cargo</th>
+              <th class="sortable text-right" onclick="rankingSort('score')">Score</th>
+              <th class="sortable text-right" onclick="rankingSort('noticias')">Notícias</th>
+              <th class="text-right">Ação</th>
+            </tr>
+          </thead>
+          <tbody id="rk-tbody"></tbody>
+        </table>
+      </div>
+      <div class="md:hidden" id="rk-cards-mobile"></div>
+    </div>
+
+    <!-- Pagination -->
+    <div class="flex items-center justify-between mt-4">
+      <span class="text-xs text-[#94A3B8]">Mostrando <span id="rk-showing">10</span> de <span id="rk-total">20</span></span>
+      <div class="flex gap-2">
+        <button id="rk-prev" onclick="rankingPage(-1)" class="px-3 py-1.5 bg-[#1A1A2E] border border-[#2D2D44] text-xs rounded-lg hover:border-[#10B981] transition disabled:opacity-40" disabled>Anterior</button>
+        <button id="rk-next" onclick="rankingPage(1)" class="px-3 py-1.5 bg-[#1A1A2E] border border-[#2D2D44] text-xs rounded-lg hover:border-[#10B981] transition">Próxima</button>
+      </div>
+    </div>
+  </div>
+</div><!-- /page-ranking -->
+
+</main>
+
+<!-- ====================================================================== -->
+<!-- JAVASCRIPT - DATA + LOGIC -->
+<!-- ====================================================================== -->
+<script>
+// ============================================================
+// DADOS MOCKADOS
+// ============================================================
+const POLITICOS = [
+  {
+    id:1, slug:'marcos-doria', nome:'Marcos Dória', partido:'PT', estado:'SP', cargo:'Senador',
+    score:91.4, noticias:14, initials:'MD',
+    bio:'Senador pelo estado de São Paulo, membro do diretório nacional do PT. Reeleito em 2022 com 38% dos votos.',
+    resumo_ia:'Político com histórico de investigações relacionadas a contratos públicos superfaturados e desvios em obras de infraestrutura. Citado em 3 operações da Polícia Federal entre 2018 e 2023.',
+    noticias_arr:[
+      {id:'n1',titulo:'Dória é citado em contratos superfaturados de R$ 240 mi em obras de saneamento',resumo:'Investigação do MPF aponta que empresas vinculadas ao parlamentar teriam recebido valores acima do mercado em licitações estaduais entre 2019 e 2021. Contratos totalizam R$ 240 milhões.',data:'2024-03-15',fonte:'Folha de S.Paulo',link:'#',score_veracidade:94,severidade:'critico',relacionadas:['n2','n3']},
+      {id:'n2',titulo:'Polícia Federal cumpre mandados na residência do senador',resumo:'Agentes da PF cumpriram mandados de busca e apreensão na casa e no escritório do parlamentar, apreendendo computadores e documentos financeiros.',data:'2024-01-22',fonte:'G1',link:'#',score_veracidade:98,severidade:'critico',relacionadas:['n1']},
+      {id:'n3',titulo:'TCU aponta irregularidades em R$ 85 mi em contratos de saúde',resumo:'Tribunal de Contas da União identificou sobrepreço e ausência de documentação em contratos de equipamentos médicos firmados durante a pandemia.',data:'2023-11-08',fonte:'Estadão',link:'#',score_veracidade:87,severidade:'alto',relacionadas:['n1']},
+      {id:'n4',titulo:'Senador nega acusações e diz que é perseguição política',resumo:'Em nota, o parlamentar afirmou que todas as investigações são motivadas politicamente e que irá provar sua inocência na Justiça.',data:'2023-09-30',fonte:'UOL',link:'#',score_veracidade:45,severidade:'baixo',relacionadas:[]},
+      {id:'n5',titulo:'Empresa laranja teria financiado campanha eleitoral de 2018',resumo:'Dinheiro de origem ilícita teria sido utilizado para custear materiais de campanha e cabos eleitorais, segundo delação premiada.',data:'2023-06-14',fonte:'The Intercept Brasil',link:'#',score_veracidade:78,severidade:'alto',relacionadas:[]},
+    ],
+    milestones:[
+      {titulo:'Abertura de Inquérito no STJ',tipo:'inquerito',data:'2022-08-10',descricao:'Superior Tribunal de Justiça abriu inquérito para apurar uso irregular de verba de gabinete.'},
+      {titulo:'Denúncia do MPF por corrupção passiva',tipo:'denuncia',data:'2023-03-22',descricao:'Ministério Público Federal formalizou denúncia por corrupção passiva e lavagem de dinheiro, com pena prevista de até 14 anos.'},
+      {titulo:'Ação penal aceita pelo STJ',tipo:'condenacao',data:'2024-02-15',descricao:'STJ aceitou a ação penal e tornou o senador réu por corrupção passiva e peculato.'},
+    ],
+    relacoes:[
+      {entidade:'PT',tipo:'partido',peso:3},
+      {entidade:'Construtora Delta Sul',tipo:'empresa',peso:2},
+      {entidade:'Roberto Alves',tipo:'politico',slug:'roberto-alves',peso:2},
+      {entidade:'Grupo Financeiro Meridiano',tipo:'empresa',peso:1},
+      {entidade:'ONG Futuros Brilhantes',tipo:'organizacao',peso:1},
+    ]
+  },
+  {
+    id:2, slug:'carla-ventura', nome:'Carla Ventura', partido:'PL', estado:'RJ', cargo:'Deputada Federal',
+    score:88.7, noticias:11, initials:'CV',
+    bio:'Deputada Federal pelo Rio de Janeiro, vice-líder do PL na Câmara. Ex-secretária municipal de obras.',
+    resumo_ia:'Deputada investigada por envolvimento em esquema de rachadinha e uso de assessores para serviços privados. Alvo de representação no Conselho de Ética da Câmara.',
+    noticias_arr:[
+      {id:'n6',titulo:'Assessores da deputada eram obrigados a devolver salários, diz MP',resumo:'Investigação do Ministério Público estadual aponta que funcionários comissionados devolveriam até 40% dos salários para a parlamentar.',data:'2024-04-10',fonte:'O Globo',link:'#',score_veracidade:91,severidade:'critico',relacionadas:['n7']},
+      {id:'n7',titulo:'Câmara abre processo no Conselho de Ética contra deputada',resumo:'Conselho de Ética da Câmara dos Deputados abriu processo disciplinar após denúncia de 3 ex-assessores.',data:'2024-02-28',fonte:'Poder360',link:'#',score_veracidade:96,severidade:'alto',relacionadas:['n6']},
+      {id:'n8',titulo:'Dinheiro em espécie encontrado na residência oficial',resumo:'Polícia Civil encontrou R$ 180 mil em espécie no apartamento funcional da deputada durante cumprimento de mandado judicial.',data:'2023-12-05',fonte:'G1',link:'#',score_veracidade:89,severidade:'critico',relacionadas:[]},
+    ],
+    milestones:[
+      {titulo:'Denúncia no Conselho de Ética',tipo:'denuncia',data:'2023-11-10',descricao:'Três ex-assessores formalizaram denúncia de rachadinha ao Conselho de Ética da Câmara.'},
+      {titulo:'Abertura de processo disciplinar',tipo:'inquerito',data:'2024-02-28',descricao:'Conselho de Ética instaurou processo disciplinar que pode resultar em cassação do mandato.'},
+    ],
+    relacoes:[
+      {entidade:'PL',tipo:'partido',peso:3},
+      {entidade:'Consórcio Obras RJ',tipo:'empresa',peso:2},
+      {entidade:'Marcos Dória',tipo:'politico',slug:'marcos-doria',peso:1},
+    ]
+  },
+  {
+    id:3, slug:'roberto-alves', nome:'Roberto Alves', partido:'MDB', estado:'MG', cargo:'Governador',
+    score:85.2, noticias:9, initials:'RA',
+    bio:'Governador de Minas Gerais pelo MDB. Terceiro mandato consecutivo. Ex-prefeito de Belo Horizonte.',
+    resumo_ia:'Governador com múltiplos processos relacionados a contratos de publicidade e obras públicas superfaturadas. Citado em delação premiada de empreiteira.',
+    noticias_arr:[
+      {id:'n9',titulo:'Delação aponta pagamento de propina a governador em contratos de rodovias',resumo:'Ex-diretor de empreiteira afirmou em delação premiada que Alves recebeu R$ 12 milhões em propina para favorecimento em licitações de concessão rodoviária.',data:'2024-01-18',fonte:'Folha de S.Paulo',link:'#',score_veracidade:82,severidade:'critico',relacionadas:['n10']},
+      {id:'n10',titulo:'STF abre inquérito para apurar propinas em MG',resumo:'Supremo Tribunal Federal abriu inquérito para apurar as acusações feitas na delação, com prazo de 90 dias para investigação.',data:'2024-03-02',fonte:'Estadão',link:'#',score_veracidade:97,severidade:'alto',relacionadas:['n9']},
+    ],
+    milestones:[
+      {titulo:'Inquérito aberto no STF',tipo:'inquerito',data:'2024-03-02',descricao:'STF abriu inquérito para apurar acusações de propina em contratos rodoviários.'},
+    ],
+    relacoes:[
+      {entidade:'MDB',tipo:'partido',peso:3},
+      {entidade:'Marcos Dória',tipo:'politico',slug:'marcos-doria',peso:2},
+      {entidade:'Empreiteira Horizonte',tipo:'empresa',peso:2},
+    ]
+  },
+  {
+    id:4, slug:'ana-paula-farias', nome:'Ana Paula Farias', partido:'PP', estado:'BA', cargo:'Deputada Federal',
+    score:79.3, noticias:8, initials:'AF',
+    bio:'Deputada Federal pela Bahia. Presidente da Comissão de Saúde da Câmara.',
+    resumo_ia:'Deputada investigada por irregularidades em contratos de saúde durante a pandemia. Citada em CPI da Covid.',
+    noticias_arr:[
+      {id:'n11',titulo:'CPI da Covid aponta irregularidades em contratos com empresa da deputada',resumo:'Comissão Parlamentar de Inquérito identificou que empresa em nome do marido da parlamentar teria recebido contratos sem licitação.',data:'2021-08-15',fonte:'UOL',link:'#',score_veracidade:85,severidade:'alto',relacionadas:[]},
+    ],
+    milestones:[
+      {titulo:'Indicação à CPI da Covid',tipo:'denuncia',data:'2021-06-20',descricao:'Nome da parlamentar citado em documentos apresentados à CPI da Covid.'},
+    ],
+    relacoes:[
+      {entidade:'PP',tipo:'partido',peso:3},{entidade:'Saúde + Distribuição',tipo:'empresa',peso:2},
+    ]
+  },
+  {
+    id:5, slug:'jose-mauricio-coutinho', nome:'José Maurício Coutinho', partido:'PSDB', estado:'SP', cargo:'Senador',
+    score:76.8, noticias:7, initials:'JC',
+    bio:'Senador por São Paulo pelo PSDB. Ex-secretário de finanças estadual.',
+    resumo_ia:'Senador investigado por desvio de verbas públicas para campanhas eleitorais e favorecimento de empresas de publicidade.',
+    noticias_arr:[
+      {id:'n12',titulo:'Ministério Público investiga desvio de R$ 32 mi em contratos de publicidade',resumo:'Investigação aponta que contratos firmados durante gestão do senador como secretário teriam sido superfaturados.',data:'2023-07-20',fonte:'Estadão',link:'#',score_veracidade:79,severidade:'alto',relacionadas:[]},
+    ],
+    milestones:[
+      {titulo:'Inquérito na Procuradoria Geral',tipo:'inquerito',data:'2023-05-15',descricao:'PGR abriu inquérito para apurar contratos irregulares na secretaria de finanças.'},
+    ],
+    relacoes:[
+      {entidade:'PSDB',tipo:'partido',peso:3},{entidade:'Agência Pulsar Comunicação',tipo:'empresa',peso:2},
+    ]
+  },
+  {
+    id:6, slug:'fernando-lagoinha', nome:'Fernando Lagoinha', partido:'PSD', estado:'RS', cargo:'Deputado Federal',
+    score:72.1, noticias:6, initials:'FL',
+    bio:'Deputado Federal pelo Rio Grande do Sul pelo PSD. Presidente da Comissão de Obras.',
+    resumo_ia:'Deputado citado em investigações sobre irregularidades em licitações de obras públicas e liberação de emendas para municípios sem contrapartida.',
+    noticias_arr:[
+      {id:'n13',titulo:'MP investiga emendas de R$ 90 mi liberadas sem fiscalização',resumo:'Emendas parlamentares foram repassadas a municípios aliados sem prestação de contas, segundo investigação do Ministério Público Federal.',data:'2024-02-10',fonte:'Poder360',link:'#',score_veracidade:77,severidade:'medio',relacionadas:[]},
+    ],
+    milestones:[],
+    relacoes:[{entidade:'PSD',tipo:'partido',peso:3},{entidade:'Construtora Lagoa Bela',tipo:'empresa',peso:1}]
+  },
+  {
+    id:7, slug:'patricia-mesquita', nome:'Patrícia Mesquita', partido:'UNIAO', estado:'CE', cargo:'Senadora',
+    score:68.5, noticias:5, initials:'PM',
+    bio:'Senadora pelo Ceará pelo UNIÃO Brasil. Ex-prefeita de Fortaleza.',
+    resumo_ia:'Senadora investigada por uso irregular de verba de gabinete e contratação de familiares em cargos comissionados.',
+    noticias_arr:[
+      {id:'n14',titulo:'TCE aponta nepotismo em prefeitura durante gestão da senadora',resumo:'Tribunal de Contas do Estado identificou contratação de 12 parentes em primeiro e segundo grau durante gestão municipal.',data:'2023-04-05',fonte:'Diário do Nordeste',link:'#',score_veracidade:88,severidade:'medio',relacionadas:[]},
+    ],
+    milestones:[],
+    relacoes:[{entidade:'UNIAO',tipo:'partido',peso:3}]
+  },
+  {
+    id:8, slug:'tiago-branco-melo', nome:'Tiago Branco Melo', partido:'PT', estado:'DF', cargo:'Deputado Federal',
+    score:65.9, noticias:5, initials:'TM',
+    bio:'Deputado Federal pelo Distrito Federal pelo PT. Membro da Comissão de Finanças.',
+    resumo_ia:'Deputado investigado por irregularidades em contratos de TI firmados com empresa de parente.',
+    noticias_arr:[
+      {id:'n15',titulo:'Empresa do cunhado do deputado faturou R$ 15 mi em contratos públicos',resumo:'Investigação identificou que empresa do cunhado do parlamentar recebeu contratos sem concorrência durante gestão de comissão.',data:'2023-10-18',fonte:'Agência Pública',link:'#',score_veracidade:72,severidade:'medio',relacionadas:[]},
+    ],
+    milestones:[],
+    relacoes:[{entidade:'PT',tipo:'partido',peso:3},{entidade:'TI Solutions Brasília',tipo:'empresa',peso:2}]
+  },
+  {
+    id:9, slug:'renata-cavalcante', nome:'Renata Cavalcante', partido:'PL', estado:'GO', cargo:'Governadora',
+    score:61.2, noticias:4, initials:'RC',
+    bio:'Governadora de Goiás pelo PL. Ex-deputada federal com 3 mandatos.',
+    resumo_ia:'Governadora com histórico de irregularidades em contratos de merenda escolar e uso de recursos públicos em campanha.',
+    noticias_arr:[
+      {id:'n16',titulo:'CGU aponta irregularidades em merenda escolar de R$ 28 mi',resumo:'Controladoria Geral da União identificou sobrepreço e ausência de notas fiscais em contratos de alimentação escolar.',data:'2024-01-05',fonte:'G1 Goiás',link:'#',score_veracidade:83,severidade:'alto',relacionadas:[]},
+    ],
+    milestones:[
+      {titulo:'Relatório da CGU publicado',tipo:'denuncia',data:'2024-01-05',descricao:'CGU publicou relatório apontando irregularidades na gestão estadual de merenda escolar.'},
+    ],
+    relacoes:[{entidade:'PL',tipo:'partido',peso:3},{entidade:'Alimenta Brasil LTDA',tipo:'empresa',peso:2}]
+  },
+  {
+    id:10, slug:'silvio-pinheiro-neto', nome:'Sílvio Pinheiro Neto', partido:'MDB', estado:'PA', cargo:'Senador',
+    score:58.7, noticias:4, initials:'SN',
+    bio:'Senador pelo Pará pelo MDB. Empresário do setor madeireiro.',
+    resumo_ia:'Senador investigado por licenças ambientais irregulares e desmatamento em áreas de preservação permanente.',
+    noticias_arr:[
+      {id:'n17',titulo:'IBAMA multa empresa do senador em R$ 4 mi por desmatamento ilegal',resumo:'Empresa controlada pelo parlamentar foi multada por desmatamento de 1.200 hectares de floresta amazônica sem autorização.',data:'2023-08-22',fonte:'Folha de S.Paulo',link:'#',score_veracidade:91,severidade:'alto',relacionadas:[]},
+    ],
+    milestones:[],
+    relacoes:[{entidade:'MDB',tipo:'partido',peso:3},{entidade:'Madeireira Pará Sul',tipo:'empresa',peso:3}]
+  },
+  {
+    id:11, slug:'lucia-goncalves-batista', nome:'Lúcia Gonçalves Batista', partido:'PP', estado:'RJ', cargo:'Vereadora',
+    score:54.3, noticias:3, initials:'LG',
+    bio:'Vereadora no município do Rio de Janeiro pelo PP.',
+    resumo_ia:'Vereadora investigada por nepotismo e uso de verba de gabinete para fins pessoais.',
+    noticias_arr:[
+      {id:'n18',titulo:'Vereadora contratou filha e sobrinha como assessoras',resumo:'Investigação da Câmara Municipal identificou contratação de parentes como assessores parlamentares, o que é vedado pela lei municipal.',data:'2023-11-30',fonte:'O Dia',link:'#',score_veracidade:82,severidade:'medio',relacionadas:[]},
+    ],
+    milestones:[],
+    relacoes:[{entidade:'PP',tipo:'partido',peso:3}]
+  },
+  {
+    id:12, slug:'edgard-lima-paranhos', nome:'Edgard Lima Paranhos', partido:'PSDB', estado:'MG', cargo:'Deputado Federal',
+    score:51.8, noticias:3, initials:'EP',
+    bio:'Deputado Federal por Minas Gerais pelo PSDB.',
+    resumo_ia:'Deputado com histórico de votos controversos em projetos de interesse de empresas financiadoras de campanha.',
+    noticias_arr:[
+      {id:'n19',titulo:'Deputado votou 14 vezes a favor de empresa que doou R$ 500 mil à campanha',resumo:'Levantamento mostra coincidência entre votações do parlamentar e interesses de empresa que financiou sua campanha eleitoral.',data:'2023-05-12',fonte:'The Intercept Brasil',link:'#',score_veracidade:68,severidade:'medio',relacionadas:[]},
+    ],
+    milestones:[],
+    relacoes:[{entidade:'PSDB',tipo:'partido',peso:3},{entidade:'Agro Sul Investimentos',tipo:'empresa',peso:1}]
+  },
+  {
+    id:13, slug:'miriam-costa-ribeiro', nome:'Miriam Costa Ribeiro', partido:'PSD', estado:'SC', cargo:'Deputada Federal',
+    score:47.2, noticias:2, initials:'MR',
+    bio:'Deputada Federal por Santa Catarina pelo PSD. Primeira legislatura.',
+    resumo_ia:'Deputada com histórico de declarações conflitantes sobre patrimônio e financiamento de campanha por empresas investigadas.',
+    noticias_arr:[
+      {id:'n20',titulo:'Declaração de bens da deputada apresenta inconsistências, aponta TSE',resumo:'Tribunal Superior Eleitoral identificou divergências entre os bens declarados em 2018 e 2022 sem justificativa de crescimento patrimonial.',data:'2023-09-08',fonte:'Correio Braziliense',link:'#',score_veracidade:61,severidade:'baixo',relacionadas:[]},
+    ],
+    milestones:[],
+    relacoes:[{entidade:'PSD',tipo:'partido',peso:3}]
+  },
+  {
+    id:14, slug:'helio-santos-cavalcanti', nome:'Hélio Santos Cavalcanti', partido:'PT', estado:'PE', cargo:'Prefeito',
+    score:43.6, noticias:2, initials:'HS',
+    bio:'Prefeito de Recife pelo PT. Segundo mandato.',
+    resumo_ia:'Prefeito com investigações em andamento sobre irregularidades em contratos de pavimentação.',
+    noticias_arr:[
+      {id:'n21',titulo:'TCE-PE investiga contratos de R$ 18 mi em obras de pavimentação',resumo:'Tribunal de Contas identificou possível sobrepreço em lotes de obras de rua contratados sem licitação pública adequada.',data:'2023-12-20',fonte:'Jornal do Commercio',link:'#',score_veracidade:74,severidade:'medio',relacionadas:[]},
+    ],
+    milestones:[],
+    relacoes:[{entidade:'PT',tipo:'partido',peso:3}]
+  },
+  {
+    id:15, slug:'carlos-augusto-figueiredo', nome:'Carlos Augusto Figueiredo', partido:'UNIAO', estado:'MA', cargo:'Senador',
+    score:39.1, noticias:2, initials:'CF',
+    bio:'Senador pelo Maranhão pelo UNIÃO Brasil.',
+    resumo_ia:'Senador com registro de irregularidades em prestação de contas eleitorais e uso de verba de gabinete.',
+    noticias_arr:[
+      {id:'n22',titulo:'TSE impõe multa de R$ 120 mil por irregularidades na prestação de contas',resumo:'Tribunal Superior Eleitoral multou o senador por descumprimento das normas de prestação de contas da campanha eleitoral de 2022.',data:'2023-07-15',fonte:'Agência Brasil',link:'#',score_veracidade:93,severidade:'baixo',relacionadas:[]},
+    ],
+    milestones:[],
+    relacoes:[{entidade:'UNIAO',tipo:'partido',peso:3}]
+  },
+  {
+    id:16, slug:'viviane-porto-meira', nome:'Viviane Porto Meira', partido:'PL', estado:'BA', cargo:'Deputada Federal',
+    score:35.4, noticias:1, initials:'VP',
+    bio:'Deputada Federal pela Bahia pelo PL. Primeira legislatura.',
+    resumo_ia:'Deputada investigada por irregularidades menores em despesas de gabinete.',
+    noticias_arr:[
+      {id:'n23',titulo:'Portal da Transparência aponta gastos excessivos com passagens aéreas',resumo:'Dados do portal revelam que a deputada gastou 320% acima da média de sua bancada em passagens aéreas no primeiro ano de mandato.',data:'2023-10-05',fonte:'Portal da Transparência / Agência Pública',link:'#',score_veracidade:89,severidade:'baixo',relacionadas:[]},
+    ],
+    milestones:[],
+    relacoes:[{entidade:'PL',tipo:'partido',peso:3}]
+  },
+  {
+    id:17, slug:'fabio-moreira-azevedo', nome:'Fábio Moreira Azevedo', partido:'MDB', estado:'SP', cargo:'Prefeito',
+    score:31.8, noticias:1, initials:'FA',
+    bio:'Prefeito de Campinas pelo MDB.',
+    resumo_ia:'Prefeito com investigação pontual sobre contratação sem licitação de empresa de TI.',
+    noticias_arr:[
+      {id:'n24',titulo:'MP investiga contrato de R$ 2,4 mi com empresa de software sem licitação',resumo:'Ministério Público estadual abriu inquérito para apurar contratação direta de empresa de software para sistema de gestão municipal.',data:'2023-08-14',fonte:'Correio Popular',link:'#',score_veracidade:71,severidade:'baixo',relacionadas:[]},
+    ],
+    milestones:[],
+    relacoes:[{entidade:'MDB',tipo:'partido',peso:3}]
+  },
+  {
+    id:18, slug:'thais-rodrigues-matos', nome:'Thaís Rodrigues Matos', partido:'PP', estado:'PR', cargo:'Vereadora',
+    score:28.2, noticias:1, initials:'TR',
+    bio:'Vereadora em Curitiba pelo PP.',
+    resumo_ia:'Vereadora com registro de participação em sessões fantasma e uso do título de cargo para fins privados.',
+    noticias_arr:[
+      {id:'n25',titulo:'Câmara Municipal identifica faltas não justificadas em 40% das sessões',resumo:'Controle de frequência da Câmara Municipal revelou que a vereadora faltou sem justificativa a 12 das 30 sessões realizadas no semestre.',data:'2023-11-22',fonte:'Gazeta do Povo',link:'#',score_veracidade:77,severidade:'baixo',relacionadas:[]},
+    ],
+    milestones:[],
+    relacoes:[{entidade:'PP',tipo:'partido',peso:3}]
+  },
+  {
+    id:19, slug:'anderson-queiroz-fontes', nome:'Anderson Queiroz Fontes', partido:'PSD', estado:'AM', cargo:'Deputado Federal',
+    score:24.5, noticias:1, initials:'AQ',
+    bio:'Deputado Federal pelo Amazonas pelo PSD. Pesquisador universitário.',
+    resumo_ia:'Deputado com registro isolado de declaração de bens com inconsistência identificada pelo TSE.',
+    noticias_arr:[
+      {id:'n26',titulo:'TSE notifica deputado por omissão de imóvel em declaração de bens',resumo:'Tribunal identificou que o parlamentar omitiu chácara de 80 hectares avaliada em R$ 1,2 milhão na declaração de bens eleitorais.',data:'2023-06-28',fonte:'Agência Brasil',link:'#',score_veracidade:85,severidade:'baixo',relacionadas:[]},
+    ],
+    milestones:[],
+    relacoes:[{entidade:'PSD',tipo:'partido',peso:3}]
+  },
+  {
+    id:20, slug:'claudia-bittencourt-silva', nome:'Cláudia Bittencourt Silva', partido:'UNIAO', estado:'RS', cargo:'Deputada Federal',
+    score:18.9, noticias:1, initials:'CS',
+    bio:'Deputada Federal pelo Rio Grande do Sul pelo UNIÃO Brasil. Professora universitária.',
+    resumo_ia:'Deputada com registro de multa eleitoral de pequeno valor por descumprimento de prazo de prestação de contas.',
+    noticias_arr:[
+      {id:'n27',titulo:'TSE multa deputada por atraso na entrega de prestação de contas',resumo:'Tribunal Superior Eleitoral aplicou multa de R$ 8.500 por atraso de 12 dias na entrega da prestação de contas da campanha de 2022.',data:'2023-05-10',fonte:'TSE / Agência Brasil',link:'#',score_veracidade:97,severidade:'baixo',relacionadas:[]},
+    ],
+    milestones:[],
+    relacoes:[{entidade:'UNIAO',tipo:'partido',peso:3}]
+  },
+];
+
+// Casos recentes (compilados das noticias)
+const CASOS_RECENTES = [
+  {titulo:'Operação Papel Manchado', badge:'critico', politicos:['Marcos Dória','Carla Ventura'], resumo:'PF e MPF investigam esquema de desvio de verbas públicas em contratos de obras e saúde envolvendo 2 parlamentares de estados diferentes.', data:'2024-03-15'},
+  {titulo:'Escândalo da Merenda', badge:'alto', politicos:['Renata Cavalcante','Ana Paula Farias'], resumo:'CGU aponta irregularidades em contratos de merenda escolar em dois estados, com sobrepreço estimado em R$ 50 milhões.', data:'2024-01-10'},
+  {titulo:'Propina em Rodovias MG', badge:'critico', politicos:['Roberto Alves'], resumo:'Delação premiada aponta esquema de propina de R$ 12 milhões em contratos de concessão rodoviária em Minas Gerais.', data:'2024-01-18'},
+  {titulo:'Rachadinha na Câmara RJ', badge:'alto', politicos:['Carla Ventura'], resumo:'Três ex-assessores denunciam obrigatoriedade de devolver até 40% dos salários à deputada federal pelo Rio de Janeiro.', data:'2024-02-28'},
+  {titulo:'Desmatamento na Amazônia', badge:'medio', politicos:['Silvio Pinheiro Neto'], resumo:'IBAMA multa empresa do senador em R$ 4 milhões por desmatamento ilegal de 1.200 hectares no Pará.', data:'2023-08-22'},
+  {titulo:'Contratos de TI sem Licitação', badge:'medio', politicos:['Tiago Branco Melo'], resumo:'Empresa do cunhado de deputado federal faturou R$ 15 milhões em contratos públicos de tecnologia sem concorrência adequada.', data:'2023-10-18'},
+];
+
+// Dados grafo global
+const GRAFO_NODES = [
+  // Politicos
+  {id:'p1',label:'Marcos Dória',tipo:'politico',score:91.4,slug:'marcos-doria'},
+  {id:'p2',label:'Carla Ventura',tipo:'politico',score:88.7,slug:'carla-ventura'},
+  {id:'p3',label:'Roberto Alves',tipo:'politico',score:85.2,slug:'roberto-alves'},
+  {id:'p4',label:'Ana Paula Farias',tipo:'politico',score:79.3,slug:'ana-paula-farias'},
+  {id:'p5',label:'José Maurício Coutinho',tipo:'politico',score:76.8,slug:'jose-mauricio-coutinho'},
+  {id:'p6',label:'Fernando Lagoinha',tipo:'politico',score:72.1,slug:'fernando-lagoinha'},
+  {id:'p7',label:'Patrícia Mesquita',tipo:'politico',score:68.5,slug:'patricia-mesquita'},
+  {id:'p8',label:'Renata Cavalcante',tipo:'politico',score:61.2,slug:'renata-cavalcante'},
+  {id:'p9',label:'Sílvio Pinheiro Neto',tipo:'politico',score:58.7,slug:'silvio-pinheiro-neto'},
+  {id:'p10',label:'Hélio Santos',tipo:'politico',score:43.6,slug:'helio-santos-cavalcanti'},
+  // Partidos
+  {id:'pt1',label:'PT',tipo:'partido'},
+  {id:'pt2',label:'PL',tipo:'partido'},
+  {id:'pt3',label:'MDB',tipo:'partido'},
+  {id:'pt4',label:'PP',tipo:'partido'},
+  {id:'pt5',label:'PSD',tipo:'partido'},
+  // Empresas
+  {id:'e1',label:'Construtora Delta Sul',tipo:'empresa'},
+  {id:'e2',label:'Consórcio Obras RJ',tipo:'empresa'},
+  {id:'e3',label:'Empreiteira Horizonte',tipo:'empresa'},
+  {id:'e4',label:'Madeireira Pará Sul',tipo:'empresa'},
+  {id:'e5',label:'Agência Pulsar',tipo:'empresa'},
+  // Organizações
+  {id:'o1',label:'ONG Futuros Brilhantes',tipo:'organizacao'},
+  {id:'o2',label:'Instituto Nacional de Obras',tipo:'organizacao'},
+  {id:'o3',label:'Fundação Transparência BR',tipo:'organizacao'},
+];
+
+const GRAFO_LINKS = [
+  {source:'p1',target:'pt1',peso:3},{source:'p1',target:'e1',peso:2},{source:'p1',target:'o1',peso:1},
+  {source:'p2',target:'pt2',peso:3},{source:'p2',target:'e2',peso:2},{source:'p2',target:'p1',peso:1},
+  {source:'p3',target:'pt3',peso:3},{source:'p3',target:'e3',peso:2},{source:'p3',target:'p1',peso:2},
+  {source:'p4',target:'pt4',peso:3},{source:'p4',target:'o2',peso:1},
+  {source:'p5',target:'pt1',peso:2},{source:'p5',target:'e5',peso:2},
+  {source:'p6',target:'pt5',peso:3},{source:'p6',target:'e1',peso:1},
+  {source:'p7',target:'p3',peso:1},{source:'p7',target:'pt3',peso:2},
+  {source:'p8',target:'pt2',peso:3},{source:'p8',target:'e2',peso:1},
+  {source:'p9',target:'pt3',peso:3},{source:'p9',target:'e4',peso:3},
+  {source:'p10',target:'pt1',peso:2},{source:'p10',target:'o3',peso:1},
+  {source:'e1',target:'o2',peso:1},{source:'e3',target:'e1',peso:1},
+];
+
+// ============================================================
+// ROUTING / NAV
+// ============================================================
+let currentPage = 'home';
+let currentPoliticoSlug = null;
+
+function navigate(page, slug) {
+  // Hide all pages
+  document.querySelectorAll('.page').forEach(p => {
+    p.classList.remove('active');
+  });
+
+  // Show target
+  const el = document.getElementById('page-' + page);
+  if (el) {
+    el.classList.add('active');
+    el.classList.remove('fade-in');
+    void el.offsetWidth;
+    el.classList.add('fade-in');
+  }
+
+  currentPage = page;
+
+  // Update nav active states
+  document.querySelectorAll('.nav-btn').forEach(b => {
+    b.style.background = '';
+    b.style.color = '#94A3B8';
+  });
+  const activeNav = document.getElementById('nav-' + page);
+  if (activeNav) {
+    activeNav.style.background = 'rgba(16,185,129,0.1)';
+    activeNav.style.color = '#10B981';
+  }
+
+  document.querySelectorAll('.mobile-nav-btn').forEach(b => { b.style.color = '#94A3B8'; });
+  const activeMnav = document.getElementById('mnav-' + page);
+  if (activeMnav) activeMnav.style.color = '#10B981';
+
+  // Init pages on first visit
+  if (page === 'perfil' && slug) {
+    currentPoliticoSlug = slug;
+    renderPerfil(slug);
+  }
+  if (page === 'grafo') {
+    setTimeout(() => renderGrafo(), 50);
+  }
+  if (page === 'ranking') {
+    renderRanking();
+  }
+  if (page === 'busca') {
+    buscaFiltrar();
+  }
+
+  // Scroll to top
+  window.scrollTo({top:0, behavior:'smooth'});
+}
+
+// ============================================================
+// AUTOCOMPLETE HELPERS
+// ============================================================
+function getInitialsColor(score) {
+  if (score >= 80) return '#3D1515';
+  if (score >= 60) return '#3D2E0A';
+  if (score >= 40) return '#0A2E3D';
+  return '#0A2E1A';
+}
+
+function getScoreClass(score) {
+  if (score >= 80) return 'score-danger';
+  if (score >= 60) return 'score-high';
+  if (score >= 40) return 'score-medium';
+  return 'score-low';
+}
+
+function getScoreColor(score) {
+  if (score >= 80) return '#EF4444';
+  if (score >= 60) return '#F97316';
+  if (score >= 40) return '#F59E0B';
+  return '#10B981';
+}
+
+function buildACItem(p) {
+  return `<div class="autocomplete-item" onclick="navigate('perfil','${p.slug}');closeDropdown('hero-ac');closeDropdown('header-ac');">
+    <div class="avatar w-9 h-9 shrink-0 text-xs" style="background:${getInitialsColor(p.score)};border:1px solid ${getScoreColor(p.score)}33;">${p.initials}</div>
+    <div class="flex-1 min-w-0">
+      <div class="text-sm font-medium text-[#F1F5F9] truncate">${p.nome}</div>
+      <div class="text-xs text-[#94A3B8]">${p.partido} - ${p.estado} - ${p.cargo}</div>
+    </div>
+    <span class="font-mono text-sm font-bold shrink-0" style="color:${getScoreColor(p.score)}">${p.score}</span>
+  </div>`;
+}
+
+function heroAutocomplete(q) {
+  const dropdown = document.getElementById('hero-ac');
+  if (!q || q.length < 2) { dropdown.innerHTML=''; dropdown.style.display='none'; return; }
+  const results = POLITICOS.filter(p => p.nome.toLowerCase().includes(q.toLowerCase())).slice(0,6);
+  if (!results.length) { dropdown.innerHTML=''; dropdown.style.display='none'; return; }
+  dropdown.style.cssText = 'position:absolute;top:calc(100% + 6px);left:0;right:0;background:#1A1A2E;border:1px solid #2D2D44;border-radius:12px;overflow:hidden;z-index:200;box-shadow:0 16px 40px rgba(0,0,0,0.6);max-height:320px;overflow-y:auto;display:block;';
+  dropdown.innerHTML = results.map(buildACItem).join('');
+}
+
+function headerAutocomplete(q) {
+  const dropdown = document.getElementById('header-ac');
+  if (!q || q.length < 2) { dropdown.style.display='none'; return; }
+  const results = POLITICOS.filter(p => p.nome.toLowerCase().includes(q.toLowerCase())).slice(0,5);
+  if (!results.length) { dropdown.style.display='none'; return; }
+  dropdown.style.display = 'block';
+  dropdown.innerHTML = results.map(buildACItem).join('');
+}
+
+function closeDropdown(id) {
+  const el = document.getElementById(id);
+  if (el) { el.style.display='none'; el.innerHTML=''; }
+}
+
+// ============================================================
+// COUNTERS ANIMATION
+// ============================================================
+function animateCounter(elId, target, suffix='') {
+  const el = document.getElementById(elId);
+  if (!el) return;
+  let start = 0;
+  const duration = 1800;
+  const startTime = performance.now();
+  function step(now) {
+    const progress = Math.min((now - startTime) / duration, 1);
+    const eased = 1 - Math.pow(1 - progress, 3);
+    const val = Math.floor(eased * target);
+    el.textContent = val.toLocaleString('pt-BR') + suffix;
+    if (progress < 1) requestAnimationFrame(step);
+  }
+  requestAnimationFrame(step);
+}
+
+// ============================================================
+// HOME - Top 10 strip
+// ============================================================
+function renderTop10() {
+  const container = document.getElementById('top10-strip');
+  if (!container) return;
+  const top10 = [...POLITICOS].sort((a,b)=>b.score-a.score).slice(0,10);
+  container.innerHTML = top10.map((p,i) => `
+    <div onclick="navigate('perfil','${p.slug}')" class="card card-hover p-3 w-40 shrink-0 cursor-pointer">
+      <div class="flex items-center justify-between mb-2">
+        <span class="text-xs text-[#94A3B8] font-mono">#${i+1}</span>
+        <span class="font-mono text-xs font-bold" style="color:${getScoreColor(p.score)}">${p.score}</span>
+      </div>
+      <div class="avatar w-10 h-10 mx-auto mb-2 text-sm" style="background:${getInitialsColor(p.score)};border:1.5px solid ${getScoreColor(p.score)}44;">${p.initials}</div>
+      <div class="text-xs font-medium text-center truncate">${p.nome}</div>
+      <div class="text-center mt-1">
+        <span class="chip chip-gray text-[10px]">${p.partido}</span>
+      </div>
+    </div>
+  `).join('');
+}
+
+// ============================================================
+// HOME - Casos recentes
+// ============================================================
+function renderCasosRecentes() {
+  const container = document.getElementById('casos-recentes');
+  if (!container) return;
+  const badgeClass = {critico:'chip-red',alto:'chip-orange',medio:'chip-yellow',baixo:'chip-blue'};
+  const badgeLabel = {critico:'Crítico',alto:'Alto',medio:'Médio',baixo:'Baixo'};
+  container.innerHTML = CASOS_RECENTES.map(c => `
+    <div class="card card-hover p-4 cursor-pointer" onclick="navigate('busca')">
+      <div class="flex items-start justify-between gap-2 mb-2">
+        <h3 class="text-sm font-semibold text-[#F1F5F9]">${c.titulo}</h3>
+        <span class="chip ${badgeClass[c.badge]} shrink-0">${badgeLabel[c.badge]}</span>
+      </div>
+      <p class="text-xs text-[#94A3B8] mb-3 leading-relaxed">${c.resumo}</p>
+      <div class="flex flex-wrap gap-1 mb-2">
+        ${c.politicos.map(nome=>`<span class="chip chip-gray text-[10px]">${nome}</span>`).join('')}
+      </div>
+      <div class="text-[10px] text-[#94A3B8]">${formatDate(c.data)}</div>
+    </div>
+  `).join('');
+}
+
+// ============================================================
+// PERFIL
+// ============================================================
+const PARTIDO_CLASS = {PT:'partido-pt',PL:'partido-pl',MDB:'partido-mdb',PP:'partido-pp',PSDB:'partido-psdb',PSD:'partido-psd',UNIAO:'partido-uniao'};
+
+function getPartidoClass(p) { return PARTIDO_CLASS[p] || 'partido-default'; }
+
+const SEV_CONF = {
+  critico:{label:'Crítico',cls:'chip-red',borderCls:'sev-critico',dotColor:'#EF4444'},
+  alto:{label:'Alto',cls:'chip-orange',borderCls:'sev-alto',dotColor:'#F97316'},
+  medio:{label:'Médio',cls:'chip-yellow',borderCls:'sev-medio',dotColor:'#F59E0B'},
+  baixo:{label:'Baixo',cls:'chip-blue',borderCls:'sev-baixo',dotColor:'#3B82F6'},
+};
+
+const VER_CONF = [
+  {min:90,label:'Muito confiável',cls:'chip-green',color:'#10B981'},
+  {min:75,label:'Confiável',cls:'chip-blue',color:'#3B82F6'},
+  {min:60,label:'Moderado',cls:'chip-yellow',color:'#F59E0B'},
+  {min:40,label:'Duvidoso',cls:'chip-orange',color:'#F97316'},
+  {min:0,label:'Não verificado',cls:'chip-red',color:'#EF4444'},
+];
+
+function getVerConf(score) { return VER_CONF.find(v=>score>=v.min) || VER_CONF[VER_CONF.length-1]; }
+
+const MILESTONE_TIPOS = {
+  inquerito:{icon:'&#9878;',label:'Abertura de Inquérito',color:'#F59E0B'},
+  denuncia:{icon:'&#9741;',label:'Denúncia Formal',color:'#F97316'},
+  condenacao:{icon:'&#9878;',label:'Condenação',color:'#EF4444'},
+  absolvicao:{icon:'&#10003;',label:'Absolvição',color:'#10B981'},
+};
+
+function formatDate(d) {
+  const [y,m,day] = d.split('-');
+  const months = ['jan','fev','mar','abr','mai','jun','jul','ago','set','out','nov','dez'];
+  return `${parseInt(day)} ${months[parseInt(m)-1]} ${y}`;
+}
+
+let activeTab = 'timeline';
+let timelineShowing = 3;
+
+function renderPerfil(slug) {
+  const p = POLITICOS.find(x=>x.slug===slug);
+  if (!p) return;
+  activeTab = 'timeline';
+  timelineShowing = 3;
+
+  const scoreColor = getScoreColor(p.score);
+  const critCount = p.noticias_arr.filter(n=>n.severidade==='critico').length;
+  const fontes = [...new Set(p.noticias_arr.map(n=>n.fonte))];
+
+  document.getElementById('perfil-content').innerHTML = `
+    <!-- Back -->
+    <div class="max-w-4xl mx-auto px-4 pt-4 pb-1">
+      <button onclick="history.back()" class="flex items-center gap-1.5 text-xs text-[#94A3B8] hover:text-[#F1F5F9] transition mb-2">
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/></svg>
+        Voltar
+      </button>
+    </div>
+
+    <!-- Header card -->
+    <div class="max-w-4xl mx-auto px-4 pb-4">
+      <div class="card p-5 md:p-6">
+        <div class="flex flex-col sm:flex-row gap-5">
+          <!-- Avatar + score ring -->
+          <div class="flex flex-col items-center gap-2 shrink-0">
+            <div class="relative" style="width:88px;height:88px;">
+              <svg class="score-ring-svg absolute inset-0" width="88" height="88" viewBox="0 0 88 88">
+                <circle class="score-ring-track" cx="44" cy="44" r="39"/>
+                <circle class="score-ring-fill" cx="44" cy="44" r="39"
+                  style="stroke:${scoreColor};stroke-dasharray:${2*Math.PI*39};stroke-dashoffset:${2*Math.PI*39*(1-p.score/100)};"/>
+              </svg>
+              <div class="avatar absolute" style="inset:9px;background:${getInitialsColor(p.score)};font-size:22px;">${p.initials}</div>
+            </div>
+            <!-- Share -->
+            <button onclick="copyLink('${p.slug}')" class="flex items-center gap-1 text-xs text-[#94A3B8] hover:text-[#10B981] transition">
+              <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z"/></svg>
+              Compartilhar
+            </button>
+          </div>
+
+          <!-- Info -->
+          <div class="flex-1">
+            <div class="flex flex-wrap items-start gap-2 mb-1">
+              <h1 class="text-xl md:text-2xl font-black text-[#F1F5F9]">${p.nome}</h1>
+              <div class="flex items-center gap-1 mt-0.5">
+                <span class="chip ${getPartidoClass(p.partido)}">${p.partido}</span>
+                <span class="chip chip-gray">${p.estado}</span>
+              </div>
+            </div>
+            <div class="text-sm text-[#94A3B8] mb-3">${p.cargo}</div>
+
+            <!-- Score big -->
+            <div class="flex items-center gap-3 mb-3">
+              <div>
+                <div class="font-mono text-3xl font-black" style="color:${scoreColor}">${p.score}</div>
+                <div class="text-xs text-[#94A3B8]">Score de risco</div>
+              </div>
+              <div class="w-px h-8 bg-[#2D2D44]"></div>
+              <div>
+                <div class="progress-wrap w-32 md:w-48">
+                  <div class="progress-bar" id="score-bar" style="width:0%;background:linear-gradient(90deg,${scoreColor}88,${scoreColor});"></div>
+                </div>
+                <div class="text-xs text-[#94A3B8] mt-1">vs. máxima gravidade</div>
+              </div>
+            </div>
+
+            <p class="text-sm text-[#94A3B8] leading-relaxed">${p.resumo_ia}</p>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Stats -->
+    <div class="max-w-4xl mx-auto px-4 pb-4">
+      <div class="grid grid-cols-2 md:grid-cols-4 gap-3">
+        <div class="card p-4 text-center">
+          <div class="font-mono text-2xl font-bold text-[#F1F5F9] mb-0.5">${p.noticias_arr.length}</div>
+          <div class="text-xs text-[#94A3B8]">Total de notícias</div>
+        </div>
+        <div class="card p-4 text-center">
+          <div class="font-mono text-2xl font-bold text-[#EF4444] mb-0.5">${critCount}</div>
+          <div class="text-xs text-[#94A3B8]">Críticas</div>
+        </div>
+        <div class="card p-4 text-center">
+          <div class="font-mono text-2xl font-bold text-[#3B82F6] mb-0.5">${fontes.length}</div>
+          <div class="text-xs text-[#94A3B8]">Fontes</div>
+        </div>
+        <div class="card p-4 text-center">
+          <div class="font-mono text-2xl font-bold text-[#F59E0B] mb-0.5">${p.milestones.length}</div>
+          <div class="text-xs text-[#94A3B8]">Marcos legais</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Tabs -->
+    <div class="max-w-4xl mx-auto px-4 pb-4">
+      <div class="flex border-b border-[#2D2D44] overflow-x-auto">
+        <button class="tab-btn active" id="tab-btn-timeline" onclick="switchTab('timeline','${p.slug}')">Timeline</button>
+        <button class="tab-btn" id="tab-btn-noticias" onclick="switchTab('noticias','${p.slug}')">Notícias</button>
+        <button class="tab-btn" id="tab-btn-grafo" onclick="switchTab('grafo-mini','${p.slug}')">Grafo de conexões</button>
+      </div>
+
+      <!-- Tab content -->
+      <div id="tab-timeline" class="pt-5">
+        ${renderTimeline(p)}
+      </div>
+      <div id="tab-noticias" class="pt-5 hidden">
+        ${renderNoticiasTab(p)}
+      </div>
+      <div id="tab-grafo-mini" class="pt-5 hidden">
+        ${renderGrafoMiniTab(p)}
+      </div>
+    </div>
+  `;
+
+  // Animate score bar
+  setTimeout(() => {
+    const bar = document.getElementById('score-bar');
+    if (bar) bar.style.width = p.score + '%';
+    // Init mini grafo if needed
+  }, 100);
+}
+
+function switchTab(tab, slug) {
+  ['timeline','noticias','grafo-mini'].forEach(t => {
+    document.getElementById('tab-'+t).classList.add('hidden');
+    const btn = document.getElementById('tab-btn-'+t);
+    if (btn) { btn.classList.remove('active'); }
+  });
+  document.getElementById('tab-'+tab).classList.remove('hidden');
+  const activeBtn = document.getElementById('tab-btn-'+tab);
+  if (activeBtn) activeBtn.classList.add('active');
+  activeTab = tab;
+
+  if (tab === 'grafo-mini') {
+    const p = POLITICOS.find(x=>x.slug===slug);
+    if (p) setTimeout(() => renderMiniGrafo(p), 50);
+  }
+}
+
+function renderTimeline(p) {
+  const sorted = [...p.noticias_arr].sort((a,b) => new Date(b.data) - new Date(a.data));
+
+  // Merge milestones and noticias
+  const items = [];
+  p.milestones.forEach(m => items.push({...m, _type:'milestone'}));
+  sorted.forEach(n => items.push({...n, _type:'noticia'}));
+  items.sort((a,b) => new Date(b.data) - new Date(a.data));
+
+  const visible = items.slice(0, timelineShowing + p.milestones.length);
+  const hasMore = sorted.length > timelineShowing;
+
+  let html = `<div class="timeline-container pl-10" id="timeline-list">`;
+
+  visible.forEach((item, idx) => {
+    if (item._type === 'milestone') {
+      const tipo = MILESTONE_TIPOS[item.tipo] || MILESTONE_TIPOS.inquerito;
+      html += `
+        <div class="relative mb-5 slide-up" style="animation-delay:${idx*0.05}s">
+          <div class="milestone-dot" style="border-color:${tipo.color};box-shadow:0 0 12px ${tipo.color}44;">${tipo.icon}</div>
+          <div class="milestone-card p-4">
+            <div class="flex items-start gap-2 mb-1">
+              <span class="chip chip-gold text-[10px] shrink-0">${tipo.label}</span>
+              <span class="text-xs text-[#94A3B8] ml-auto shrink-0">${formatDate(item.data)}</span>
+            </div>
+            <h4 class="text-sm font-bold text-[#FBB824] mb-1">${item.titulo}</h4>
+            <p class="text-xs text-[#94A3B8] leading-relaxed">${item.descricao}</p>
+          </div>
+        </div>`;
+    } else {
+      const sev = SEV_CONF[item.severidade] || SEV_CONF.baixo;
+      const ver = getVerConf(item.score_veracidade);
+      const hasRelated = item.relacionadas && item.relacionadas.length > 0;
+      const relatedNoticias = hasRelated ? item.relacionadas.map(rid => p.noticias_arr.find(n=>n.id===rid)).filter(Boolean) : [];
+
+      html += `
+        <div class="relative mb-4 slide-up" style="animation-delay:${idx*0.05}s">
+          <div class="timeline-dot" style="color:${sev.dotColor};background:${sev.dotColor};"></div>
+          <div class="card p-4 ${sev.borderCls}">
+            <div class="flex flex-wrap items-center gap-2 mb-2">
+              <span class="text-xs text-[#94A3B8]">${formatDate(item.data)}</span>
+              <span class="chip ${sev.cls}">${sev.label}</span>
+              <span class="chip ${ver.cls} ml-auto">${ver.label} ${item.score_veracidade}%</span>
+            </div>
+            <h3 class="text-sm font-semibold text-[#F1F5F9] mb-2 leading-snug">${item.titulo}</h3>
+            <p class="text-xs text-[#94A3B8] leading-relaxed mb-3">${item.resumo}</p>
+
+            <!-- Fontes -->
+            <div class="flex flex-wrap items-center gap-2 mb-2">
+              <span class="text-[10px] text-[#94A3B8] uppercase tracking-wide font-medium">Fonte:</span>
+              <a href="${item.link}" target="_blank" class="text-[10px] text-[#3B82F6] hover:underline">${item.fonte}</a>
+              <a href="${item.link}" target="_blank" class="ml-auto flex items-center gap-1 text-[10px] text-[#10B981] hover:underline">
+                Ler íntegra <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"/></svg>
+              </a>
+            </div>
+
+            ${hasRelated ? `
+            <!-- Related toggle -->
+            <button class="text-[10px] text-[#94A3B8] hover:text-[#10B981] transition flex items-center gap-1 mt-1" onclick="toggleRelated('rel-${item.id}',this)">
+              <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1"/></svg>
+              ${relatedNoticias.length} notícias relacionadas
+            </button>
+            <div id="rel-${item.id}" class="hidden mt-2 space-y-2 pl-3 border-l-2 border-[#2D2D44]">
+              ${relatedNoticias.map(rn => `
+                <div class="bg-[#0A0A0A] rounded-lg p-2.5">
+                  <div class="text-[10px] text-[#94A3B8] mb-0.5">${formatDate(rn.data)} - ${rn.fonte}</div>
+                  <div class="text-xs font-medium text-[#F1F5F9]">${rn.titulo}</div>
+                </div>
+              `).join('')}
+            </div>` : ''}
+          </div>
+        </div>`;
+    }
+  });
+
+  html += `</div>`;
+
+  if (hasMore) {
+    html += `<div class="text-center mt-2">
+      <button onclick="loadMoreTimeline('${p.slug}')" class="px-5 py-2 bg-[#1A1A2E] border border-[#2D2D44] text-sm rounded-lg hover:border-[#10B981] hover:text-[#10B981] transition">
+        Carregar mais (${sorted.length - timelineShowing} restantes)
+      </button>
+    </div>`;
+  }
+
+  return html;
+}
+
+function loadMoreTimeline(slug) {
+  timelineShowing += 3;
+  const p = POLITICOS.find(x=>x.slug===slug);
+  if (!p) return;
+  const container = document.getElementById('tab-timeline');
+  if (container) container.innerHTML = renderTimeline(p);
+}
+
+function toggleRelated(id, btn) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  const isOpen = !el.classList.contains('hidden');
+  el.classList.toggle('hidden', isOpen);
+  btn.style.color = isOpen ? '' : '#10B981';
+}
+
+function renderNoticiasTab(p) {
+  let html = `
+    <div class="flex items-center gap-2 mb-4">
+      <select class="input-base px-3 py-1.5 text-xs" id="ntab-sev-filter" onchange="filterNoticiasTab('${p.slug}')">
+        <option value="">Todas as severidades</option>
+        <option value="critico">Crítico</option>
+        <option value="alto">Alto</option>
+        <option value="medio">Médio</option>
+        <option value="baixo">Baixo</option>
+      </select>
+      <select class="input-base px-3 py-1.5 text-xs" id="ntab-sort" onchange="filterNoticiasTab('${p.slug}')">
+        <option value="data">Por data</option>
+        <option value="score">Por score</option>
+      </select>
+    </div>
+    <div id="noticias-list-${p.slug}">
+      ${buildNoticiasTabList(p, '', 'data')}
+    </div>`;
+  return html;
+}
+
+function filterNoticiasTab(slug) {
+  const sev = document.getElementById('ntab-sev-filter')?.value || '';
+  const sort = document.getElementById('ntab-sort')?.value || 'data';
+  const p = POLITICOS.find(x=>x.slug===slug);
+  const container = document.getElementById('noticias-list-' + slug);
+  if (container && p) container.innerHTML = buildNoticiasTabList(p, sev, sort);
+}
+
+function buildNoticiasTabList(p, sevFilter, sort) {
+  let arr = [...p.noticias_arr];
+  if (sevFilter) arr = arr.filter(n=>n.severidade===sevFilter);
+  if (sort === 'score') arr.sort((a,b)=>b.score_veracidade-a.score_veracidade);
+  else arr.sort((a,b)=>new Date(b.data)-new Date(a.data));
+
+  if (!arr.length) return '<p class="text-sm text-[#94A3B8] text-center py-6">Nenhuma notícia encontrada.</p>';
+
+  return arr.map(n => {
+    const sev = SEV_CONF[n.severidade] || SEV_CONF.baixo;
+    const ver = getVerConf(n.score_veracidade);
+    return `
+      <div class="card mb-2 p-3 ${sev.borderCls} hover:border-[#3D3D5C] transition">
+        <div class="flex flex-wrap items-center gap-2 mb-1">
+          <span class="text-xs text-[#94A3B8]">${formatDate(n.data)}</span>
+          <span class="chip ${sev.cls}">${sev.label}</span>
+          <span class="chip ${ver.cls} ml-auto">${n.score_veracidade}%</span>
+        </div>
+        <div class="text-sm font-medium text-[#F1F5F9] mb-1">${n.titulo}</div>
+        <div class="flex items-center gap-3">
+          <span class="text-xs text-[#94A3B8]">${n.fonte}</span>
+          <a href="${n.link}" target="_blank" class="ml-auto text-xs text-[#10B981] hover:underline flex items-center gap-1">
+            Ver notícia <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"/></svg>
+          </a>
+        </div>
+      </div>`;
+  }).join('');
+}
+
+function renderGrafoMiniTab(p) {
+  return `
+    <div class="card overflow-hidden" style="height:360px;position:relative;">
+      <svg id="mini-grafo-svg" style="width:100%;height:100%;"></svg>
+      <div id="mini-tooltip" class="graph-tooltip" style="display:none;"></div>
+      <p class="absolute bottom-2 right-3 text-[10px] text-[#94A3B8]">Arraste os nós para explorar</p>
+    </div>`;
+}
+
+function copyLink(slug) {
+  navigator.clipboard.writeText(window.location.href.split('#')[0] + '#perfil/' + slug).catch(()=>{});
+  // Show toast
+  showToast('Link copiado!');
+}
+
+function showToast(msg) {
+  const t = document.createElement('div');
+  t.className = 'fixed bottom-24 md:bottom-6 left-1/2 -translate-x-1/2 bg-[#1A1A2E] border border-[#10B981] text-[#10B981] text-sm px-4 py-2 rounded-lg shadow-lg z-[999]';
+  t.textContent = msg;
+  document.body.appendChild(t);
+  setTimeout(()=>t.remove(), 2000);
+}
+
+// ============================================================
+// MINI GRAFO (perfil)
+// ============================================================
+function renderMiniGrafo(p) {
+  const svgEl = document.getElementById('mini-grafo-svg');
+  if (!svgEl) return;
+  const tooltip = document.getElementById('mini-tooltip');
+
+  const W = svgEl.clientWidth || 500;
+  const H = 360;
+
+  // Build nodes/links from politician relations
+  const nodes = [{id:'center',label:p.nome,tipo:'politico',score:p.score,isSelf:true}];
+  const links = [];
+  p.relacoes.forEach((r,i) => {
+    const id = 'rel'+i;
+    nodes.push({id, label:r.entidade, tipo:r.tipo, slug:r.slug||null});
+    links.push({source:'center',target:id,peso:r.peso});
+  });
+
+  const svg = d3.select(svgEl).html('').attr('viewBox',`0 0 ${W} ${H}`);
+  const g = svg.append('g');
+
+  const nodeColor = {politico:'#10B981',partido:'#3B82F6',empresa:'#94A3B8',organizacao:'#F59E0B'};
+
+  const sim = d3.forceSimulation(nodes)
+    .force('link', d3.forceLink(links).id(d=>d.id).distance(d=>100-d.peso*10))
+    .force('charge', d3.forceManyBody().strength(-200))
+    .force('center', d3.forceCenter(W/2, H/2))
+    .force('collision', d3.forceCollide(30));
+
+  const link = g.append('g').selectAll('line').data(links).join('line')
+    .attr('class','graph-link')
+    .attr('stroke-width', d=>d.peso*0.8);
+
+  const nodeG = g.append('g').selectAll('g').data(nodes).join('g')
+    .attr('class','graph-node')
+    .call(d3.drag()
+      .on('start', (ev,d) => { if (!ev.active) sim.alphaTarget(0.3).restart(); d.fx=d.x; d.fy=d.y; })
+      .on('drag', (ev,d) => { d.fx=ev.x; d.fy=ev.y; })
+      .on('end', (ev,d) => { if (!ev.active) sim.alphaTarget(0); d.fx=null; d.fy=null; })
+    );
+
+  nodeG.append('circle')
+    .attr('r', d=>d.isSelf?22:15)
+    .attr('fill', d=>nodeColor[d.tipo]||'#94A3B8')
+    .attr('fill-opacity', d=>d.isSelf?0.9:0.7)
+    .attr('stroke', d=>nodeColor[d.tipo]||'#94A3B8')
+    .attr('stroke-width', 2)
+    .attr('stroke-opacity', 0.5);
+
+  nodeG.append('text')
+    .attr('text-anchor','middle')
+    .attr('dy','0.35em')
+    .attr('fill','#F1F5F9')
+    .attr('font-size', d=>d.isSelf?9:8)
+    .attr('font-weight','600')
+    .attr('pointer-events','none')
+    .text(d=>d.label.split(' ').map(w=>w[0]).join('').slice(0,2));
+
+  nodeG.on('mouseover', (ev,d) => {
+    if (!tooltip) return;
+    tooltip.style.display='block';
+    tooltip.innerHTML=`<strong style="color:#F1F5F9">${d.label}</strong><br><span style="color:#94A3B8;font-size:10px;text-transform:capitalize;">${d.tipo}</span>`;
+  })
+  .on('mousemove', ev => {
+    const rect = svgEl.getBoundingClientRect();
+    tooltip.style.left = (ev.clientX - rect.left + 12) + 'px';
+    tooltip.style.top = (ev.clientY - rect.top - 30) + 'px';
+  })
+  .on('mouseout', () => { if(tooltip) tooltip.style.display='none'; })
+  .on('click', (ev,d) => {
+    if (d.tipo==='politico' && d.slug) navigate('perfil', d.slug);
+  });
+
+  sim.on('tick', () => {
+    link.attr('x1',d=>d.source.x).attr('y1',d=>d.source.y)
+        .attr('x2',d=>d.target.x).attr('y2',d=>d.target.y);
+    nodeG.attr('transform',d=>`translate(${d.x},${d.y})`);
+  });
+}
+
+// ============================================================
+// GRAFO GLOBAL
+// ============================================================
+let globalSim = null;
+let globalZoom = null;
+let grafoInited = false;
+
+function renderGrafo() {
+  const svgEl = document.getElementById('graph-global-svg');
+  if (!svgEl) return;
+
+  const showPolitico = document.getElementById('gf-politico')?.checked ?? true;
+  const showPartido = document.getElementById('gf-partido')?.checked ?? true;
+  const showEmpresa = document.getElementById('gf-empresa')?.checked ?? true;
+  const showOrg = document.getElementById('gf-org')?.checked ?? true;
+
+  const activeTypes = new Set();
+  if (showPolitico) activeTypes.add('politico');
+  if (showPartido) activeTypes.add('partido');
+  if (showEmpresa) activeTypes.add('empresa');
+  if (showOrg) activeTypes.add('organizacao');
+
+  const filtNodes = GRAFO_NODES.filter(n => activeTypes.has(n.tipo));
+  const filtNodeIds = new Set(filtNodes.map(n=>n.id));
+  const filtLinks = GRAFO_LINKS.filter(l => filtNodeIds.has(l.source.id || l.source) && filtNodeIds.has(l.target.id || l.target));
+
+  const container = svgEl.parentElement;
+  const W = container.clientWidth || 800;
+  const H = container.clientHeight || 560;
+
+  const nodeColor = {politico:'#10B981',partido:'#3B82F6',empresa:'#6B7280',organizacao:'#F59E0B'};
+
+  if (globalSim) globalSim.stop();
+
+  const nodesClone = filtNodes.map(n=>({...n}));
+  const linksClone = filtLinks.map(l=>({...l}));
+
+  const svg = d3.select(svgEl).html('')
+    .attr('width', W).attr('height', H);
+
+  globalZoom = d3.zoom().scaleExtent([0.3, 4])
+    .on('zoom', ev => g.attr('transform', ev.transform));
+
+  svg.call(globalZoom);
+
+  const g = svg.append('g');
+
+  const tooltip = document.getElementById('graph-tooltip');
+
+  globalSim = d3.forceSimulation(nodesClone)
+    .force('link', d3.forceLink(linksClone).id(d=>d.id).distance(90).strength(0.6))
+    .force('charge', d3.forceManyBody().strength(-180))
+    .force('center', d3.forceCenter(W/2, H/2))
+    .force('collision', d3.forceCollide(d=>getNodeRadius(d)+4))
+    .alphaDecay(0.02);
+
+  const link = g.append('g').selectAll('line').data(linksClone).join('line')
+    .attr('class','graph-link')
+    .attr('stroke-width', d=>Math.max(1, d.peso));
+
+  const nodeG = g.append('g').selectAll('g').data(nodesClone).join('g')
+    .attr('class','graph-node')
+    .call(d3.drag()
+      .on('start', (ev,d)=>{if(!ev.active)globalSim.alphaTarget(0.3).restart();d.fx=d.x;d.fy=d.y;})
+      .on('drag', (ev,d)=>{d.fx=ev.x;d.fy=ev.y;})
+      .on('end', (ev,d)=>{if(!ev.active)globalSim.alphaTarget(0);d.fx=null;d.fy=null;})
+    );
+
+  nodeG.append('circle')
+    .attr('r', getNodeRadius)
+    .attr('fill', d=>nodeColor[d.tipo]||'#6B7280')
+    .attr('fill-opacity', 0.8)
+    .attr('stroke', d=>nodeColor[d.tipo]||'#6B7280')
+    .attr('stroke-width', 2)
+    .attr('stroke-opacity', 0.4);
+
+  nodeG.append('text')
+    .attr('text-anchor','middle').attr('dy','0.35em')
+    .attr('fill','#F1F5F9').attr('font-size',9).attr('font-weight','700')
+    .attr('pointer-events','none')
+    .text(d=>d.label.split(' ').map(w=>w[0]).join('').slice(0,2));
+
+  nodeG.on('mouseover', (ev,d)=>{
+    const rect = svgEl.getBoundingClientRect();
+    tooltip.style.display='block';
+    tooltip.style.left=(ev.clientX-rect.left+14)+'px';
+    tooltip.style.top=(ev.clientY-rect.top-10)+'px';
+    let tipHtml=`<strong style="color:#F1F5F9">${d.label}</strong><br><span style="color:#94A3B8;font-size:10px;text-transform:capitalize;">${d.tipo}</span>`;
+    if(d.score) tipHtml+=`<br><span style="color:${getScoreColor(d.score)};font-family:'JetBrains Mono',monospace;font-weight:600;">${d.score}</span>`;
+    tooltip.innerHTML=tipHtml;
+  })
+  .on('mousemove', ev=>{
+    const rect=svgEl.getBoundingClientRect();
+    tooltip.style.left=(ev.clientX-rect.left+14)+'px';
+    tooltip.style.top=(ev.clientY-rect.top-10)+'px';
+  })
+  .on('mouseout', ()=>{ tooltip.style.display='none'; })
+  .on('click', (ev,d)=>{
+    if(d.tipo==='politico'&&d.slug){ navigate('perfil',d.slug); return; }
+    openSidebar(d, nodesClone, linksClone);
+  });
+
+  globalSim.on('tick', ()=>{
+    link.attr('x1',d=>d.source.x).attr('y1',d=>d.source.y)
+        .attr('x2',d=>d.target.x).attr('y2',d=>d.target.y);
+    nodeG.attr('transform',d=>`translate(${Math.max(20,Math.min(W-20,d.x))},${Math.max(20,Math.min(H-20,d.y))})`);
+  });
+
+  grafoInited = true;
+}
+
+function getNodeRadius(d) {
+  if (d.tipo === 'politico') return Math.max(14, Math.min(28, 10 + (d.score||50)/10));
+  if (d.tipo === 'partido') return 18;
+  return 14;
+}
+
+function grafoZoom(factor) {
+  if (!globalZoom) return;
+  const svgEl = d3.select('#graph-global-svg');
+  svgEl.transition().duration(300).call(globalZoom.scaleBy, factor);
+}
+
+function grafoReset() {
+  if (!globalZoom) return;
+  const svgEl = d3.select('#graph-global-svg');
+  svgEl.transition().duration(400).call(globalZoom.transform, d3.zoomIdentity);
+}
+
+function grafoSearch(q) {
+  // Highlight node matching query (visual feedback)
+}
+
+function openSidebar(node, nodes, links) {
+  const sidebar = document.getElementById('graph-sidebar');
+  const nameEl = document.getElementById('sidebar-name');
+  const contentEl = document.getElementById('sidebar-content');
+  if (!sidebar || !nameEl || !contentEl) return;
+
+  const connected = links.filter(l =>
+    (l.source.id||l.source) === node.id || (l.target.id||l.target) === node.id
+  ).map(l => {
+    const otherId = (l.source.id||l.source) === node.id ? (l.target.id||l.target) : (l.source.id||l.source);
+    return nodes.find(n=>n.id===otherId);
+  }).filter(Boolean);
+
+  const nodeColor = {politico:'#10B981',partido:'#3B82F6',empresa:'#6B7280',organizacao:'#F59E0B'};
+
+  nameEl.textContent = node.label;
+  contentEl.innerHTML = `
+    <div class="text-xs text-[#94A3B8] capitalize mb-3 flex items-center gap-2">
+      <span class="w-2 h-2 rounded-full" style="background:${nodeColor[node.tipo]}"></span>
+      ${node.tipo}
+    </div>
+    ${node.score ? `<div class="mb-3"><span class="font-mono text-xl font-bold" style="color:${getScoreColor(node.score)}">${node.score}</span><span class="text-xs text-[#94A3B8] ml-1">score de risco</span></div>`:''}
+    <div class="text-xs text-[#94A3B8] mb-2 uppercase tracking-wide font-medium">${connected.length} conexões</div>
+    <div class="space-y-1.5">
+      ${connected.map(c=>`
+        <div class="flex items-center gap-2 cursor-pointer hover:bg-[#0A0A0A] rounded-lg p-1.5 transition ${c.tipo==='politico'&&c.slug?'':'pointer-events-none'}" onclick="${c.tipo==='politico'&&c.slug?`navigate('perfil','${c.slug}')`:''}" >
+          <span class="w-2 h-2 rounded-full shrink-0" style="background:${nodeColor[c.tipo]}"></span>
+          <span class="text-xs text-[#F1F5F9] truncate">${c.label}</span>
+          <span class="text-[10px] text-[#94A3B8] capitalize ml-auto shrink-0">${c.tipo}</span>
+        </div>`).join('')}
+    </div>
+    ${node.tipo==='politico'&&node.slug?`<button onclick="navigate('perfil','${node.slug}')" class="mt-4 w-full py-2 bg-[#10B981]/10 border border-[#10B981]/30 text-[#10B981] text-xs rounded-lg hover:bg-[#10B981]/20 transition">Ver perfil completo</button>`:''}
+  `;
+
+  sidebar.classList.add('open');
+}
+
+function closeSidebar() {
+  document.getElementById('graph-sidebar')?.classList.remove('open');
+}
+
+// ============================================================
+// BUSCA
+// ============================================================
+let buscaPage = 0;
+const BUSCA_PER_PAGE = 9;
+let buscaFiltered = [];
+
+function buscaFiltrar() {
+  buscaPage = 0;
+  const q = document.getElementById('busca-input')?.value.toLowerCase() || '';
+  const partido = document.getElementById('f-partido')?.value || '';
+  const estado = document.getElementById('f-estado')?.value || '';
+  const cargo = document.getElementById('f-cargo')?.value || '';
+  const sevMin = parseFloat(document.getElementById('f-severidade')?.value || '0');
+  const ordem = document.getElementById('f-ordem')?.value || 'score';
+
+  buscaFiltered = POLITICOS.filter(p => {
+    if (q && !p.nome.toLowerCase().includes(q)) return false;
+    if (partido && p.partido !== partido) return false;
+    if (estado && p.estado !== estado) return false;
+    if (cargo && p.cargo !== cargo) return false;
+    if (p.score < sevMin) return false;
+    return true;
+  });
+
+  if (ordem === 'score') buscaFiltered.sort((a,b)=>b.score-a.score);
+  else if (ordem === 'nome') buscaFiltered.sort((a,b)=>a.nome.localeCompare(b.nome));
+  else if (ordem === 'noticias') buscaFiltered.sort((a,b)=>b.noticias-a.noticias);
+
+  renderBuscaResults();
+}
+
+function renderBuscaResults() {
+  const container = document.getElementById('busca-results');
+  const countEl = document.getElementById('busca-count');
+  const moreBtn = document.getElementById('busca-more');
+  if (!container) return;
+
+  if (countEl) countEl.textContent = buscaFiltered.length;
+
+  const slice = buscaFiltered.slice(0, (buscaPage + 1) * BUSCA_PER_PAGE);
+
+  container.innerHTML = slice.map(p => `
+    <div class="card card-hover p-4 cursor-pointer" onclick="navigate('perfil','${p.slug}')">
+      <div class="flex items-start gap-3">
+        <div class="avatar w-12 h-12 shrink-0" style="background:${getInitialsColor(p.score)};border:1.5px solid ${getScoreColor(p.score)}44;font-size:15px;">${p.initials}</div>
+        <div class="flex-1 min-w-0">
+          <div class="font-semibold text-sm truncate">${p.nome}</div>
+          <div class="text-xs text-[#94A3B8]">${p.cargo}</div>
+          <div class="flex flex-wrap gap-1 mt-1.5">
+            <span class="chip ${getPartidoClass(p.partido)}">${p.partido}</span>
+            <span class="chip chip-gray">${p.estado}</span>
+          </div>
+        </div>
+        <div class="text-right shrink-0">
+          <div class="font-mono font-bold text-lg" style="color:${getScoreColor(p.score)}">${p.score}</div>
+          <div class="text-[10px] text-[#94A3B8]">${p.noticias} notícias</div>
+        </div>
+      </div>
+    </div>
+  `).join('');
+
+  if (moreBtn) {
+    const hasMore = buscaFiltered.length > slice.length;
+    moreBtn.classList.toggle('hidden', !hasMore);
+  }
+}
+
+function buscaLoadMore() {
+  buscaPage++;
+  renderBuscaResults();
+}
+
+function buscaLimpar() {
+  document.getElementById('busca-input').value = '';
+  document.getElementById('f-partido').value = '';
+  document.getElementById('f-estado').value = '';
+  document.getElementById('f-cargo').value = '';
+  document.getElementById('f-severidade').value = '0';
+  document.getElementById('f-ordem').value = 'score';
+  buscaFiltrar();
+}
+
+// ============================================================
+// RANKING
+// ============================================================
+let rankingData = [];
+let rkPage = 0;
+const RK_PER_PAGE = 10;
+let rkSortField = 'score';
+let rkSortDir = -1;
+
+function rankingFiltrar() {
+  rkPage = 0;
+  const partido = document.getElementById('rk-partido')?.value || '';
+  const estado = document.getElementById('rk-estado')?.value || '';
+  const cargo = document.getElementById('rk-cargo')?.value || '';
+
+  rankingData = POLITICOS.filter(p => {
+    if (partido && p.partido !== partido) return false;
+    if (estado && p.estado !== estado) return false;
+    if (cargo && p.cargo !== cargo) return false;
+    return true;
+  });
+
+  rankingSort(rkSortField, true);
+}
+
+function rankingSort(field, keepDir) {
+  if (!keepDir) {
+    if (rkSortField === field) rkSortDir *= -1;
+    else { rkSortField = field; rkSortDir = -1; }
+  }
+  rkSortField = field;
+
+  rankingData.sort((a,b) => {
+    let va = a[field], vb = b[field];
+    if (typeof va === 'string') return va.localeCompare(vb) * rkSortDir;
+    return (vb - va) * (rkSortDir < 0 ? 1 : -1);
+  });
+
+  renderRankingTable();
+}
+
+function renderRanking() {
+  rankingFiltrar();
+  renderTop3();
+}
+
+function renderTop3() {
+  const top3 = [...POLITICOS].sort((a,b)=>b.score-a.score).slice(0,3);
+  const medals = [
+    {label:'#1',textClass:'medal-gold',border:'#FFD700',bg:'rgba(255,215,0,0.05)'},
+    {label:'#2',textClass:'medal-silver',border:'#C0C0C0',bg:'rgba(192,192,192,0.05)'},
+    {label:'#3',textClass:'medal-bronze',border:'#CD7F32',bg:'rgba(205,127,50,0.05)'},
+  ];
+
+  document.getElementById('rk-top3').innerHTML = top3.map((p,i) => {
+    const m = medals[i];
+    return `
+      <div class="card card-hover p-5 text-center cursor-pointer" style="border-color:${m.border}33;background:${m.bg}" onclick="navigate('perfil','${p.slug}')">
+        <div class="text-2xl font-black mb-2 ${m.textClass}">${m.label}</div>
+        <div class="avatar w-14 h-14 mx-auto mb-2" style="background:${getInitialsColor(p.score)};border:2px solid ${m.border}55;font-size:17px;">${p.initials}</div>
+        <div class="font-semibold text-sm mb-1">${p.nome}</div>
+        <div class="flex justify-center gap-1 mb-2">
+          <span class="chip ${getPartidoClass(p.partido)}">${p.partido}</span>
+          <span class="chip chip-gray">${p.estado}</span>
+        </div>
+        <div class="font-mono text-2xl font-black" style="color:${getScoreColor(p.score)}">${p.score}</div>
+        <div class="text-xs text-[#94A3B8] mt-0.5">${p.noticias_arr.length} notícias</div>
+      </div>`;
+  }).join('');
+}
+
+function renderRankingTable() {
+  const tbody = document.getElementById('rk-tbody');
+  const mobileCards = document.getElementById('rk-cards-mobile');
+  const showingEl = document.getElementById('rk-showing');
+  const totalEl = document.getElementById('rk-total');
+  const prevBtn = document.getElementById('rk-prev');
+  const nextBtn = document.getElementById('rk-next');
+  if (!tbody) return;
+
+  const start = rkPage * RK_PER_PAGE;
+  const slice = rankingData.slice(start, start + RK_PER_PAGE);
+  const total = rankingData.length;
+
+  if (showingEl) showingEl.textContent = Math.min(start + RK_PER_PAGE, total);
+  if (totalEl) totalEl.textContent = total;
+  if (prevBtn) prevBtn.disabled = rkPage === 0;
+  if (nextBtn) nextBtn.disabled = start + RK_PER_PAGE >= total;
+
+  tbody.innerHTML = slice.map((p, i) => {
+    const rank = start + i + 1;
+    const rankDisplay = rank <= 3
+      ? `<span class="${['medal-gold','medal-silver','medal-bronze'][rank-1]} text-base font-black">${rank}</span>`
+      : `<span class="text-[#94A3B8] font-mono text-sm">${rank}</span>`;
+
+    return `<tr>
+      <td>${rankDisplay}</td>
+      <td>
+        <div class="flex items-center gap-2">
+          <div class="avatar w-8 h-8 text-xs shrink-0" style="background:${getInitialsColor(p.score)};border:1px solid ${getScoreColor(p.score)}44;">${p.initials}</div>
+          <button onclick="navigate('perfil','${p.slug}')" class="text-sm font-medium hover:text-[#10B981] text-left transition">${p.nome}</button>
+        </div>
+      </td>
+      <td><span class="chip ${getPartidoClass(p.partido)}">${p.partido}</span></td>
+      <td class="text-sm text-[#94A3B8]">${p.estado}</td>
+      <td class="text-sm text-[#94A3B8] max-w-[120px] truncate">${p.cargo}</td>
+      <td class="text-right"><span class="font-mono font-bold" style="color:${getScoreColor(p.score)}">${p.score}</span></td>
+      <td class="text-right text-sm text-[#94A3B8]">${p.noticias_arr.length}</td>
+      <td class="text-right"><button onclick="navigate('perfil','${p.slug}')" class="text-xs text-[#10B981] hover:underline">Ver perfil</button></td>
+    </tr>`;
+  }).join('');
+
+  // Mobile cards
+  if (mobileCards) {
+    mobileCards.innerHTML = slice.map((p,i) => {
+      const rank = start + i + 1;
+      return `
+        <div class="flex items-center gap-3 p-4 border-b border-[#2D2D44] hover:bg-[#1E1E36] transition cursor-pointer" onclick="navigate('perfil','${p.slug}')">
+          <span class="font-mono text-sm text-[#94A3B8] w-6 text-center shrink-0">${rank}</span>
+          <div class="avatar w-10 h-10 shrink-0" style="background:${getInitialsColor(p.score)};border:1.5px solid ${getScoreColor(p.score)}44;font-size:13px;">${p.initials}</div>
+          <div class="flex-1 min-w-0">
+            <div class="text-sm font-medium truncate">${p.nome}</div>
+            <div class="flex gap-1 mt-1">
+              <span class="chip ${getPartidoClass(p.partido)}">${p.partido}</span>
+              <span class="chip chip-gray">${p.estado}</span>
+            </div>
+          </div>
+          <div class="text-right shrink-0">
+            <div class="font-mono font-bold" style="color:${getScoreColor(p.score)}">${p.score}</div>
+            <div class="text-[10px] text-[#94A3B8]">${p.noticias_arr.length} not.</div>
+          </div>
+        </div>`;
+    }).join('');
+  }
+}
+
+function rankingPage(dir) {
+  rkPage += dir;
+  renderRankingTable();
+  window.scrollTo({top:0, behavior:'smooth'});
+}
+
+// ============================================================
+// INIT
+// ============================================================
+window.addEventListener('DOMContentLoaded', () => {
+  // Animate counters on home
+  setTimeout(() => {
+    animateCounter('cnt-politicos', 5847);
+    animateCounter('cnt-noticias', 523412);
+    animateCounter('cnt-fontes', 47);
+  }, 300);
+
+  // Render home sections
+  renderTop10();
+  renderCasosRecentes();
+
+  // Set nav active
+  navigate('home');
+
+  // Hash routing
+  const hash = window.location.hash.replace('#','');
+  if (hash.startsWith('perfil/')) {
+    const slug = hash.replace('perfil/','');
+    navigate('perfil', slug);
+  } else if (hash && ['busca','grafo','ranking'].includes(hash)) {
+    navigate(hash);
+  }
+});
+
+// Handle hash changes
+window.addEventListener('hashchange', () => {
+  const hash = window.location.hash.replace('#','');
+  if (hash.startsWith('perfil/')) navigate('perfil', hash.replace('perfil/',''));
+  else if (['home','busca','grafo','ranking'].includes(hash)) navigate(hash);
+});
+
+// Close dropdowns on outside click
+document.addEventListener('click', e => {
+  if (!e.target.closest('#hero-search') && !e.target.closest('#hero-ac')) {
+    closeDropdown('hero-ac');
+  }
+  if (!e.target.closest('#header-search-input') && !e.target.closest('#header-ac')) {
+    closeDropdown('header-ac');
+  }
+});
+</script>
+
+</body>
+</html>
