@@ -11,6 +11,7 @@ from pydantic import BaseModel, ConfigDict
 class LogStep(str, Enum):
     ingest = "ingest"
     dedup = "dedup"
+    cache = "cache"
     process = "process"
     validate = "validate"
     persist = "persist"

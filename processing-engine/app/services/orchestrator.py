@@ -77,19 +77,26 @@ class Orchestrator:
                 result["duration_ms"] = int((time.monotonic() - total_start) * 1000)
                 await conn.execute(_UPDATE_ITEM_STATUS, item_id, "duplicate")
                 return result
+        else:
+            await self._log(conn, item_id, "dedup", "skipped", 0, meta={"reason": "skip_dedup=true"})
 
         # --- CACHE CHECK (after dedup, before LLM) ---
         content_hash = hashlib.sha256(ingested.encode("utf-8")).hexdigest()
         if not skip_cache:
+            cache_start = time.monotonic()
             cache_hit = await conn.fetchrow(SELECT_CACHE_HIT, content_hash, pipeline["id"])
+            cache_duration = int((time.monotonic() - cache_start) * 1000)
             if cache_hit:
                 await conn.execute(INCREMENT_CACHE_HIT, content_hash, pipeline["id"])
                 result["output"] = json.loads(cache_hit["output"]) if isinstance(cache_hit["output"], str) else cache_hit["output"]
                 result["cached"] = True
                 result["duration_ms"] = int((time.monotonic() - total_start) * 1000)
                 await conn.execute(_UPDATE_ITEM_STATUS, item_id, "completed")
-                await self._log(conn, item_id, "process", "cache_hit", 0)
+                await self._log(conn, item_id, "cache", "hit", cache_duration)
                 return result
+            await self._log(conn, item_id, "cache", "miss", cache_duration)
+        else:
+            await self._log(conn, item_id, "cache", "skipped", 0, meta={"reason": "skip_cache=true"})
 
         # --- 3. PROCESS (LLM) ---
         await conn.execute(_UPDATE_ITEM_STATUS, item_id, "processing")

@@ -408,7 +408,7 @@ class TestProcessingLogContract:
         "metadata": (dict, type(None)),
     }
 
-    VALID_STEPS = {"ingest", "dedup", "process", "validate", "persist"}
+    VALID_STEPS = {"ingest", "dedup", "cache", "process", "validate", "persist"}
 
     def test_required_fields(self):
         from app.models.log import ProcessingLog

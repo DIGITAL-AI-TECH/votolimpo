@@ -11,6 +11,7 @@ import asyncpg
 from app.db import get_pool
 from app.services.callback import CallbackService
 from app.services.orchestrator import Orchestrator
+from app.services.rate_limiter import RateLimiter
 
 logger = logging.getLogger(__name__)
 
@@ -122,15 +123,17 @@ class Worker:
 
         orchestrator = Orchestrator()
         semaphore = asyncio.Semaphore(pipeline.get("max_concurrent", 5))
+        rate_limiter = RateLimiter(rpm=pipeline.get("rate_limit_rpm", 60))
 
         async def process_one(item_record: asyncpg.Record) -> None:
             item = dict(item_record)
             async with semaphore:
+                await rate_limiter.acquire()
                 async with pool.acquire() as item_conn:
                     try:
                         result = await orchestrator.process_item(
                             item_id=item["id"],
-                            raw_content=item.get("content") or "",
+                            raw_content=item.get("content") or item.get("raw_content") or "",
                             source_url=item.get("source_url"),
                             content_type=item.get("content_type", "text/plain"),
                             pipeline=pipeline,
@@ -139,6 +142,7 @@ class Worker:
                             skip_cache=job.get("skip_cache", False),
                             dry_run=job.get("dry_run", False),
                             override_model=job.get("override_model"),
+                            job_id=job["id"],
                         )
                         await item_conn.execute(
                             _UPDATE_ITEM_RESULT,
