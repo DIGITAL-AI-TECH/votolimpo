@@ -1,0 +1,526 @@
+openapi: "3.1.0"
+info:
+  title: Processing Engine API
+  version: "1.0.0"
+  description: |
+    Agnostic data processing engine with LLM integration.
+    Processes raw data through configurable pipelines (Ingest → Dedup → Process → Validate → Persist).
+
+servers:
+  - url: http://localhost:8000
+    description: Local development
+  - url: https://processing-engine.digital-ai.tech
+    description: Production
+
+security:
+  - apiKey: []
+
+paths:
+  # ─── Health ───────────────────────────────────────────
+  /health:
+    get:
+      operationId: healthCheck
+      summary: Health check (no auth required)
+      security: []
+      tags: [Health]
+      responses:
+        "200":
+          description: Service healthy
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status: { type: string, example: "ok" }
+                  version: { type: string, example: "1.0.0" }
+                  db_connected: { type: boolean }
+                  worker_active: { type: boolean }
+
+  # ─── Pipelines ────────────────────────────────────────
+  /v1/pipelines:
+    get:
+      operationId: listPipelines
+      summary: List all registered pipelines
+      tags: [Pipelines]
+      parameters:
+        - name: active_only
+          in: query
+          schema: { type: boolean, default: true }
+      responses:
+        "200":
+          description: List of pipelines
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/Pipeline" }
+
+    post:
+      operationId: createPipeline
+      summary: Register a new pipeline
+      tags: [Pipelines]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/PipelineCreate" }
+          application/x-yaml:
+            schema: { type: string, description: "YAML pipeline config" }
+      responses:
+        "201":
+          description: Pipeline created
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Pipeline" }
+        "422":
+          description: Validation error
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+
+  /v1/pipelines/{pipeline_id}:
+    get:
+      operationId: getPipeline
+      summary: Get pipeline details
+      tags: [Pipelines]
+      parameters:
+        - $ref: "#/components/parameters/PipelineId"
+      responses:
+        "200":
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Pipeline" }
+        "404":
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+
+    put:
+      operationId: updatePipeline
+      summary: Update pipeline (creates new version)
+      tags: [Pipelines]
+      parameters:
+        - $ref: "#/components/parameters/PipelineId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/PipelineCreate" }
+      responses:
+        "200":
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Pipeline" }
+
+  # ─── Jobs ─────────────────────────────────────────────
+  /v1/jobs:
+    post:
+      operationId: createJob
+      summary: Submit a processing job
+      tags: [Jobs]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/JobCreate" }
+      responses:
+        "201":
+          description: Job queued
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Job" }
+        "409":
+          description: Duplicate idempotency_key
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "429":
+          description: Budget limit reached for pipeline
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+
+    get:
+      operationId: listJobs
+      summary: List jobs with filters
+      tags: [Jobs]
+      parameters:
+        - name: pipeline_id
+          in: query
+          schema: { type: string, format: uuid }
+        - name: status
+          in: query
+          schema: { $ref: "#/components/schemas/JobStatus" }
+        - name: limit
+          in: query
+          schema: { type: integer, default: 50, maximum: 200 }
+        - name: offset
+          in: query
+          schema: { type: integer, default: 0 }
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items:
+                    type: array
+                    items: { $ref: "#/components/schemas/Job" }
+                  total: { type: integer }
+
+  /v1/jobs/{job_id}:
+    get:
+      operationId: getJob
+      summary: Get job status and counters
+      tags: [Jobs]
+      parameters:
+        - $ref: "#/components/parameters/JobId"
+      responses:
+        "200":
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Job" }
+        "404":
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+
+  /v1/jobs/{job_id}/result:
+    get:
+      operationId: getJobResult
+      summary: Get processed results for all items in a job
+      tags: [Jobs]
+      parameters:
+        - $ref: "#/components/parameters/JobId"
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  job_id: { type: string, format: uuid }
+                  status: { $ref: "#/components/schemas/JobStatus" }
+                  items:
+                    type: array
+                    items: { $ref: "#/components/schemas/ItemResult" }
+
+  /v1/jobs/{job_id}/logs:
+    get:
+      operationId: getJobLogs
+      summary: Get processing logs for a job
+      tags: [Jobs]
+      parameters:
+        - $ref: "#/components/parameters/JobId"
+        - name: step
+          in: query
+          schema: { $ref: "#/components/schemas/LogStep" }
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/ProcessingLog" }
+
+  # ─── Stats ────────────────────────────────────────────
+  /v1/stats:
+    get:
+      operationId: getStats
+      summary: Get aggregated processing metrics
+      tags: [Stats]
+      parameters:
+        - name: pipeline_id
+          in: query
+          schema: { type: string, format: uuid }
+        - name: period
+          in: query
+          schema: { type: string, enum: [day, week, month, all], default: month }
+      responses:
+        "200":
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Stats" }
+
+  # ─── Costs ────────────────────────────────────────────
+  /v1/costs:
+    get:
+      operationId: getCosts
+      summary: Get cost breakdown with filters and grouping
+      tags: [Costs]
+      parameters:
+        - name: pipeline_id
+          in: query
+          schema: { type: string, format: uuid }
+        - name: job_id
+          in: query
+          schema: { type: string, format: uuid }
+        - name: period
+          in: query
+          schema: { type: string, enum: [day, week, month, custom], default: month }
+        - name: start_date
+          in: query
+          schema: { type: string, format: date }
+          description: Required when period=custom
+        - name: end_date
+          in: query
+          schema: { type: string, format: date }
+          description: Required when period=custom
+        - name: group_by
+          in: query
+          schema: { type: string, enum: [pipeline, job, model, day], default: pipeline }
+      responses:
+        "200":
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CostReport" }
+
+  # ─── Model Pricing ───────────────────────────────────
+  /v1/pricing:
+    get:
+      operationId: listPricing
+      summary: List current model pricing
+      tags: [Pricing]
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/ModelPricing" }
+
+    post:
+      operationId: upsertPricing
+      summary: Create or update model pricing
+      tags: [Pricing]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ModelPricingCreate" }
+      responses:
+        "200":
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ModelPricing" }
+
+components:
+  securitySchemes:
+    apiKey:
+      type: apiKey
+      in: header
+      name: X-API-Key
+
+  parameters:
+    PipelineId:
+      name: pipeline_id
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+    JobId:
+      name: job_id
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+
+  schemas:
+    # ─── Enums ────────────────────────────────────────
+    JobStatus:
+      type: string
+      enum: [queued, running, completed, failed, partial, cancelled]
+
+    ItemStatus:
+      type: string
+      enum: [pending, ingesting, deduplicating, processing, validating, persisting, completed, failed, duplicate, similar]
+
+    LogStep:
+      type: string
+      enum: [ingest, dedup, process, validate, persist]
+
+    # ─── Pipeline ─────────────────────────────────────
+    PipelineCreate:
+      type: object
+      required: [name, system_prompt, output_schema]
+      properties:
+        name: { type: string, minLength: 1, maxLength: 255 }
+        description: { type: string }
+        ingestor_type: { type: string, enum: [html, pdf, text, json, auto], default: auto }
+        max_content_chars: { type: integer, default: 100000 }
+        dedup_strategy: { type: string, enum: [hash, semantic, composite, none], default: hash }
+        dedup_threshold: { type: number, minimum: 0, maximum: 1, default: 0.90 }
+        llm_provider: { type: string, default: openai }
+        llm_model: { type: string, default: gpt-4.1-mini }
+        llm_temperature: { type: number, minimum: 0, maximum: 2, default: 0 }
+        llm_seed: { type: integer, default: 42 }
+        llm_max_tokens: { type: integer, default: 16384 }
+        system_prompt: { type: string, minLength: 1 }
+        output_schema: { type: object, description: "JSON Schema for LLM output validation" }
+        validators: { type: array, items: { type: string }, default: ["schema"] }
+        sink_type: { type: string, default: postgresql }
+        sink_config: { type: object, default: {} }
+        max_concurrent: { type: integer, minimum: 1, maximum: 50, default: 5 }
+        rate_limit_rpm: { type: integer, minimum: 1, default: 60 }
+        budget_limit_usd: { type: number, minimum: 0, nullable: true }
+        budget_period: { type: string, enum: [day, week, month], default: month }
+        max_retries: { type: integer, minimum: 0, maximum: 10, default: 3 }
+        cache_ttl_hours: { type: integer, minimum: 0, default: 720 }
+
+    Pipeline:
+      allOf:
+        - { $ref: "#/components/schemas/PipelineCreate" }
+        - type: object
+          properties:
+            id: { type: string, format: uuid }
+            version: { type: integer }
+            is_active: { type: boolean }
+            created_at: { type: string, format: date-time }
+            updated_at: { type: string, format: date-time }
+
+    # ─── Job ──────────────────────────────────────────
+    JobCreate:
+      type: object
+      required: [pipeline_id, items]
+      properties:
+        pipeline_id: { type: string, format: uuid }
+        idempotency_key: { type: string }
+        priority: { type: integer, default: 0 }
+        items:
+          type: array
+          minItems: 1
+          maxItems: 1000
+          items: { $ref: "#/components/schemas/ItemCreate" }
+        override_model: { type: string }
+        skip_dedup: { type: boolean, default: false }
+        skip_cache: { type: boolean, default: false }
+        dry_run: { type: boolean, default: false }
+        callback_url: { type: string, format: uri }
+        metadata: { type: object }
+
+    ItemCreate:
+      type: object
+      properties:
+        source_url: { type: string, format: uri }
+        content: { type: string, description: "Raw content (alternative to source_url)" }
+        content_type: { type: string, default: "text/plain" }
+        metadata: { type: object }
+
+    Job:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        pipeline_id: { type: string, format: uuid }
+        pipeline_version: { type: integer }
+        status: { $ref: "#/components/schemas/JobStatus" }
+        items_total: { type: integer }
+        items_completed: { type: integer }
+        items_failed: { type: integer }
+        idempotency_key: { type: string }
+        error_message: { type: string }
+        metadata: { type: object }
+        started_at: { type: string, format: date-time }
+        completed_at: { type: string, format: date-time }
+        created_at: { type: string, format: date-time }
+
+    # ─── Item Result ──────────────────────────────────
+    ItemResult:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        status: { $ref: "#/components/schemas/ItemStatus" }
+        source_url: { type: string }
+        content_type: { type: string }
+        output: { type: object, description: "Structured LLM output" }
+        dedup_result: { type: string, enum: [new, duplicate, similar] }
+        cached: { type: boolean }
+        usage:
+          type: object
+          properties:
+            prompt_tokens: { type: integer }
+            completion_tokens: { type: integer }
+            total_tokens: { type: integer }
+            cost_usd: { type: number }
+        duration_ms: { type: integer }
+        error_message: { type: string }
+
+    # ─── Processing Log ──────────────────────────────
+    ProcessingLog:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        item_id: { type: string, format: uuid }
+        step: { $ref: "#/components/schemas/LogStep" }
+        status: { type: string }
+        duration_ms: { type: integer }
+        error_message: { type: string }
+        metadata: { type: object }
+        created_at: { type: string, format: date-time }
+
+    # ─── Stats ────────────────────────────────────────
+    Stats:
+      type: object
+      properties:
+        period: { type: string }
+        total_jobs: { type: integer }
+        total_items: { type: integer }
+        items_completed: { type: integer }
+        items_failed: { type: integer }
+        success_rate: { type: number, description: "Percentage 0-100" }
+        total_cost_usd: { type: number }
+        avg_duration_ms: { type: number }
+        cache_hit_rate: { type: number, description: "Percentage 0-100" }
+        dedup_rate: { type: number, description: "Percentage 0-100" }
+
+    # ─── Cost Report ──────────────────────────────────
+    CostReport:
+      type: object
+      properties:
+        period: { type: string }
+        start_date: { type: string, format: date }
+        end_date: { type: string, format: date }
+        total_cost_usd: { type: number }
+        total_tokens: { type: integer }
+        total_calls: { type: integer }
+        avg_cost_per_item: { type: number }
+        breakdown:
+          type: array
+          items:
+            type: object
+            properties:
+              group_key: { type: string, description: "pipeline_id, job_id, model or date depending on group_by" }
+              group_label: { type: string, description: "Human-readable label (pipeline name, model name, etc.)" }
+              total_cost_usd: { type: number }
+              total_tokens: { type: integer }
+              total_calls: { type: integer }
+              avg_cost_per_item: { type: number }
+              prompt_tokens: { type: integer }
+              completion_tokens: { type: integer }
+
+    # ─── Model Pricing ───────────────────────────────
+    ModelPricing:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        provider: { type: string }
+        model: { type: string }
+        input_price_per_million_tokens: { type: number }
+        output_price_per_million_tokens: { type: number }
+        is_active: { type: boolean }
+        effective_from: { type: string, format: date }
+
+    ModelPricingCreate:
+      type: object
+      required: [provider, model, input_price_per_million_tokens]
+      properties:
+        provider: { type: string }
+        model: { type: string }
+        input_price_per_million_tokens: { type: number, minimum: 0 }
+        output_price_per_million_tokens: { type: number, minimum: 0, default: 0 }
+
+    # ─── Error ────────────────────────────────────────
+    Error:
+      type: object
+      properties:
+        error: { type: string }
+        detail: { type: string }
+        status_code: { type: integer }

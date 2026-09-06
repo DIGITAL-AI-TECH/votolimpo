@@ -1,0 +1,33 @@
+name: votolimpo-proposicoes
+description: "Extract structured data from legislative proposals"
+ingestor_type: html
+dedup_strategy: hash
+llm_provider: openai
+llm_model: gpt-4.1-mini
+llm_temperature: 0
+system_prompt: |
+  You are a legislative data extraction assistant.
+  Extract the following fields from the given legislative proposal text.
+  Return valid JSON matching the output schema.
+output_schema:
+  type: object
+  required: [title, author, date, summary, category]
+  properties:
+    title: { type: string }
+    author: { type: string }
+    date: { type: string, format: date }
+    summary: { type: string, maxLength: 500 }
+    category:
+      type: string
+      enum: [education, health, infrastructure, security, environment, economy, other]
+validators: [schema]
+sink_type: postgresql
+sink_config:
+  table: votolimpo.proposicoes_processed
+  conflict_column: source_url
+max_concurrent: 5
+rate_limit_rpm: 60
+max_retries: 3
+cache_ttl_hours: 720
+budget_limit_usd: 10.0
+budget_period: month
