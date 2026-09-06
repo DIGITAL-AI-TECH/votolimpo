@@ -1,0 +1,625 @@
+openapi: 3.1.0
+info:
+  title: Processing Engine API
+  version: 1.0.0
+  description: |
+    Agnostic data processing engine with LLM integration.
+    Processes raw data through configurable pipelines: Ingest → Dedup → Process (LLM) → Validate → Persist.
+
+servers:
+  - url: http://localhost:8000
+    description: Local development
+  - url: https://processing.digital-ai.tech
+    description: Production (Docker Swarm)
+
+security:
+  - ApiKeyAuth: []
+
+components:
+  securitySchemes:
+    ApiKeyAuth:
+      type: apiKey
+      in: header
+      name: X-Api-Key
+      description: API key per project instance
+
+  schemas:
+    # --- Request schemas ---
+
+    ProcessingItem:
+      type: object
+      required: [content]
+      properties:
+        item_id:
+          type: string
+          format: uuid
+          description: Optional client-provided ID. Auto-generated if omitted.
+        content:
+          type: string
+          minLength: 1
+          description: Raw content to process (text, HTML, JSON, etc.)
+        content_type:
+          type: string
+          default: text/plain
+          description: MIME type of content
+          enum: [text/plain, text/html, application/json, application/pdf]
+        source_url:
+          type: string
+          format: uri
+          description: Origin URL of the content
+        metadata:
+          type: object
+          additionalProperties: true
+          description: Free-form metadata passed through to output
+
+    CreateJobRequest:
+      type: object
+      required: [pipeline_id, items]
+      properties:
+        pipeline_id:
+          type: string
+          description: Registered pipeline identifier
+          example: votolimpo-article-extraction
+        items:
+          type: array
+          minItems: 1
+          maxItems: 1000
+          items:
+            $ref: '#/components/schemas/ProcessingItem'
+        priority:
+          type: string
+          enum: [low, normal, high, critical]
+          default: normal
+        callback_url:
+          type: string
+          format: uri
+          description: Webhook URL called when job completes
+        idempotency_key:
+          type: string
+          description: Prevents duplicate job submission
+        llm_override:
+          type: object
+          properties:
+            model:
+              type: string
+              example: gpt-4.1-mini
+            temperature:
+              type: number
+              minimum: 0
+              maximum: 2
+            max_tokens:
+              type: integer
+          description: Per-job LLM parameter overrides
+        skip_dedup:
+          type: boolean
+          default: false
+        skip_cache:
+          type: boolean
+          default: false
+        dry_run:
+          type: boolean
+          default: false
+          description: Validate pipeline execution without persisting to sink
+
+    CreatePipelineRequest:
+      type: object
+      required: [id, name, config]
+      properties:
+        id:
+          type: string
+          pattern: "^[a-z0-9-]+$"
+          description: Pipeline slug identifier
+          example: votolimpo-article-extraction
+        name:
+          type: string
+          description: Human-readable name
+        description:
+          type: string
+        config:
+          type: object
+          description: Full pipeline configuration (ingestor, dedup, llm, validators, sink, cache)
+          required: [ingestor, llm, sink]
+          properties:
+            ingestor:
+              type: object
+              required: [type]
+              properties:
+                type:
+                  type: string
+                  enum: [html, pdf, text, json, auto]
+                config:
+                  type: object
+            dedup:
+              type: object
+              properties:
+                strategy:
+                  type: string
+                  enum: [hash, semantic, composite, none]
+                  default: hash
+                config:
+                  type: object
+            llm:
+              type: object
+              required: [provider, model]
+              properties:
+                provider:
+                  type: string
+                  enum: [openai, anthropic, azure, ollama]
+                model:
+                  type: string
+                temperature:
+                  type: number
+                max_tokens:
+                  type: integer
+                max_retries:
+                  type: integer
+                  default: 2
+                system_prompt:
+                  type: string
+                  description: Inline system prompt (mutually exclusive with system_prompt_file)
+                system_prompt_file:
+                  type: string
+                  description: Path to system prompt file
+                output_schema:
+                  type: object
+                  description: Inline JSON Schema (mutually exclusive with output_schema_file)
+                output_schema_file:
+                  type: string
+                  description: Path to JSON Schema file
+            validators:
+              type: array
+              items:
+                type: object
+                required: [type]
+                properties:
+                  type:
+                    type: string
+                    enum: [json_schema, grounding, range, date, custom]
+                  config:
+                    type: object
+            sink:
+              type: object
+              required: [type]
+              properties:
+                type:
+                  type: string
+                  enum: [postgresql, sharepoint, s3, webhook, filesystem]
+                config:
+                  type: object
+            cache:
+              type: object
+              properties:
+                enabled:
+                  type: boolean
+                  default: true
+                ttl_hours:
+                  type: integer
+                  default: 720
+                key_strategy:
+                  type: string
+                  enum: [content_hash, url_hash]
+                  default: content_hash
+            batch:
+              type: object
+              properties:
+                max_concurrent:
+                  type: integer
+                  default: 5
+                  minimum: 1
+                  maximum: 50
+                requests_per_minute:
+                  type: integer
+                  default: 60
+
+    # --- Response schemas ---
+
+    JobResponse:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        pipeline_id:
+          type: string
+        status:
+          type: string
+          enum: [queued, running, completed, failed, partial]
+        priority:
+          type: string
+          enum: [low, normal, high, critical]
+        items_total:
+          type: integer
+        items_completed:
+          type: integer
+        items_failed:
+          type: integer
+        created_at:
+          type: string
+          format: date-time
+        started_at:
+          type: string
+          format: date-time
+          nullable: true
+        completed_at:
+          type: string
+          format: date-time
+          nullable: true
+
+    ItemResult:
+      type: object
+      properties:
+        item_id:
+          type: string
+          format: uuid
+        status:
+          type: string
+          enum: [completed, failed, skipped]
+        output:
+          type: object
+          nullable: true
+          description: Structured LLM output
+        validation_result:
+          type: object
+          nullable: true
+        dedup_result:
+          type: string
+          enum: [new, duplicate, similar, cached]
+          nullable: true
+        usage:
+          type: object
+          properties:
+            prompt_tokens:
+              type: integer
+            completion_tokens:
+              type: integer
+            total_tokens:
+              type: integer
+          nullable: true
+        cost_usd:
+          type: number
+        duration_ms:
+          type: integer
+        error:
+          type: string
+          nullable: true
+        cached:
+          type: boolean
+
+    JobResultResponse:
+      type: object
+      properties:
+        job_id:
+          type: string
+          format: uuid
+        status:
+          type: string
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/ItemResult'
+        summary:
+          type: object
+          properties:
+            total:
+              type: integer
+            completed:
+              type: integer
+            failed:
+              type: integer
+            skipped:
+              type: integer
+            total_cost_usd:
+              type: number
+            total_duration_ms:
+              type: integer
+
+    PipelineResponse:
+      type: object
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        description:
+          type: string
+          nullable: true
+        current_version:
+          type: integer
+        is_active:
+          type: boolean
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    StatsResponse:
+      type: object
+      properties:
+        total_jobs:
+          type: integer
+        total_items:
+          type: integer
+        total_cost_usd:
+          type: number
+        success_rate:
+          type: number
+          description: "Ratio of completed items to total items (0.0-1.0)"
+        avg_duration_ms:
+          type: number
+        cache_hit_rate:
+          type: number
+          description: "Ratio of cache hits to total items (0.0-1.0)"
+        by_pipeline:
+          type: array
+          items:
+            type: object
+            properties:
+              pipeline_id:
+                type: string
+              jobs_count:
+                type: integer
+              items_count:
+                type: integer
+              cost_usd:
+                type: number
+              success_rate:
+                type: number
+
+    HealthResponse:
+      type: object
+      properties:
+        status:
+          type: string
+          enum: [healthy, degraded, unhealthy]
+        version:
+          type: string
+        uptime_seconds:
+          type: number
+        db_connected:
+          type: boolean
+        queued_jobs:
+          type: integer
+        active_workers:
+          type: integer
+
+    ErrorResponse:
+      type: object
+      properties:
+        error:
+          type: string
+        detail:
+          type: string
+        code:
+          type: string
+
+paths:
+  /v1/jobs:
+    post:
+      operationId: createJob
+      summary: Submit a processing job
+      description: |
+        Submit 1 or more items for processing through the specified pipeline.
+        Returns immediately with job_id and status "queued".
+        Use GET /v1/jobs/{id} to poll status or provide callback_url for webhook notification.
+      tags: [Jobs]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateJobRequest'
+      responses:
+        '201':
+          description: Job created and queued
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/JobResponse'
+        '409':
+          description: Duplicate idempotency_key
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '422':
+          description: Validation error (invalid pipeline_id, empty items, etc.)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /v1/jobs/{job_id}:
+    get:
+      operationId: getJobStatus
+      summary: Get job status
+      description: Returns current status with progress counters updated in real-time.
+      tags: [Jobs]
+      parameters:
+        - name: job_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Job status
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/JobResponse'
+        '404':
+          description: Job not found
+
+  /v1/jobs/{job_id}/result:
+    get:
+      operationId: getJobResult
+      summary: Get job results
+      description: |
+        Returns complete results for all items in the job.
+        Only available when job status is completed, failed, or partial.
+      tags: [Jobs]
+      parameters:
+        - name: job_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Job results
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/JobResultResponse'
+        '404':
+          description: Job not found
+        '409':
+          description: Job still running (status=queued or running)
+
+  /v1/pipelines:
+    post:
+      operationId: createPipeline
+      summary: Register a new pipeline
+      description: |
+        Register a pipeline configuration. The config is validated against
+        the Pydantic model and stored with version 1. System prompt and
+        output schema files are resolved and stored inline.
+      tags: [Pipelines]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreatePipelineRequest'
+      responses:
+        '201':
+          description: Pipeline registered
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PipelineResponse'
+        '409':
+          description: Pipeline ID already exists
+        '422':
+          description: Invalid configuration
+
+    get:
+      operationId: listPipelines
+      summary: List registered pipelines
+      tags: [Pipelines]
+      responses:
+        '200':
+          description: List of pipelines
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/PipelineResponse'
+
+  /v1/pipelines/{pipeline_id}:
+    get:
+      operationId: getPipeline
+      summary: Get pipeline details
+      tags: [Pipelines]
+      parameters:
+        - name: pipeline_id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Pipeline details with current config
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/PipelineResponse'
+                  - type: object
+                    properties:
+                      config:
+                        type: object
+        '404':
+          description: Pipeline not found
+
+    put:
+      operationId: updatePipeline
+      summary: Update pipeline (creates new version)
+      description: |
+        Updates the pipeline configuration. Creates a new version.
+        Jobs in progress continue with their original version.
+        Future jobs use the new version.
+      tags: [Pipelines]
+      parameters:
+        - name: pipeline_id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreatePipelineRequest'
+      responses:
+        '200':
+          description: Pipeline updated (new version created)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PipelineResponse'
+        '404':
+          description: Pipeline not found
+        '422':
+          description: Invalid configuration
+
+  /v1/health:
+    get:
+      operationId: healthCheck
+      summary: Health check
+      description: Returns engine health status, DB connectivity, and queue depth.
+      tags: [Operations]
+      security: []
+      responses:
+        '200':
+          description: Engine healthy
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthResponse'
+        '503':
+          description: Engine unhealthy
+
+  /v1/stats:
+    get:
+      operationId: getStats
+      summary: Aggregated metrics
+      description: Returns aggregated processing metrics across all pipelines.
+      tags: [Operations]
+      parameters:
+        - name: pipeline_id
+          in: query
+          required: false
+          schema:
+            type: string
+          description: Filter stats by pipeline
+        - name: since
+          in: query
+          required: false
+          schema:
+            type: string
+            format: date-time
+          description: Start date for stats window
+      responses:
+        '200':
+          description: Aggregated metrics
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StatsResponse'
