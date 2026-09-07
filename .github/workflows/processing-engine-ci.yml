@@ -276,14 +276,13 @@ jobs:
             sleep 5
           done
 
-          # Step 3: Set PG password via service update (handles first deploy + rotation)
-          echo "Injecting POSTGRES_PASSWORD into postgres service..."
-          docker service update \
-            --env-add "POSTGRES_PASSWORD=${DB_PASSWORD}" \
-            --detach \
-            "${STACK_NAME}_postgres"
+          # NOTE: We do NOT update the postgres service here.
+          # POSTGRES_PASSWORD only applies on first initdb (empty volume).
+          # On existing volumes it does nothing — and the service update
+          # RESTARTS PG, making it unavailable for the Sync step.
+          # Password rotation is handled by ALTER ROLE in the Sync step.
 
-          # Step 4: Inject secrets + image into API and scale to 1 replica (atomic)
+          # Step 3: Inject secrets + image into API and scale to 1 replica (atomic)
           echo "Injecting secrets into API service and scaling to 1 replica..."
           docker service update \
             --image "${IMG}" \
