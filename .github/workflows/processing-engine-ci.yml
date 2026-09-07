@@ -345,18 +345,43 @@ jobs:
             echo "  PG     first 3: ${PG_PW:0:3}"
           fi
 
-          # 4. Try to connect to PG directly from the manager node
-          echo "=== Testing direct pg_isready ==="
-          PG_CONTAINER=$(docker ps --filter "label=com.docker.swarm.service.name=processing-engine_postgres" -q | head -1)
-          if [ -n "$PG_CONTAINER" ]; then
-            echo "PG container: $PG_CONTAINER"
-            docker exec "$PG_CONTAINER" pg_isready -U postgres 2>&1 || true
-            # Try to verify password by running psql
-            # Pass password via env to avoid shell interpolation of special chars
-            docker exec -e PGPASSWORD="$DB_PASSWORD" "$PG_CONTAINER" psql -U postgres -d processing_engine -c "SELECT 1" 2>&1 || echo "psql auth failed with GitHub Secret password"
-          else
-            echo "No PG container found on this node"
-          fi
+          # 4. Test PG auth via temporary container on overlay network
+          echo "=== Testing PG auth via overlay network ==="
+          docker run --rm --network processing-engine_internal \
+            -e PGPASSWORD="${DB_PASSWORD}" \
+            pgvector/pgvector:pg16 \
+            psql -h postgres -U postgres -d processing_engine -c "SELECT 1 as ok" \
+            2>&1 || echo "FAILED: psql auth test with GitHub Secret password"
+
+          # 5. Check what password PG actually has (hash from pg_authid)
+          docker run --rm --network processing-engine_internal \
+            -e PGPASSWORD="${DB_PASSWORD}" \
+            pgvector/pgvector:pg16 \
+            psql -h postgres -U postgres -d processing_engine \
+            -c "SELECT rolname, left(rolpassword,20) as pw_prefix FROM pg_authid WHERE rolname='postgres'" \
+            2>&1 || echo "Could not query pg_authid (auth failed)"
+
+          # 6. Try pg_isready (no auth) to see if PG is reachable
+          docker run --rm --network processing-engine_internal \
+            pgvector/pgvector:pg16 \
+            pg_isready -h postgres -U postgres \
+            2>&1 || echo "pg_isready failed - PG may not be reachable"
+
+          # 7. Try with EMPTY password — if this works, PG was initialized without password
+          echo "=== Testing with EMPTY password ==="
+          docker run --rm --network processing-engine_internal \
+            -e PGPASSWORD="" \
+            pgvector/pgvector:pg16 \
+            psql -h postgres -U postgres -d processing_engine -c "SELECT 'empty_pw_works' as result" \
+            2>&1 || echo "Empty password also failed (expected)"
+
+          # 8. Print raw bytes of password (hex) to detect hidden chars
+          echo "=== Password hex dump ==="
+          printf '%s' "${DB_PASSWORD}" | xxd | head -5
+          echo "API_PW hex:"
+          printf '%s' "${API_PW}" | xxd | head -5
+          echo "PG_PW hex:"
+          printf '%s' "${PG_PW}" | xxd | head -5
 
       - name: Health Check
         env:
