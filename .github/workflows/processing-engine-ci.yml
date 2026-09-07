@@ -294,7 +294,10 @@ jobs:
       - name: Deploy stack
         env:
           TAG: ${{ needs.docker.outputs.image_sha }}
-          DB_PASSWORD: ${{ secrets.PE_DB_PASSWORD }}
+          # Use a simple known password to test if special chars in the
+          # GitHub Secret are the root cause of InvalidPasswordError.
+          # TODO: revert to ${{ secrets.PE_DB_PASSWORD }} once confirmed working.
+          DB_PASSWORD: "processing_engine_2026"
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
           API_KEY: ${{ secrets.PE_API_KEY }}
         run: |
@@ -322,7 +325,7 @@ jobs:
       - name: Health Check
         env:
           TAG: ${{ needs.docker.outputs.image_sha }}
-          DB_PASSWORD: ${{ secrets.PE_DB_PASSWORD }}
+          DB_PASSWORD: "processing_engine_2026"
         run: |
           SERVICE_NAME="processing-engine_api"
           echo "Aguardando convergencia do servico (max 5 min)..."
@@ -362,8 +365,8 @@ jobs:
                 echo -n "${DB_PASSWORD}" | md5sum
                 echo "--- Local socket auth (should always work) ---"
                 docker exec "$PG_CONTAINER" psql -U postgres -c "SELECT 1 AS socket_auth_ok;" 2>&1 || echo "  SOCKET AUTH FAILED!"
-                echo "--- TCP auth with POSTGRES_PASSWORD (simulates API connection) ---"
-                docker exec "$PG_CONTAINER" sh -c 'PGPASSWORD=$POSTGRES_PASSWORD psql -h 127.0.0.1 -U postgres -c "SELECT 1 AS tcp_auth_ok;"' 2>&1 || echo "  TCP AUTH FAILED!"
+                echo "--- TCP auth with POSTGRES_PASSWORD via container IP (scram-sha-256) ---"
+                docker exec "$PG_CONTAINER" sh -c 'MY_IP=$(hostname -i | awk "{print \$1}"); echo "Testing auth via $MY_IP"; PGPASSWORD=$POSTGRES_PASSWORD psql -h $MY_IP -U postgres -c "SELECT 1 AS real_scram_auth_ok;"' 2>&1 || echo "  SCRAM AUTH FAILED!"
                 echo "--- pg_hba.conf ---"
                 docker exec "$PG_CONTAINER" cat /var/lib/postgresql/data/pg_hba.conf 2>&1 | grep -v "^#" | grep -v "^$" || true
                 echo "--- Check password in pg_authid ---"
