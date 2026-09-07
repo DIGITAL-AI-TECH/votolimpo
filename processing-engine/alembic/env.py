@@ -18,6 +18,7 @@ import db_models.processing_log  # noqa: F401
 import db_models.cache_entry  # noqa: F401
 import db_models.llm_call_log  # noqa: F401
 import db_models.model_pricing  # noqa: F401
+import db_models.pool  # noqa: F401
 
 from db_models.base import Base
 

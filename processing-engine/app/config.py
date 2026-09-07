@@ -18,6 +18,9 @@ class Settings(BaseSettings):
     API_KEY: str = "dev-key"
     ENGINE_ROLE: Literal["api", "worker", "both"] = "both"
     WORKER_POLL_INTERVAL_SECONDS: float = 1.0
+    BATCHER_POLL_INTERVAL_SECONDS: int = 5
+    BATCHER_DEFAULT_BATCH_SIZE: int = 50
+    BATCHER_ENABLED: bool = True
     LOG_LEVEL: str = "INFO"
     APP_VERSION: str = "1.0.0"
 

@@ -18,6 +18,7 @@ logging.basicConfig(
 )
 
 _worker_task: asyncio.Task | None = None
+_auto_batcher = None
 
 
 async def _run_worker() -> None:
@@ -40,20 +41,35 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
       - Cancels the worker task (if running).
       - Closes the connection pool.
     """
-    global _worker_task
+    global _worker_task, _auto_batcher
 
     # --- Startup ---
     logger.info("Starting Processing Engine (role=%s)", settings.ENGINE_ROLE)
-    await create_pool(settings.DATABASE_URL)
+    db_pool = await create_pool(settings.DATABASE_URL)
 
     if settings.ENGINE_ROLE in ("worker", "both"):
         _worker_task = asyncio.create_task(_run_worker(), name="processing-worker")
         logger.info("Background worker task created")
 
+    # Start Auto-Batcher if enabled and not API-only
+    if settings.BATCHER_ENABLED and settings.ENGINE_ROLE != "api":
+        from app.services.auto_batcher import AutoBatcher
+
+        _auto_batcher = AutoBatcher(
+            pool=db_pool,
+            poll_interval=settings.BATCHER_POLL_INTERVAL_SECONDS,
+            batch_size=settings.BATCHER_DEFAULT_BATCH_SIZE,
+        )
+        await _auto_batcher.start()
+
     yield
 
     # --- Shutdown ---
     logger.info("Shutting down Processing Engine")
+
+    if _auto_batcher is not None:
+        await _auto_batcher.stop()
+        _auto_batcher = None
 
     if _worker_task is not None and not _worker_task.done():
         _worker_task.cancel()
@@ -83,6 +99,7 @@ from app.api.jobs import router as jobs_router  # noqa: E402
 from app.api.costs import router as costs_router  # noqa: E402
 from app.api.pricing import router as pricing_router  # noqa: E402
 from app.api.stats import router as stats_router  # noqa: E402
+from app.api.pool import router as pool_router  # noqa: E402
 from app.deps import verify_api_key  # noqa: E402
 
 app.include_router(health.router)
@@ -108,6 +125,11 @@ app.include_router(
 )
 app.include_router(
     stats_router,
+    prefix="/v1",
+    dependencies=[Depends(verify_api_key)],
+)
+app.include_router(
+    pool_router,
     prefix="/v1",
     dependencies=[Depends(verify_api_key)],
 )
