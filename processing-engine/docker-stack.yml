@@ -4,7 +4,7 @@ services:
   api:
     image: registry.digital-ai.tech/processing-engine:${TAG:-latest}
     environment:
-      - DATABASE_URL=postgresql://postgres:${DB_PASSWORD}@postgres:5432/processing_engine
+      - DATABASE_URL=${DATABASE_URL:-postgresql://postgres:${DB_PASSWORD}@postgres:5432/processing_engine}
       - OPENAI_API_KEY=${OPENAI_API_KEY}
       - API_KEY=${API_KEY}
       - ENGINE_ROLE=both
