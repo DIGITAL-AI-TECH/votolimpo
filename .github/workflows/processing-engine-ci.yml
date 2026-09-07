@@ -225,25 +225,24 @@ jobs:
       - name: Deploy ou Update no Swarm
         env:
           IMAGE_SHA: ${{ needs.docker.outputs.image_sha }}
+          TAG: ${{ needs.docker.outputs.image_sha }}
           DB_PASSWORD: ${{ secrets.PE_DB_PASSWORD }}
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
           API_KEY: ${{ secrets.PE_API_KEY }}
         run: |
-          IMG="${IMAGE_NAME}:${IMAGE_SHA}"
+          IMG="${IMAGE_NAME}:${TAG}"
 
           # Pull da nova imagem no manager para que o Swarm nao re-baixe durante deploy
           echo "Pulling ${IMG}..."
           timeout 300 docker pull "${IMG}" || echo "WARNING: pull timed out — Swarm will pull via --with-registry-auth"
 
+          echo "TAG=${TAG} | DB_PASSWORD is set: $([ -n \"${DB_PASSWORD}\" ] && echo yes || echo no)"
+          echo "Image to deploy: ${IMG}"
+
           STACK_NAME="processing-engine"
 
-          # Usar TAG para que o compose resolva a imagem correta
-          export TAG="${IMAGE_SHA}"
-
-          # docker stack deploy atualiza servicos existentes e cria novos
-          # Env vars (DB_PASSWORD, OPENAI_API_KEY, API_KEY, TAG) sao interpoladas
-          # pelo shell no docker-stack.yml via ${VAR}
-          echo "Deploying stack ${STACK_NAME} with image ${IMG}..."
+          # docker stack deploy interpola env vars no compose file:
+          # TAG, DB_PASSWORD, OPENAI_API_KEY, API_KEY
           docker stack deploy \
             --with-registry-auth \
             --compose-file processing-engine/docker-stack.yml \
