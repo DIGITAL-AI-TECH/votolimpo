@@ -23,6 +23,7 @@ COPY entrypoint.sh ./
 RUN chmod +x entrypoint.sh
 
 ENV PYTHONUNBUFFERED=1 \
+    PYTHONPATH=/app \
     ENGINE_ROLE=both \
     WORKER_POLL_INTERVAL_SECONDS=1.0 \
     LOG_LEVEL=INFO
