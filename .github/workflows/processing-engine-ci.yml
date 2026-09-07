@@ -285,9 +285,22 @@ jobs:
       - name: Health Check
         env:
           TAG: ${{ needs.docker.outputs.image_sha }}
+          DB_PASSWORD: ${{ secrets.PE_DB_PASSWORD }}
         run: |
           SERVICE_NAME="processing-engine_api"
           echo "Aguardando convergencia do servico (max 5 min)..."
+
+          # Debug: show password hash for both services (never plaintext!)
+          echo "=== Password Debug ==="
+          PW_LEN=${#DB_PASSWORD}
+          PW_MD5=$(echo -n "${DB_PASSWORD}" | md5sum | cut -d' ' -f1)
+          echo "GitHub Secret PE_DB_PASSWORD: len=${PW_LEN}, md5=${PW_MD5}"
+
+          # Show what env vars the services actually have (password masked)
+          echo "--- API service env (DB_PASSWORD) ---"
+          docker service inspect processing-engine_api --format '{{range .Spec.TaskTemplate.ContainerSpec.Env}}{{println .}}{{end}}' 2>/dev/null | grep -E "DB_PASSWORD|POSTGRES_PASSWORD" | sed 's/=.*/=***/' || echo "N/A"
+          echo "--- PG service env (POSTGRES_PASSWORD) ---"
+          docker service inspect processing-engine_postgres --format '{{range .Spec.TaskTemplate.ContainerSpec.Env}}{{println .}}{{end}}' 2>/dev/null | grep -E "DB_PASSWORD|POSTGRES_PASSWORD" | sed 's/=.*/=***/' || echo "N/A"
 
           # Wait for PostgreSQL service to report Running via Swarm API
           # (NOT docker ps/exec — PG may run on a different node)
@@ -332,14 +345,14 @@ jobs:
               exit 0
             fi
 
-            # Dump detailed diagnostics at 30s, 90s, 150s, etc.
+            # Dump detailed diagnostics at key iterations
             if [ "$i" -eq 6 ] || [ "$i" -eq 18 ] || [ "$i" -eq 30 ] || [ "$i" -eq 50 ]; then
               echo "=== DIAGNOSTIC (iteration $i) ==="
               echo "--- Task States ---"
               docker service ps "${SERVICE_NAME}" --no-trunc \
                 --format "table {{.Name}}\t{{.Node}}\t{{.CurrentState}}\t{{.Error}}" 2>&1 | head -15 || true
               echo "--- Container Logs (service logs --raw) ---"
-              docker service logs "${SERVICE_NAME}" --tail 60 --raw 2>&1 || true
+              docker service logs "${SERVICE_NAME}" --tail 200 --raw 2>&1 || true
               echo "--- Service Inspect (update status) ---"
               docker service inspect "${SERVICE_NAME}" --format '{{json .UpdateStatus}}' 2>/dev/null || true
               echo ""
