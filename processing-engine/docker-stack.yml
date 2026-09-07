@@ -22,6 +22,9 @@ services:
       - pe-net
     deploy:
       replicas: 1
+      placement:
+        constraints:
+          - node.hostname == oraculus-server-4
       resources:
         limits:
           cpus: "1.0"

@@ -29,6 +29,37 @@ python -c 'import fastapi; import asyncpg; import uvicorn; import alembic; print
     exit 1
 }
 
+# Pre-flight: test PG connection from this container
+echo "--- Pre-flight PG connection test ---"
+python -c '
+import asyncio, asyncpg, os, hashlib
+async def test():
+    pw = os.environ.get("DB_PASSWORD", "")
+    h = os.environ.get("DB_HOST", "localhost")
+    p = int(os.environ.get("DB_PORT", "5432"))
+    u = os.environ.get("DB_USER", "postgres")
+    d = os.environ.get("DB_NAME", "processing_engine")
+    md5 = hashlib.md5(pw.encode()).hexdigest()
+    print(f"Preflight: host={h}, port={p}, user={u}, db={d}, pw_len={len(pw)}, pw_md5={md5}")
+    try:
+        conn = await asyncpg.connect(host=h, port=p, user=u, password=pw, database=d, timeout=15)
+        ver = await conn.fetchval("SELECT version()")
+        print(f"Preflight: CONNECTED OK — {ver[:50]}")
+        await conn.close()
+    except Exception as e:
+        print(f"Preflight: FAILED — {type(e).__name__}: {e}")
+        # Try with explicit password string to rule out env var encoding issues
+        try:
+            conn2 = await asyncpg.connect(host=h, port=p, user=u, password=pw.strip(), database=d, timeout=10)
+            print("Preflight: CONNECTED OK with stripped password!")
+            await conn2.close()
+        except Exception as e2:
+            print(f"Preflight: Also failed with stripped pw — {type(e2).__name__}")
+            # Show hex of first/last 4 bytes of password for debugging
+            print(f"Preflight: pw hex start={pw[:4].encode().hex()}, end={pw[-4:].encode().hex()}")
+asyncio.run(test())
+' || echo "WARNING: preflight test script failed (non-fatal)"
+
 echo "Running database migrations..."
 MAX_RETRIES=30
 RETRY_INTERVAL=2
