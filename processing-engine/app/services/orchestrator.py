@@ -13,7 +13,7 @@ import asyncpg
 from app.plugins.protocols import DedupResult, LLMResponse, ValidationResult
 from app.plugins.registry import get_instance
 from app.services.cost_tracker import CostTracker
-from app.sql.cache import SELECT_CACHE_HIT, UPSERT_CACHE, INCREMENT_CACHE_HIT
+from app.sql.cache import INCREMENT_CACHE_HIT, SELECT_CACHE_HIT, UPSERT_CACHE
 
 logger = logging.getLogger(__name__)
 

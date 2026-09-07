@@ -3,11 +3,8 @@ from __future__ import annotations
 
 from unittest.mock import AsyncMock, MagicMock
 
-import pytest
-
 from app.plugins.dedup.hash import HashDedupStrategy, _sha256
 from app.plugins.protocols import DedupResult
-
 
 # ---------------------------------------------------------------------------
 # _sha256 helper

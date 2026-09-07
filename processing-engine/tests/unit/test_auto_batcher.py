@@ -4,8 +4,6 @@ Tests use mocks — no Docker or PostgreSQL required.
 """
 from __future__ import annotations
 
-import asyncio
-import json
 import os
 import uuid
 from unittest.mock import AsyncMock, MagicMock, patch
@@ -17,7 +15,6 @@ os.environ.setdefault("ENGINE_ROLE", "api")
 import pytest
 
 from app.services.auto_batcher import AutoBatcher
-
 
 # ---------------------------------------------------------------------------
 # Helpers

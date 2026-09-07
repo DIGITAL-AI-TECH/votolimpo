@@ -1,13 +1,13 @@
 from __future__ import annotations
 
 import uuid
-from enum import Enum
+from enum import StrEnum
 from typing import Any
 
 from pydantic import BaseModel, ConfigDict
 
 
-class ItemStatus(str, Enum):
+class ItemStatus(StrEnum):
     pending = "pending"
     ingesting = "ingesting"
     deduplicating = "deduplicating"

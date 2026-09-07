@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from fastapi import APIRouter
+
 from app.db import get_pool
 
 router = APIRouter(tags=["Health"])

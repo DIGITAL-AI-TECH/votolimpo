@@ -1,11 +1,8 @@
 """Unit tests for validator plugins."""
 from __future__ import annotations
 
-import pytest
-
 from app.plugins.protocols import ValidationResult
 from app.plugins.validators.schema import SchemaValidator
-
 
 # ---------------------------------------------------------------------------
 # SchemaValidator

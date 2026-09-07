@@ -6,7 +6,7 @@ Sobrescreve as fixtures de banco/container do conftest.py da raiz para que os
 testes unitários não precisem de Docker nem de PostgreSQL.
 """
 
-import pytest
+import pytest  # noqa: E402
 
 
 @pytest.fixture(scope="session")

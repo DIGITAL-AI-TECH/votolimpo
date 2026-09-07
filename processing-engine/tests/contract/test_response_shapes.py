@@ -10,14 +10,13 @@ from __future__ import annotations
 
 import os
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 # Set env vars before any app import
 os.environ.setdefault("DATABASE_URL", "postgresql://x:x@localhost/x")
 os.environ.setdefault("API_KEY", "test-key")
 os.environ.setdefault("ENGINE_ROLE", "api")
 
-import pytest
 
 
 # ---------------------------------------------------------------------------
@@ -68,8 +67,8 @@ class TestPipelineContract:
             name="test",
             version=1,
             is_active=True,
-            created_at=datetime.now(timezone.utc),
-            updated_at=datetime.now(timezone.utc),
+            created_at=datetime.now(UTC),
+            updated_at=datetime.now(UTC),
             system_prompt="Extract data",
             output_schema={"type": "object"},
             ingestor_type="text",
@@ -145,7 +144,7 @@ class TestJobContract:
             items_total=5,
             items_completed=0,
             items_failed=0,
-            created_at=datetime.now(timezone.utc),
+            created_at=datetime.now(UTC),
         )
         return j.model_dump(mode="json")
 
@@ -201,7 +200,7 @@ class TestJobListResponseContract:
             items_total=1,
             items_completed=0,
             items_failed=0,
-            created_at=datetime.now(timezone.utc),
+            created_at=datetime.now(UTC),
         )
         resp = JobListResponse(items=[j], total=1)
         data = resp.model_dump(mode="json")
@@ -259,7 +258,7 @@ class TestItemResultContract:
 
     def test_optional_fields(self):
         data = self._make_item_dict()
-        for field, expected_type in self.OPTIONAL_FIELDS.items():
+        for field, _expected_type in self.OPTIONAL_FIELDS.items():
             assert field in data, f"ItemResult missing field: {field}"
 
     def test_usage_sub_object(self):
@@ -417,7 +416,7 @@ class TestProcessingLogContract:
             item_id=uuid.uuid4(),
             step="ingest",
             status="success",
-            created_at=datetime.now(timezone.utc),
+            created_at=datetime.now(UTC),
         )
         data = log.model_dump(mode="json")
         for field in self.REQUIRED_FIELDS:
@@ -472,8 +471,8 @@ class TestModelPricingContract:
             input_price_per_million_tokens=0.40,
             output_price_per_million_tokens=1.60,
             is_active=True,
-            created_at=datetime.now(timezone.utc),
-            updated_at=datetime.now(timezone.utc),
+            created_at=datetime.now(UTC),
+            updated_at=datetime.now(UTC),
         )
         data = mp.model_dump(mode="json")
         for field, expected_type in self.REQUIRED_FIELDS.items():

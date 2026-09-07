@@ -9,10 +9,10 @@ import asyncpg
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 
 from app.deps import get_db, verify_api_key
-from app.services.cost_tracker import BudgetExceededError, CostTracker
 from app.models.item import ItemResult, TokenUsage
 from app.models.job import Job, JobCreate, JobListResponse
 from app.models.log import ProcessingLog
+from app.services.cost_tracker import CostTracker
 from app.sql.items import (
     INSERT_ITEM,
     SELECT_ITEMS_BY_JOB,

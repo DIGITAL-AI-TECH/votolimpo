@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+
 import pytest
 
 from app.plugins.ingestors.auto import AutoIngestor, _detect_content_type
@@ -9,7 +10,6 @@ from app.plugins.ingestors.html import HTMLIngestor
 from app.plugins.ingestors.json_ingestor import JSONIngestor
 from app.plugins.ingestors.pdf import PDFIngestor
 from app.plugins.ingestors.text import TextIngestor, _truncate
-
 
 # ---------------------------------------------------------------------------
 # Helper
@@ -33,7 +33,7 @@ class TestTextIngestor:
         assert result == "hello world"
 
     async def test_passthrough_bytes_utf8(self):
-        raw = "olá mundo".encode("utf-8")
+        raw = "olá mundo".encode()
         result = await self.ingestor.ingest(raw, CONTENT_TYPE_PLAIN)
         assert result == "olá mundo"
 

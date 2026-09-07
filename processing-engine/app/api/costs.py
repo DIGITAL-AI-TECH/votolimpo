@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Annotated
 
 import asyncpg
@@ -22,13 +22,13 @@ router = APIRouter(tags=["Costs"])
 
 def _default_start() -> datetime:
     """Default start: beginning of current month."""
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     return now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
 
 
 def _default_end() -> datetime:
     """Default end: now."""
-    return datetime.now(timezone.utc)
+    return datetime.now(UTC)
 
 
 @router.get("/costs", response_model=CostReport, summary="Relatório de custos LLM")

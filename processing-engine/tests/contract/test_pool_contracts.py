@@ -7,7 +7,7 @@ from __future__ import annotations
 
 import os
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 os.environ.setdefault("DATABASE_URL", "postgresql://x:x@localhost/x")
 os.environ.setdefault("API_KEY", "test-key")
@@ -105,7 +105,7 @@ class TestPoolStatusResponseShape:
                     pipeline_id=uuid.uuid4(),
                     pipeline_name="VotoLimpo",
                     pending=35,
-                    oldest_pending=datetime(2026, 9, 7, 13, 45, tzinfo=timezone.utc),
+                    oldest_pending=datetime(2026, 9, 7, 13, 45, tzinfo=UTC),
                 ),
             ],
         )

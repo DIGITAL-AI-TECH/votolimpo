@@ -9,7 +9,6 @@ from app.plugins.dedup.composite import CompositeDedupStrategy
 from app.plugins.dedup.semantic import SemanticDedupStrategy
 from app.plugins.protocols import DedupResult
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------

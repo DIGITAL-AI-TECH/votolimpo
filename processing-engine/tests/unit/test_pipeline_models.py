@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 import pytest
 from pydantic import ValidationError
@@ -158,7 +158,7 @@ def test_max_retries_out_of_range_rejected() -> None:
 
 def test_pipeline_response_model_includes_server_fields() -> None:
     """Pipeline (response) deve aceitar campos gerados pelo banco."""
-    now = datetime.now(tz=timezone.utc)
+    now = datetime.now(tz=UTC)
     data = {
         **MINIMAL_VALID,
         "id": uuid.uuid4(),
@@ -176,7 +176,7 @@ def test_pipeline_response_model_includes_server_fields() -> None:
 
 def test_pipeline_response_model_version_increments() -> None:
     """Garante que version é um inteiro positivo e pode representar incremento."""
-    now = datetime.now(tz=timezone.utc)
+    now = datetime.now(tz=UTC)
     data = {
         **MINIMAL_VALID,
         "id": uuid.uuid4(),

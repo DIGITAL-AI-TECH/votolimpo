@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Annotated
 
 import asyncpg
@@ -16,7 +16,7 @@ router = APIRouter(tags=["Stats"])
 
 def _period_to_range(period: str) -> tuple[datetime, datetime]:
     """Convert period string to (start, end) datetime range."""
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     if period == "day":
         start = now.replace(hour=0, minute=0, second=0, microsecond=0)
     elif period == "week":
@@ -26,7 +26,7 @@ def _period_to_range(period: str) -> tuple[datetime, datetime]:
     elif period == "month":
         start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
     else:  # "all"
-        start = datetime(2020, 1, 1, tzinfo=timezone.utc)
+        start = datetime(2020, 1, 1, tzinfo=UTC)
     return start, now
 
 

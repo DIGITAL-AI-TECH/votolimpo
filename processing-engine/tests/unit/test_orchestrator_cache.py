@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import json
 import uuid
-from unittest.mock import AsyncMock, MagicMock, patch, call
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
@@ -162,7 +162,7 @@ class TestCacheIntegration:
             )
 
         # Verify UPSERT_CACHE was called (it's the execute with 8 params)
-        cache_calls = [
+        [
             c for c in mock_conn.execute.call_args_list
             if len(c.args) == 9 and "make_interval" not in str(c.args[0])
             # UPSERT_CACHE has 8 params ($1-$8)

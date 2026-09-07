@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import asyncio
-import json
 import uuid
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -168,7 +167,7 @@ class TestWorkerPartialFailure:
     @pytest.mark.asyncio
     async def test_determines_partial_status_on_mixed_results(self):
         """When some items succeed and some fail, final status should be 'partial'."""
-        worker = Worker()
+        Worker()
 
         # We test the status logic directly
         # items_completed > 0 AND items_failed > 0 => partial

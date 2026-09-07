@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import jsonschema
-from jsonschema import ValidationError
 
 from app.plugins.protocols import ValidationResult
 

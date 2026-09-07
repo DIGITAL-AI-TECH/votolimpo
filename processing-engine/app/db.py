@@ -1,13 +1,12 @@
 from __future__ import annotations
 
 import logging
-from typing import Optional
 
 import asyncpg
 
 logger = logging.getLogger(__name__)
 
-_pool: Optional[asyncpg.Pool] = None
+_pool: asyncpg.Pool | None = None
 
 
 async def _init_pool_with_extensions(conn: asyncpg.Connection) -> None:

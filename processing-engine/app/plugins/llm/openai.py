@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import contextlib
 import json
 import time
 from typing import Any
@@ -78,10 +79,8 @@ class OpenAIProvider:
 
         # Attempt to parse JSON
         parsed: dict[str, Any] | None = None
-        try:
+        with contextlib.suppress(json.JSONDecodeError):
             parsed = json.loads(raw_content)
-        except json.JSONDecodeError:
-            pass
 
         usage = response.usage
         return LLMResponse(

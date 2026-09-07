@@ -6,6 +6,7 @@ and creates one job per item (v1: 1:1 granularity).
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import json
 import logging
 
@@ -54,10 +55,8 @@ class AutoBatcher:
         self._running = False
         if self._task is not None and not self._task.done():
             self._task.cancel()
-            try:
+            with contextlib.suppress(asyncio.CancelledError):
                 await self._task
-            except asyncio.CancelledError:
-                pass
             self._task = None
         logger.info("Auto-Batcher stopped")
 

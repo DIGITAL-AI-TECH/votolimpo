@@ -1,13 +1,10 @@
 """Unit tests for GroundingValidator, RangeValidator and CompositeValidator."""
 from __future__ import annotations
 
-import pytest
-
 from app.plugins.protocols import ValidationResult
 from app.plugins.validators.composite import CompositeValidator
 from app.plugins.validators.grounding import GroundingValidator
 from app.plugins.validators.range_validator import RangeValidator
-
 
 # ---------------------------------------------------------------------------
 # GroundingValidator

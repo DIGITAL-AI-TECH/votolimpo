@@ -2,8 +2,8 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from contextlib import asynccontextmanager
-from typing import AsyncIterator
+from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager, suppress
 
 from fastapi import Depends, FastAPI
 
@@ -73,10 +73,8 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 
     if _worker_task is not None and not _worker_task.done():
         _worker_task.cancel()
-        try:
+        with suppress(asyncio.CancelledError):
             await _worker_task
-        except asyncio.CancelledError:
-            pass
         _worker_task = None
 
     await close_pool()
@@ -94,12 +92,12 @@ app = FastAPI(
 # each router in its own module.
 # ---------------------------------------------------------------------------
 from app.api import health  # noqa: E402 — must come after app is defined
-from app.api.pipelines import router as pipelines_router  # noqa: E402
-from app.api.jobs import router as jobs_router  # noqa: E402
 from app.api.costs import router as costs_router  # noqa: E402
+from app.api.jobs import router as jobs_router  # noqa: E402
+from app.api.pipelines import router as pipelines_router  # noqa: E402
+from app.api.pool import router as pool_router  # noqa: E402
 from app.api.pricing import router as pricing_router  # noqa: E402
 from app.api.stats import router as stats_router  # noqa: E402
-from app.api.pool import router as pool_router  # noqa: E402
 from app.deps import verify_api_key  # noqa: E402
 
 app.include_router(health.router)

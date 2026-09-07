@@ -4,9 +4,6 @@ Requires Docker (testcontainers) for real PostgreSQL.
 """
 from __future__ import annotations
 
-import asyncio
-import json
-import os
 import uuid
 
 import pytest

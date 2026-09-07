@@ -5,7 +5,6 @@ No Docker or PostgreSQL required.
 """
 from __future__ import annotations
 
-import json
 import os
 import uuid
 from unittest.mock import AsyncMock, MagicMock
@@ -20,7 +19,6 @@ from httpx import ASGITransport, AsyncClient
 from app.api.pool import _compute_hash
 from app.deps import get_db, verify_api_key
 from app.main import app
-
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -213,13 +211,12 @@ class TestPoolIngest:
         async def mock_fetchval(*args):
             nonlocal call_count
             call_count += 1
-            if call_count == 1:
-                return existing_id  # First item: duplicate
-            elif call_count == 2:
-                return None  # Second item: url_hash check OK
-            elif call_count == 3:
-                return new_pool_id  # Second item: INSERT
-            return None
+            result_map = {
+                1: existing_id,   # First item: duplicate
+                2: None,          # Second item: url_hash check OK
+                3: new_pool_id,   # Second item: INSERT
+            }
+            return result_map.get(call_count)
 
         mock_conn.fetchval = mock_fetchval
 
