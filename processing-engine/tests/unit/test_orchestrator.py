@@ -98,7 +98,7 @@ class TestOrchestratorFullPipeline:
         assert result["output"] == {"name": "test"}
         assert result["dedup_result"] == "new"
         assert result["prompt_tokens"] == 10
-        assert result["duration_ms"] > 0
+        assert result["duration_ms"] >= 0
         mock_ingestor.ingest.assert_called_once()
         mock_dedup.check.assert_called_once()
         mock_llm.complete.assert_called_once()

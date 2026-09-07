@@ -60,7 +60,11 @@ def postgres_container():
 @pytest.fixture(scope="session")
 def database_url(postgres_container) -> str:
     """Get the database URL from the running container."""
-    return postgres_container.get_connection_url().replace("psycopg2", "postgresql")
+    url = postgres_container.get_connection_url()
+    # testcontainers returns postgresql+psycopg2://... but asyncpg needs postgresql://...
+    if "+psycopg2" in url:
+        url = url.replace("+psycopg2", "")
+    return url
 
 
 @pytest.fixture(scope="session")
