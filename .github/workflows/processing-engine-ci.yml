@@ -1,20 +1,26 @@
-name: Processing Engine CI
+name: Processing Engine CI/CD
 
 on:
   push:
-    branches: [main, "002-processing-engine"]
+    branches: [main]
     paths: ["processing-engine/**"]
   pull_request:
     branches: [main]
     paths: ["processing-engine/**"]
 
-defaults:
-  run:
-    working-directory: processing-engine
+env:
+  N8N_NOTIFY_URL: https://webhook.digital-ai.tech/webhook/1c708636-864f-469d-8540-0dab5c145c7c
+  IMAGE_NAME: registry.digital-ai.tech/processing-engine
 
 jobs:
+  # ──────────────────────────────────────────────
+  # Job 1: Lint
+  # ──────────────────────────────────────────────
   lint:
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: processing-engine
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -24,9 +30,15 @@ jobs:
       - run: ruff check app/ tests/
       - run: ruff format --check app/ tests/
 
+  # ──────────────────────────────────────────────
+  # Job 2: Test (depends on lint)
+  # ──────────────────────────────────────────────
   test:
     runs-on: ubuntu-latest
     needs: lint
+    defaults:
+      run:
+        working-directory: processing-engine
     services:
       postgres:
         image: pgvector/pgvector:pg16
@@ -53,16 +65,191 @@ jobs:
       - run: pip install -e ".[dev]"
       - run: pytest -v --tb=short
 
-  docker-build:
+  # ──────────────────────────────────────────────
+  # Job 3: Build + Push to Registry (only on main push)
+  # ──────────────────────────────────────────────
+  docker:
     runs-on: ubuntu-latest
     needs: test
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    outputs:
+      image_sha: ${{ steps.meta.outputs.image_sha }}
     steps:
       - uses: actions/checkout@v4
+
+      - name: Notify - Pipeline Iniciado
+        env:
+          COMMIT_MSG: ${{ github.event.head_commit.message }}
+          ACTOR: ${{ github.actor }}
+          BRANCH: ${{ github.ref_name }}
+          SHA: ${{ github.sha }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          curl -sf -X POST "${N8N_NOTIFY_URL}" \
+            -H "Content-Type: application/json" \
+            -d "$(python3 -c "import json,os; print(json.dumps({
+              'status':'started','repo':'votolimpo/processing-engine',
+              'branch':os.environ['BRANCH'],'actor':os.environ['ACTOR'],
+              'commit_sha':os.environ['SHA'],'commit_message':os.environ['COMMIT_MSG'],
+              'run_url':os.environ['RUN_URL'],
+              'stage':'Pipeline CI/CD','message':'Pipeline iniciado - lint e testes passaram'
+            }))")" || true
+
+      - name: Set image metadata
+        id: meta
+        run: echo "image_sha=${GITHUB_SHA::8}" >> "$GITHUB_OUTPUT"
+
       - uses: docker/setup-buildx-action@v3
-      - uses: docker/build-push-action@v6
+
+      - name: Login to Private Registry
+        uses: docker/login-action@v3
+        with:
+          registry: registry.digital-ai.tech
+          username: ${{ secrets.REGISTRY_USER }}
+          password: ${{ secrets.REGISTRY_PASSWORD }}
+
+      - name: Build and Push
+        uses: docker/build-push-action@v6
         with:
           context: processing-engine
-          push: false
-          tags: processing-engine:ci-${{ github.sha }}
+          push: true
+          tags: |
+            ${{ env.IMAGE_NAME }}:latest
+            ${{ env.IMAGE_NAME }}:${{ steps.meta.outputs.image_sha }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
+
+      - name: Notify - Build Concluido
+        if: success()
+        env:
+          COMMIT_MSG: ${{ github.event.head_commit.message }}
+          ACTOR: ${{ github.actor }}
+          BRANCH: ${{ github.ref_name }}
+          SHA: ${{ github.sha }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          SHORT_SHA="${SHA:0:8}"
+          curl -sf -X POST "${N8N_NOTIFY_URL}" \
+            -H "Content-Type: application/json" \
+            -d "$(python3 -c "import json,os; print(json.dumps({
+              'status':'info','repo':'votolimpo/processing-engine',
+              'branch':os.environ['BRANCH'],'actor':os.environ['ACTOR'],
+              'commit_sha':os.environ['SHA'],'commit_message':os.environ['COMMIT_MSG'],
+              'run_url':os.environ['RUN_URL'],
+              'stage':'Build Docker','message':'Imagem pushed: registry.digital-ai.tech/processing-engine:${SHORT_SHA}'
+            }))")" || true
+
+      - name: Notify - Build Falhou
+        if: failure()
+        env:
+          COMMIT_MSG: ${{ github.event.head_commit.message }}
+          ACTOR: ${{ github.actor }}
+          BRANCH: ${{ github.ref_name }}
+          SHA: ${{ github.sha }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          curl -sf -X POST "${N8N_NOTIFY_URL}" \
+            -H "Content-Type: application/json" \
+            -d "$(python3 -c "import json,os; print(json.dumps({
+              'status':'failure','repo':'votolimpo/processing-engine',
+              'branch':os.environ['BRANCH'],'actor':os.environ['ACTOR'],
+              'commit_sha':os.environ['SHA'],'commit_message':os.environ['COMMIT_MSG'],
+              'run_url':os.environ['RUN_URL'],
+              'stage':'Build Docker','message':'Falha no build ou push da imagem Docker'
+            }))")" || true
+
+  # ──────────────────────────────────────────────
+  # Job 4: Deploy to Docker Swarm (depends on docker)
+  # ──────────────────────────────────────────────
+  deploy:
+    runs-on: ubuntu-latest
+    needs: docker
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    environment: production
+    steps:
+      - name: Notify - Deploy em Andamento
+        env:
+          COMMIT_MSG: ${{ github.event.head_commit.message }}
+          ACTOR: ${{ github.actor }}
+          BRANCH: ${{ github.ref_name }}
+          SHA: ${{ github.sha }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          curl -sf -X POST "${N8N_NOTIFY_URL}" \
+            -H "Content-Type: application/json" \
+            -d "$(python3 -c "import json,os; print(json.dumps({
+              'status':'info','repo':'votolimpo/processing-engine',
+              'branch':os.environ['BRANCH'],'actor':os.environ['ACTOR'],
+              'commit_sha':os.environ['SHA'],'commit_message':os.environ['COMMIT_MSG'],
+              'run_url':os.environ['RUN_URL'],
+              'stage':'Deploy Swarm','message':'Atualizando servico no Docker Swarm...'
+            }))")" || true
+
+      - name: Deploy via SSH
+        uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ secrets.SWARM_HOST }}
+          username: ${{ secrets.SWARM_USER }}
+          key: ${{ secrets.SWARM_SSH_KEY }}
+          script: |
+            # Login no registry privado
+            echo "${{ secrets.REGISTRY_PASSWORD }}" | docker login registry.digital-ai.tech -u "${{ secrets.REGISTRY_USER }}" --password-stdin
+
+            # Pull da nova imagem
+            docker pull ${{ env.IMAGE_NAME }}:${{ needs.docker.outputs.image_sha }}
+
+            # Update do servico com a nova imagem
+            docker service update \
+              --image ${{ env.IMAGE_NAME }}:${{ needs.docker.outputs.image_sha }} \
+              --with-registry-auth \
+              processing-engine_api || true
+
+            # Verificar convergencia (max 60s)
+            for i in $(seq 1 12); do
+              STATUS=$(docker service ps processing-engine_api --format '{{.CurrentState}}' | head -1)
+              if echo "$STATUS" | grep -q "Running"; then
+                echo "Service converged: $STATUS"
+                exit 0
+              fi
+              echo "Waiting for convergence... ($i/12) - $STATUS"
+              sleep 5
+            done
+            echo "WARNING: Service may not have converged within 60s"
+
+      - name: Notify - Deploy Concluido
+        if: success()
+        env:
+          COMMIT_MSG: ${{ github.event.head_commit.message }}
+          ACTOR: ${{ github.actor }}
+          BRANCH: ${{ github.ref_name }}
+          SHA: ${{ github.sha }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          curl -sf -X POST "${N8N_NOTIFY_URL}" \
+            -H "Content-Type: application/json" \
+            -d "$(python3 -c "import json,os; print(json.dumps({
+              'status':'success','repo':'votolimpo/processing-engine',
+              'branch':os.environ['BRANCH'],'actor':os.environ['ACTOR'],
+              'commit_sha':os.environ['SHA'],'commit_message':os.environ['COMMIT_MSG'],
+              'run_url':os.environ['RUN_URL'],
+              'stage':'Deploy Swarm','message':'Deploy concluido com sucesso - processing-engine.digital-ai.tech'
+            }))")" || true
+
+      - name: Notify - Deploy Falhou
+        if: failure()
+        env:
+          COMMIT_MSG: ${{ github.event.head_commit.message }}
+          ACTOR: ${{ github.actor }}
+          BRANCH: ${{ github.ref_name }}
+          SHA: ${{ github.sha }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          curl -sf -X POST "${N8N_NOTIFY_URL}" \
+            -H "Content-Type: application/json" \
+            -d "$(python3 -c "import json,os; print(json.dumps({
+              'status':'failure','repo':'votolimpo/processing-engine',
+              'branch':os.environ['BRANCH'],'actor':os.environ['ACTOR'],
+              'commit_sha':os.environ['SHA'],'commit_message':os.environ['COMMIT_MSG'],
+              'run_url':os.environ['RUN_URL'],
+              'stage':'Deploy Swarm','message':'Falha no deploy do processing-engine no Docker Swarm'
+            }))")" || true

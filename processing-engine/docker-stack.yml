@@ -2,7 +2,7 @@ version: "3.8"
 
 services:
   api:
-    image: ${REGISTRY:-registry.digital-ai.tech}/processing-engine:${TAG:-latest}
+    image: registry.digital-ai.tech/processing-engine:${TAG:-latest}
     environment:
       - DATABASE_URL=postgresql://postgres:${DB_PASSWORD}@postgres:5432/processing_engine
       - OPENAI_API_KEY=${OPENAI_API_KEY}
@@ -11,7 +11,7 @@ services:
       - WORKER_POLL_INTERVAL_SECONDS=1.0
       - LOG_LEVEL=INFO
     networks:
-      - traefik-public
+      - oraculusnet
       - internal
     deploy:
       replicas: 1
@@ -26,11 +26,20 @@ services:
         - "traefik.enable=true"
         - "traefik.http.routers.processing-engine.rule=Host(`processing-engine.digital-ai.tech`)"
         - "traefik.http.routers.processing-engine.entrypoints=websecure"
-        - "traefik.http.routers.processing-engine.tls.certresolver=le"
+        - "traefik.http.routers.processing-engine.tls.certresolver=letsencrypt"
         - "traefik.http.services.processing-engine.loadbalancer.server.port=8000"
+        # HTTP -> HTTPS redirect
+        - "traefik.http.routers.processing-engine-http.rule=Host(`processing-engine.digital-ai.tech`)"
+        - "traefik.http.routers.processing-engine-http.entrypoints=web"
+        - "traefik.http.routers.processing-engine-http.middlewares=redirect-to-https"
       update_config:
         parallelism: 1
         delay: 10s
+        order: start-first
+        failure_action: rollback
+      rollback_config:
+        parallelism: 1
+        delay: 5s
         order: start-first
     healthcheck:
       test: ["CMD", "python", "-c", "import httpx; httpx.get('http://localhost:8000/health').raise_for_status()"]
@@ -61,7 +70,7 @@ services:
           memory: 1G
 
 networks:
-  traefik-public:
+  oraculusnet:
     external: true
   internal:
     driver: overlay
