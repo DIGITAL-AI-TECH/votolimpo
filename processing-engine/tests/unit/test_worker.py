@@ -26,6 +26,7 @@ def _make_job_record(
     class FakeRecord(dict):
         def __getitem__(self, key):
             return dict.__getitem__(self, key)
+
         def get(self, key, default=None):
             return dict.get(self, key, default)
 
@@ -52,6 +53,7 @@ def _make_item_record(job_id, item_id=None, content="test content"):
     class FakeRecord(dict):
         def __getitem__(self, key):
             return dict.__getitem__(self, key)
+
         def get(self, key, default=None):
             return dict.get(self, key, default)
 
@@ -72,6 +74,7 @@ def _make_pipeline_record(pipeline_id=None, max_concurrent=5, rate_limit_rpm=600
     class FakeRecord(dict):
         def __getitem__(self, key):
             return dict.__getitem__(self, key)
+
         def get(self, key, default=None):
             return dict.get(self, key, default)
 
@@ -191,13 +194,16 @@ class TestWorkerCallback:
             mock_client.__aexit__ = AsyncMock(return_value=False)
             MockClient.return_value = mock_client
 
-            result = await callback.send("https://example.com/callback", {
-                "job_id": str(uuid.uuid4()),
-                "status": "completed",
-                "items_completed": 5,
-                "items_failed": 0,
-                "items_total": 5,
-            })
+            result = await callback.send(
+                "https://example.com/callback",
+                {
+                    "job_id": str(uuid.uuid4()),
+                    "status": "completed",
+                    "items_completed": 5,
+                    "items_failed": 0,
+                    "items_total": 5,
+                },
+            )
 
         assert result is True
         mock_client.post.assert_called_once()

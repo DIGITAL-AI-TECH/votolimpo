@@ -86,7 +86,9 @@ async def _dispatch(args: argparse.Namespace) -> None:
             resp = await client.get(f"{base}/v1/jobs/{args.job_id}")
             resp.raise_for_status()
             data = resp.json()
-            print(f"Job {data['id']}: {data['status']} ({data['items_completed']}/{data['items_total']} done)")
+            print(
+                f"Job {data['id']}: {data['status']} ({data['items_completed']}/{data['items_total']} done)"
+            )
 
         elif args.command == "result":
             resp = await client.get(f"{base}/v1/jobs/{args.job_id}/result")
@@ -97,8 +99,10 @@ async def _dispatch(args: argparse.Namespace) -> None:
             resp = await client.get(f"{base}/v1/stats")
             resp.raise_for_status()
             data = resp.json()
-            print(f"Jobs: {data['total_jobs']} | Items: {data['total_items']} | "
-                  f"Success: {data['success_rate']:.1f}% | Cost: ${data['total_cost_usd']:.4f}")
+            print(
+                f"Jobs: {data['total_jobs']} | Items: {data['total_items']} | "
+                f"Success: {data['success_rate']:.1f}% | Cost: ${data['total_cost_usd']:.4f}"
+            )
 
         elif args.command == "costs":
             resp = await client.get(f"{base}/v1/costs")
@@ -106,7 +110,9 @@ async def _dispatch(args: argparse.Namespace) -> None:
             data = resp.json()
             print(f"Total cost: ${data['total_cost_usd']:.4f} ({data['total_calls']} calls)")
             for item in data.get("breakdown", []):
-                print(f"  {item['label']}: ${item['total_cost_usd']:.4f} ({item['total_calls']} calls)")
+                print(
+                    f"  {item['label']}: ${item['total_cost_usd']:.4f} ({item['total_calls']} calls)"
+                )
 
 
 if __name__ == "__main__":

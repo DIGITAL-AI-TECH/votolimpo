@@ -74,9 +74,7 @@ async def create_pipeline(
     _key: Annotated[str, Depends(verify_api_key)],
 ) -> Pipeline:
     # Verifica unicidade do nome (exclui o próprio registro — usa UUID zero pois ainda não existe)
-    name_taken: bool = await conn.fetchval(
-        CHECK_NAME_UNIQUE, payload.name, _ZERO_UUID
-    )
+    name_taken: bool = await conn.fetchval(CHECK_NAME_UNIQUE, payload.name, _ZERO_UUID)
     if name_taken:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
@@ -95,7 +93,9 @@ async def create_pipeline(
 async def list_pipelines(
     conn: Annotated[asyncpg.Connection, Depends(get_db)],
     _key: Annotated[str, Depends(verify_api_key)],
-    active_only: Annotated[bool | None, Query(description="Filtrar apenas pipelines ativos")] = True,
+    active_only: Annotated[
+        bool | None, Query(description="Filtrar apenas pipelines ativos")
+    ] = True,
 ) -> list[Pipeline]:
     records = await conn.fetch(SELECT_ALL_PIPELINES, active_only)
     return [_record_to_pipeline(r) for r in records]
@@ -140,9 +140,7 @@ async def update_pipeline(
         )
 
     # Verifica unicidade do novo nome (exclui o próprio registro)
-    name_taken: bool = await conn.fetchval(
-        CHECK_NAME_UNIQUE, payload.name, pipeline_id
-    )
+    name_taken: bool = await conn.fetchval(CHECK_NAME_UNIQUE, payload.name, pipeline_id)
     if name_taken:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
@@ -151,7 +149,7 @@ async def update_pipeline(
 
     record = await conn.fetchrow(
         UPDATE_PIPELINE,
-        pipeline_id,          # $1
+        pipeline_id,  # $1
         *_pipeline_args(payload),  # $2 … $24
     )
     return _record_to_pipeline(record)

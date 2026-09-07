@@ -47,11 +47,17 @@ def _setup_mocks():
     mock_dedup = AsyncMock()
     mock_dedup.check = AsyncMock(return_value=DedupResult(is_duplicate=False))
     mock_llm = AsyncMock()
-    mock_llm.complete = AsyncMock(return_value=LLMResponse(
-        content='{"name":"test"}', parsed={"name": "test"},
-        prompt_tokens=10, completion_tokens=5, total_tokens=15,
-        model="gpt-4.1-mini", provider="openai",
-    ))
+    mock_llm.complete = AsyncMock(
+        return_value=LLMResponse(
+            content='{"name":"test"}',
+            parsed={"name": "test"},
+            prompt_tokens=10,
+            completion_tokens=5,
+            total_tokens=15,
+            model="gpt-4.1-mini",
+            provider="openai",
+        )
+    )
     mock_validator = MagicMock()
     mock_validator.validate = MagicMock(return_value=ValidationResult(valid=True))
     mock_sink = AsyncMock()
@@ -79,14 +85,25 @@ class TestCacheIntegration:
         mock_ingestor, mock_dedup, mock_llm, mock_validator, mock_sink = _setup_mocks()
 
         with patch("app.services.orchestrator.get_instance") as mock_get:
+
             def side_effect(ptype, name):
-                return {"ingestor": mock_ingestor, "dedup": mock_dedup, "llm": mock_llm,
-                        "validator": mock_validator, "sink": mock_sink}[ptype]
+                return {
+                    "ingestor": mock_ingestor,
+                    "dedup": mock_dedup,
+                    "llm": mock_llm,
+                    "validator": mock_validator,
+                    "sink": mock_sink,
+                }[ptype]
+
             mock_get.side_effect = side_effect
 
             result = await orchestrator.process_item(
-                item_id=item_id, raw_content="hello", source_url=None,
-                content_type="text/plain", pipeline=sample_pipeline, conn=mock_conn,
+                item_id=item_id,
+                raw_content="hello",
+                source_url=None,
+                content_type="text/plain",
+                pipeline=sample_pipeline,
+                conn=mock_conn,
             )
 
         assert result["cached"] is True
@@ -105,14 +122,25 @@ class TestCacheIntegration:
         mock_ingestor, mock_dedup, mock_llm, mock_validator, mock_sink = _setup_mocks()
 
         with patch("app.services.orchestrator.get_instance") as mock_get:
+
             def side_effect(ptype, name):
-                return {"ingestor": mock_ingestor, "dedup": mock_dedup, "llm": mock_llm,
-                        "validator": mock_validator, "sink": mock_sink}[ptype]
+                return {
+                    "ingestor": mock_ingestor,
+                    "dedup": mock_dedup,
+                    "llm": mock_llm,
+                    "validator": mock_validator,
+                    "sink": mock_sink,
+                }[ptype]
+
             mock_get.side_effect = side_effect
 
             result = await orchestrator.process_item(
-                item_id=item_id, raw_content="hello", source_url=None,
-                content_type="text/plain", pipeline=sample_pipeline, conn=mock_conn,
+                item_id=item_id,
+                raw_content="hello",
+                source_url=None,
+                content_type="text/plain",
+                pipeline=sample_pipeline,
+                conn=mock_conn,
             )
 
         assert result["cached"] is False
@@ -128,14 +156,25 @@ class TestCacheIntegration:
         mock_ingestor, mock_dedup, mock_llm, mock_validator, mock_sink = _setup_mocks()
 
         with patch("app.services.orchestrator.get_instance") as mock_get:
+
             def side_effect(ptype, name):
-                return {"ingestor": mock_ingestor, "dedup": mock_dedup, "llm": mock_llm,
-                        "validator": mock_validator, "sink": mock_sink}[ptype]
+                return {
+                    "ingestor": mock_ingestor,
+                    "dedup": mock_dedup,
+                    "llm": mock_llm,
+                    "validator": mock_validator,
+                    "sink": mock_sink,
+                }[ptype]
+
             mock_get.side_effect = side_effect
 
             result = await orchestrator.process_item(
-                item_id=item_id, raw_content="hello", source_url=None,
-                content_type="text/plain", pipeline=sample_pipeline, conn=mock_conn,
+                item_id=item_id,
+                raw_content="hello",
+                source_url=None,
+                content_type="text/plain",
+                pipeline=sample_pipeline,
+                conn=mock_conn,
                 skip_cache=True,
             )
 
@@ -151,19 +190,31 @@ class TestCacheIntegration:
         mock_ingestor, mock_dedup, mock_llm, mock_validator, mock_sink = _setup_mocks()
 
         with patch("app.services.orchestrator.get_instance") as mock_get:
+
             def side_effect(ptype, name):
-                return {"ingestor": mock_ingestor, "dedup": mock_dedup, "llm": mock_llm,
-                        "validator": mock_validator, "sink": mock_sink}[ptype]
+                return {
+                    "ingestor": mock_ingestor,
+                    "dedup": mock_dedup,
+                    "llm": mock_llm,
+                    "validator": mock_validator,
+                    "sink": mock_sink,
+                }[ptype]
+
             mock_get.side_effect = side_effect
 
             await orchestrator.process_item(
-                item_id=item_id, raw_content="hello", source_url=None,
-                content_type="text/plain", pipeline=sample_pipeline, conn=mock_conn,
+                item_id=item_id,
+                raw_content="hello",
+                source_url=None,
+                content_type="text/plain",
+                pipeline=sample_pipeline,
+                conn=mock_conn,
             )
 
         # Verify UPSERT_CACHE was called (it's the execute with 8 params)
         [
-            c for c in mock_conn.execute.call_args_list
+            c
+            for c in mock_conn.execute.call_args_list
             if len(c.args) == 9 and "make_interval" not in str(c.args[0])
             # UPSERT_CACHE has 8 params ($1-$8)
         ]
@@ -183,20 +234,32 @@ class TestLoggingSkippedSteps:
         mock_ingestor, mock_dedup, mock_llm, mock_validator, mock_sink = _setup_mocks()
 
         with patch("app.services.orchestrator.get_instance") as mock_get:
+
             def side_effect(ptype, name):
-                return {"ingestor": mock_ingestor, "dedup": mock_dedup, "llm": mock_llm,
-                        "validator": mock_validator, "sink": mock_sink}[ptype]
+                return {
+                    "ingestor": mock_ingestor,
+                    "dedup": mock_dedup,
+                    "llm": mock_llm,
+                    "validator": mock_validator,
+                    "sink": mock_sink,
+                }[ptype]
+
             mock_get.side_effect = side_effect
 
             await orchestrator.process_item(
-                item_id=item_id, raw_content="hello", source_url=None,
-                content_type="text/plain", pipeline=sample_pipeline, conn=mock_conn,
+                item_id=item_id,
+                raw_content="hello",
+                source_url=None,
+                content_type="text/plain",
+                pipeline=sample_pipeline,
+                conn=mock_conn,
                 skip_dedup=True,
             )
 
         # Check that a "dedup" / "skipped" log was inserted
         log_calls = [
-            c for c in mock_conn.execute.call_args_list
+            c
+            for c in mock_conn.execute.call_args_list
             if len(c.args) >= 3 and c.args[1] == item_id and c.args[2] == "dedup"
         ]
         assert len(log_calls) >= 1
@@ -212,20 +275,32 @@ class TestLoggingSkippedSteps:
         mock_ingestor, mock_dedup, mock_llm, mock_validator, mock_sink = _setup_mocks()
 
         with patch("app.services.orchestrator.get_instance") as mock_get:
+
             def side_effect(ptype, name):
-                return {"ingestor": mock_ingestor, "dedup": mock_dedup, "llm": mock_llm,
-                        "validator": mock_validator, "sink": mock_sink}[ptype]
+                return {
+                    "ingestor": mock_ingestor,
+                    "dedup": mock_dedup,
+                    "llm": mock_llm,
+                    "validator": mock_validator,
+                    "sink": mock_sink,
+                }[ptype]
+
             mock_get.side_effect = side_effect
 
             await orchestrator.process_item(
-                item_id=item_id, raw_content="hello", source_url=None,
-                content_type="text/plain", pipeline=sample_pipeline, conn=mock_conn,
+                item_id=item_id,
+                raw_content="hello",
+                source_url=None,
+                content_type="text/plain",
+                pipeline=sample_pipeline,
+                conn=mock_conn,
                 skip_cache=True,
             )
 
         # Check that a "cache" / "skipped" log was inserted
         log_calls = [
-            c for c in mock_conn.execute.call_args_list
+            c
+            for c in mock_conn.execute.call_args_list
             if len(c.args) >= 3 and c.args[1] == item_id and c.args[2] == "cache"
         ]
         assert len(log_calls) >= 1
@@ -240,19 +315,31 @@ class TestLoggingSkippedSteps:
         mock_ingestor, mock_dedup, mock_llm, mock_validator, mock_sink = _setup_mocks()
 
         with patch("app.services.orchestrator.get_instance") as mock_get:
+
             def side_effect(ptype, name):
-                return {"ingestor": mock_ingestor, "dedup": mock_dedup, "llm": mock_llm,
-                        "validator": mock_validator, "sink": mock_sink}[ptype]
+                return {
+                    "ingestor": mock_ingestor,
+                    "dedup": mock_dedup,
+                    "llm": mock_llm,
+                    "validator": mock_validator,
+                    "sink": mock_sink,
+                }[ptype]
+
             mock_get.side_effect = side_effect
 
             await orchestrator.process_item(
-                item_id=item_id, raw_content="hello", source_url=None,
-                content_type="text/plain", pipeline=sample_pipeline, conn=mock_conn,
+                item_id=item_id,
+                raw_content="hello",
+                source_url=None,
+                content_type="text/plain",
+                pipeline=sample_pipeline,
+                conn=mock_conn,
             )
 
         # Check that a "cache" / "miss" log was inserted
         log_calls = [
-            c for c in mock_conn.execute.call_args_list
+            c
+            for c in mock_conn.execute.call_args_list
             if len(c.args) >= 3 and c.args[1] == item_id and c.args[2] == "cache"
         ]
         assert len(log_calls) >= 1

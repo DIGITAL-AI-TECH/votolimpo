@@ -1,4 +1,5 @@
 """Unit tests for all ingestor plugins."""
+
 from __future__ import annotations
 
 import json
@@ -24,6 +25,7 @@ CONTENT_TYPE_PDF = "application/pdf"
 # ---------------------------------------------------------------------------
 # TextIngestor
 # ---------------------------------------------------------------------------
+
 
 class TestTextIngestor:
     ingestor = TextIngestor()
@@ -74,6 +76,7 @@ class TestTextIngestor:
 # _truncate helper
 # ---------------------------------------------------------------------------
 
+
 class TestTruncateHelper:
     def test_short_text_unchanged(self):
         assert _truncate("abc", 10) == "abc"
@@ -88,6 +91,7 @@ class TestTruncateHelper:
 # ---------------------------------------------------------------------------
 # HTMLIngestor
 # ---------------------------------------------------------------------------
+
 
 class TestHTMLIngestor:
     ingestor = HTMLIngestor()
@@ -161,6 +165,7 @@ class TestHTMLIngestor:
 # PDFIngestor
 # ---------------------------------------------------------------------------
 
+
 class TestPDFIngestor:
     ingestor = PDFIngestor()
 
@@ -211,6 +216,7 @@ class TestPDFIngestor:
 # JSONIngestor
 # ---------------------------------------------------------------------------
 
+
 class TestJSONIngestor:
     ingestor = JSONIngestor()
 
@@ -232,7 +238,7 @@ class TestJSONIngestor:
             await self.ingestor.ingest("{not valid json}", CONTENT_TYPE_JSON)
 
     async def test_json_list_input(self):
-        raw = '[1, 2, 3]'
+        raw = "[1, 2, 3]"
         result = await self.ingestor.ingest(raw, CONTENT_TYPE_JSON)
         assert json.loads(result) == [1, 2, 3]
 
@@ -252,6 +258,7 @@ class TestJSONIngestor:
 # ---------------------------------------------------------------------------
 # AutoIngestor — MIME type routing
 # ---------------------------------------------------------------------------
+
 
 class TestAutoIngestor:
     ingestor = AutoIngestor()
@@ -298,6 +305,7 @@ class TestAutoIngestor:
 # ---------------------------------------------------------------------------
 # Registry integration
 # ---------------------------------------------------------------------------
+
 
 class TestRegistryIntegration:
     def test_all_ingestors_registered(self):

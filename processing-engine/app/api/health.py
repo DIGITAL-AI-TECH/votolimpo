@@ -23,11 +23,13 @@ async def health_check():
     # Check if worker is running (import at call time to avoid circular)
     try:
         from app.main import _worker_task
+
         worker_active = _worker_task is not None and not _worker_task.done()
     except Exception:
         pass
 
     from app.config import settings
+
     return {
         "status": "ok" if db_connected else "degraded",
         "version": settings.APP_VERSION,

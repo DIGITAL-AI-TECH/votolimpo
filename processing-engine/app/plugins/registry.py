@@ -15,8 +15,7 @@ def register(plugin_type: str, name: str, cls: type) -> None:
     """Register a plugin class under the given type and name."""
     if plugin_type not in _registry:
         raise KeyError(
-            f"Unknown plugin type '{plugin_type}'. "
-            f"Valid types: {list(_registry.keys())}"
+            f"Unknown plugin type '{plugin_type}'. Valid types: {list(_registry.keys())}"
         )
     _registry[plugin_type][name] = cls
 
@@ -25,10 +24,7 @@ def get(plugin_type: str, name: str) -> type:
     """Get a plugin class by type and name. Raises KeyError if not found."""
     if name not in _registry.get(plugin_type, {}):
         available = list(_registry.get(plugin_type, {}).keys())
-        raise KeyError(
-            f"Plugin '{name}' not found in type '{plugin_type}'. "
-            f"Available: {available}"
-        )
+        raise KeyError(f"Plugin '{name}' not found in type '{plugin_type}'. Available: {available}")
     return _registry[plugin_type][name]
 
 

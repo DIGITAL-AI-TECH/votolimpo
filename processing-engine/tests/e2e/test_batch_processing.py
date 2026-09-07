@@ -3,6 +3,7 @@
 Tests batch job submission, multi-item processing, stats, and logging.
 Requires Docker (PostgreSQL container).
 """
+
 from __future__ import annotations
 
 import uuid
@@ -50,10 +51,7 @@ class TestBatchJobSubmission:
 
     async def test_submit_batch_job_multiple_items(self, client, pipeline):
         """POST /jobs accepts multiple items in a single job."""
-        items = [
-            {"content": f"Content number {i}", "content_type": "text/plain"}
-            for i in range(5)
-        ]
+        items = [{"content": f"Content number {i}", "content_type": "text/plain"} for i in range(5)]
         resp = await client.post(
             "/jobs",
             json={"pipeline_id": pipeline["id"], "items": items},
@@ -66,10 +64,7 @@ class TestBatchJobSubmission:
 
     async def test_batch_job_result_has_all_items(self, client, pipeline):
         """GET /jobs/{id}/result returns all items from batch submission."""
-        items = [
-            {"content": f"Batch item {i}"}
-            for i in range(3)
-        ]
+        items = [{"content": f"Batch item {i}"} for i in range(3)]
         create_resp = await client.post(
             "/jobs",
             json={"pipeline_id": pipeline["id"], "items": items},
@@ -167,35 +162,25 @@ class TestStatsAndCostsE2E:
 
     async def test_stats_filter_by_pipeline(self, client):
         fake_id = str(uuid.uuid4())
-        resp = await client.get(
-            "/stats", params={"pipeline_id": fake_id}, headers=self.HEADERS
-        )
+        resp = await client.get("/stats", params={"pipeline_id": fake_id}, headers=self.HEADERS)
         assert resp.status_code == 200
 
     async def test_costs_group_by_pipeline(self, client):
-        resp = await client.get(
-            "/costs", params={"group_by": "pipeline"}, headers=self.HEADERS
-        )
+        resp = await client.get("/costs", params={"group_by": "pipeline"}, headers=self.HEADERS)
         assert resp.status_code == 200
         assert "breakdown" in resp.json()
 
     async def test_costs_group_by_model(self, client):
-        resp = await client.get(
-            "/costs", params={"group_by": "model"}, headers=self.HEADERS
-        )
+        resp = await client.get("/costs", params={"group_by": "model"}, headers=self.HEADERS)
         assert resp.status_code == 200
 
     async def test_costs_group_by_day(self, client):
-        resp = await client.get(
-            "/costs", params={"group_by": "day"}, headers=self.HEADERS
-        )
+        resp = await client.get("/costs", params={"group_by": "day"}, headers=self.HEADERS)
         assert resp.status_code == 200
 
     async def test_budget_status_not_found(self, client):
         fake_id = str(uuid.uuid4())
-        resp = await client.get(
-            f"/costs/budget/{fake_id}", headers=self.HEADERS
-        )
+        resp = await client.get(f"/costs/budget/{fake_id}", headers=self.HEADERS)
         # Budget endpoint should handle missing pipeline gracefully
         assert resp.status_code in (200, 404)
 

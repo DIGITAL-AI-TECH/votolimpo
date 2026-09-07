@@ -19,8 +19,7 @@ class BudgetExceededError(Exception):
         self.current_cost = current_cost
         self.budget_limit = budget_limit
         super().__init__(
-            f"Budget exceeded for pipeline {pipeline_id}: "
-            f"${current_cost:.4f} / ${budget_limit:.2f}"
+            f"Budget exceeded for pipeline {pipeline_id}: ${current_cost:.4f} / ${budget_limit:.2f}"
         )
 
 
@@ -84,7 +83,9 @@ class CostTracker:
             return 0.0
         input_price = pricing["input_price_per_million_tokens"]
         output_price = pricing["output_price_per_million_tokens"]
-        return (prompt_tokens * input_price / 1_000_000) + (completion_tokens * output_price / 1_000_000)
+        return (prompt_tokens * input_price / 1_000_000) + (
+            completion_tokens * output_price / 1_000_000
+        )
 
     async def check_budget(
         self,
@@ -97,13 +98,21 @@ class CostTracker:
         """
         record = await conn.fetchrow(CHECK_BUDGET, pipeline_id)
         if record is None:
-            return {"current_cost": 0.0, "budget_limit": None, "pct_used": 0.0, "is_exceeded": False}
+            return {
+                "current_cost": 0.0,
+                "budget_limit": None,
+                "pct_used": 0.0,
+                "is_exceeded": False,
+            }
         result = dict(record)
         # Warn at 80%
         if result.get("pct_used", 0) >= 80 and not result.get("is_exceeded", False):
             logger.warning(
                 "Pipeline %s budget at %.1f%% ($%.4f / $%.2f)",
-                pipeline_id, result["pct_used"], result["current_cost"], result["budget_limit"]
+                pipeline_id,
+                result["pct_used"],
+                result["current_cost"],
+                result["budget_limit"],
             )
         return result
 

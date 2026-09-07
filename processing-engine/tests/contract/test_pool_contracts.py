@@ -3,6 +3,7 @@
 Validates Pydantic model serialization matches the contract
 a frontend/collector would depend on.
 """
+
 from __future__ import annotations
 
 import os
@@ -49,9 +50,7 @@ class TestPoolIngestResponseShape:
         assert isinstance(data["rejections"][0]["reason"], str)
 
     def test_empty_response_shape(self):
-        resp = PoolIngestResponse(
-            accepted=0, rejected=0, pool_ids=[], rejections=[]
-        )
+        resp = PoolIngestResponse(accepted=0, rejected=0, pool_ids=[], rejections=[])
         data = resp.model_dump(mode="json")
 
         assert data["accepted"] == 0
@@ -60,9 +59,7 @@ class TestPoolIngestResponseShape:
         assert data["rejections"] == []
 
     def test_required_fields_present(self):
-        resp = PoolIngestResponse(
-            accepted=1, rejected=0, pool_ids=[uuid.uuid4()], rejections=[]
-        )
+        resp = PoolIngestResponse(accepted=1, rejected=0, pool_ids=[uuid.uuid4()], rejections=[])
         data = resp.model_dump(mode="json")
         required = {"accepted", "rejected", "pool_ids", "rejections"}
         assert required.issubset(data.keys())
@@ -72,9 +69,7 @@ class TestPoolSingleIngestResponseShape:
     """Contract: PoolSingleIngestResponse must have exact fields."""
 
     def test_accepted_shape(self):
-        resp = PoolSingleIngestResponse(
-            pool_id=uuid.uuid4(), status="accepted"
-        )
+        resp = PoolSingleIngestResponse(pool_id=uuid.uuid4(), status="accepted")
         data = resp.model_dump(mode="json")
 
         assert isinstance(data["pool_id"], str)
@@ -131,9 +126,7 @@ class TestPoolRejectionShape:
     """Contract: PoolRejection must have exact fields."""
 
     def test_rejection_with_existing_id(self):
-        r = PoolRejection(
-            index=3, reason="duplicate_url", existing_pool_id=uuid.uuid4()
-        )
+        r = PoolRejection(index=3, reason="duplicate_url", existing_pool_id=uuid.uuid4())
         data = r.model_dump(mode="json")
 
         assert isinstance(data["index"], int)

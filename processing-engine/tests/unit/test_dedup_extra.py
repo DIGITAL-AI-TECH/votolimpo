@@ -1,4 +1,5 @@
 """Testes unitários para SemanticDedupStrategy e CompositeDedupStrategy."""
+
 from __future__ import annotations
 
 from unittest.mock import AsyncMock, MagicMock
@@ -12,6 +13,7 @@ from app.plugins.protocols import DedupResult
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 def _make_conn(row=None) -> MagicMock:
     """Cria um mock de conexão asyncpg."""
@@ -40,8 +42,8 @@ def _make_strategy(result: DedupResult) -> MagicMock:
 # SemanticDedupStrategy
 # ---------------------------------------------------------------------------
 
-class TestSemanticDedupStrategy:
 
+class TestSemanticDedupStrategy:
     pipeline_id = "pipe-semantic-001"
 
     async def test_semantic_dedup_no_match(self):
@@ -116,8 +118,8 @@ class TestSemanticDedupStrategy:
 # CompositeDedupStrategy
 # ---------------------------------------------------------------------------
 
-class TestCompositeDedupStrategy:
 
+class TestCompositeDedupStrategy:
     pipeline_id = "pipe-composite-001"
 
     async def test_composite_first_match(self):
@@ -203,6 +205,7 @@ class TestCompositeDedupStrategy:
 # ---------------------------------------------------------------------------
 # Registry integration
 # ---------------------------------------------------------------------------
+
 
 class TestDedupRegistryExtra:
     def test_semantic_and_composite_registered(self):

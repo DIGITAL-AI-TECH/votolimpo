@@ -1,4 +1,5 @@
 """Unit tests for GroundingValidator, RangeValidator and CompositeValidator."""
+
 from __future__ import annotations
 
 from app.plugins.protocols import ValidationResult
@@ -9,6 +10,7 @@ from app.plugins.validators.range_validator import RangeValidator
 # ---------------------------------------------------------------------------
 # GroundingValidator
 # ---------------------------------------------------------------------------
+
 
 class TestGroundingValidator:
     validator = GroundingValidator()
@@ -72,6 +74,7 @@ class TestGroundingValidator:
 # ---------------------------------------------------------------------------
 # RangeValidator
 # ---------------------------------------------------------------------------
+
 
 class TestRangeValidator:
     validator = RangeValidator()
@@ -152,6 +155,7 @@ class TestRangeValidator:
 # CompositeValidator
 # ---------------------------------------------------------------------------
 
+
 class TestCompositeValidator:
     def test_composite_all_pass(self):
         """Todos os validators passam -> valid=True sem erros."""
@@ -216,6 +220,7 @@ class TestCompositeValidator:
 # ---------------------------------------------------------------------------
 # Registry integration
 # ---------------------------------------------------------------------------
+
 
 class TestNewValidatorsRegistryIntegration:
     def test_all_new_validators_registered(self):

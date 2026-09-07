@@ -18,16 +18,16 @@ os.environ.setdefault("API_KEY", "test-key")
 os.environ.setdefault("ENGINE_ROLE", "api")
 
 
-
 # ---------------------------------------------------------------------------
 # Pipeline contract
 # ---------------------------------------------------------------------------
+
 
 class TestPipelineContract:
     """Contract: Pipeline response must have these exact fields and types."""
 
     REQUIRED_FIELDS = {
-        "id": str,          # UUID serialized as string
+        "id": str,  # UUID serialized as string
         "name": str,
         "version": int,
         "is_active": bool,
@@ -62,6 +62,7 @@ class TestPipelineContract:
 
     def _make_pipeline_dict(self) -> dict:
         from app.models.pipeline import Pipeline
+
         p = Pipeline(
             id=uuid.uuid4(),
             name="test",
@@ -110,6 +111,7 @@ class TestPipelineContract:
 # Job contract
 # ---------------------------------------------------------------------------
 
+
 class TestJobContract:
     """Contract: Job response must have these exact fields and types."""
 
@@ -136,6 +138,7 @@ class TestJobContract:
 
     def _make_job_dict(self) -> dict:
         from app.models.job import Job
+
         j = Job(
             id=uuid.uuid4(),
             pipeline_id=uuid.uuid4(),
@@ -171,6 +174,7 @@ class TestJobContract:
     def test_status_enum_values(self):
         """Frontend depends on specific status strings."""
         from app.models.job import JobStatus
+
         actual = {s.value for s in JobStatus}
         assert actual == self.STATUS_VALUES, (
             f"JobStatus changed! Expected {self.STATUS_VALUES}, got {actual}"
@@ -187,11 +191,13 @@ class TestJobContract:
 # JobListResponse contract
 # ---------------------------------------------------------------------------
 
+
 class TestJobListResponseContract:
     """Contract: /jobs list response shape."""
 
     def test_shape(self):
         from app.models.job import Job, JobListResponse
+
         j = Job(
             id=uuid.uuid4(),
             pipeline_id=uuid.uuid4(),
@@ -215,6 +221,7 @@ class TestJobListResponseContract:
 # ItemResult contract
 # ---------------------------------------------------------------------------
 
+
 class TestItemResultContract:
     """Contract: ItemResult shape returned in /jobs/{id}/result."""
 
@@ -235,19 +242,29 @@ class TestItemResultContract:
     }
 
     ITEM_STATUS_VALUES = {
-        "pending", "ingesting", "deduplicating", "processing",
-        "validating", "persisting", "completed", "failed",
-        "duplicate", "similar",
+        "pending",
+        "ingesting",
+        "deduplicating",
+        "processing",
+        "validating",
+        "persisting",
+        "completed",
+        "failed",
+        "duplicate",
+        "similar",
     }
 
     def _make_item_dict(self) -> dict:
         from app.models.item import ItemResult, TokenUsage
+
         item = ItemResult(
             id=uuid.uuid4(),
             status="completed",
             output={"topic": "AI"},
             cached=False,
-            usage=TokenUsage(prompt_tokens=100, completion_tokens=50, total_tokens=150, cost_usd=0.001),
+            usage=TokenUsage(
+                prompt_tokens=100, completion_tokens=50, total_tokens=150, cost_usd=0.001
+            ),
         )
         return item.model_dump(mode="json")
 
@@ -271,6 +288,7 @@ class TestItemResultContract:
 
     def test_item_status_enum_values(self):
         from app.models.item import ItemStatus
+
         actual = {s.value for s in ItemStatus}
         assert actual == self.ITEM_STATUS_VALUES
 
@@ -278,6 +296,7 @@ class TestItemResultContract:
 # ---------------------------------------------------------------------------
 # CostReport contract
 # ---------------------------------------------------------------------------
+
 
 class TestCostReportContract:
     """Contract: /costs response shape."""
@@ -297,6 +316,7 @@ class TestCostReportContract:
 
     def test_fields(self):
         from app.models.cost import CostReport
+
         report = CostReport(total_cost_usd=1.23, total_calls=10, total_tokens=5000)
         data = report.model_dump(mode="json")
         for field, expected in self.REQUIRED_FIELDS.items():
@@ -305,6 +325,7 @@ class TestCostReportContract:
 
     def test_breakdown_item_shape(self):
         from app.models.cost import CostBreakdownItem, CostReport
+
         item = CostBreakdownItem(
             label="pipeline-a",
             total_calls=5,
@@ -321,7 +342,14 @@ class TestCostReportContract:
         )
         data = report.model_dump(mode="json")
         bi = data["breakdown"][0]
-        for key in ("label", "total_calls", "prompt_tokens", "completion_tokens", "total_tokens", "total_cost_usd"):
+        for key in (
+            "label",
+            "total_calls",
+            "prompt_tokens",
+            "completion_tokens",
+            "total_tokens",
+            "total_cost_usd",
+        ):
             assert key in bi, f"CostBreakdownItem missing: {key}"
 
 
@@ -329,11 +357,13 @@ class TestCostReportContract:
 # BudgetStatus contract
 # ---------------------------------------------------------------------------
 
+
 class TestBudgetStatusContract:
     """Contract: /costs/budget/{id} response shape."""
 
     def test_fields(self):
         from app.models.cost import BudgetStatus
+
         bs = BudgetStatus(
             pipeline_id=uuid.uuid4(),
             current_cost=5.0,
@@ -351,6 +381,7 @@ class TestBudgetStatusContract:
 # ---------------------------------------------------------------------------
 # Stats contract
 # ---------------------------------------------------------------------------
+
 
 class TestStatsContract:
     """Contract: /stats response shape."""
@@ -371,6 +402,7 @@ class TestStatsContract:
 
     def test_all_fields_present_and_typed(self):
         from app.models.stats import Stats
+
         s = Stats()
         data = s.model_dump(mode="json")
         for field, expected_type in self.REQUIRED_FIELDS.items():
@@ -381,6 +413,7 @@ class TestStatsContract:
 
     def test_no_unexpected_fields(self):
         from app.models.stats import Stats
+
         data = Stats().model_dump(mode="json")
         unexpected = set(data.keys()) - set(self.REQUIRED_FIELDS)
         assert not unexpected, f"Stats has unexpected fields: {unexpected}"
@@ -389,6 +422,7 @@ class TestStatsContract:
 # ---------------------------------------------------------------------------
 # ProcessingLog contract
 # ---------------------------------------------------------------------------
+
 
 class TestProcessingLogContract:
     """Contract: /jobs/{id}/logs response item shape."""
@@ -411,6 +445,7 @@ class TestProcessingLogContract:
 
     def test_required_fields(self):
         from app.models.log import ProcessingLog
+
         log = ProcessingLog(
             id=uuid.uuid4(),
             item_id=uuid.uuid4(),
@@ -424,6 +459,7 @@ class TestProcessingLogContract:
 
     def test_step_enum_values(self):
         from app.models.log import LogStep
+
         actual = {s.value for s in LogStep}
         assert actual == self.VALID_STEPS
 
@@ -431,6 +467,7 @@ class TestProcessingLogContract:
 # ---------------------------------------------------------------------------
 # Health contract (non-authenticated)
 # ---------------------------------------------------------------------------
+
 
 class TestHealthContract:
     """Contract: /health response shape."""
@@ -448,6 +485,7 @@ class TestHealthContract:
 # ModelPricing contract
 # ---------------------------------------------------------------------------
 
+
 class TestModelPricingContract:
     """Contract: /pricing response item shape."""
 
@@ -464,6 +502,7 @@ class TestModelPricingContract:
 
     def test_fields(self):
         from app.models.cost import ModelPricing
+
         mp = ModelPricing(
             id=uuid.uuid4(),
             provider="openai",

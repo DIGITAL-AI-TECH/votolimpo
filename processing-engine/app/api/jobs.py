@@ -95,8 +95,8 @@ async def create_job(
         raise HTTPException(
             status_code=429,
             detail=f"Budget limit reached for pipeline '{pipeline_record['name']}'. "
-                   f"Current: ${budget_status['current_cost']:.4f} / "
-                   f"Limit: ${budget_status['budget_limit']:.2f}",
+            f"Current: ${budget_status['current_cost']:.4f} / "
+            f"Limit: ${budget_status['budget_limit']:.2f}",
         )
 
     # Verifica idempotência
@@ -111,17 +111,17 @@ async def create_job(
     # Insere o job
     job_record = await conn.fetchrow(
         INSERT_JOB,
-        payload.pipeline_id,                                          # $1
-        pipeline_record["version"],                                   # $2
-        len(payload.items),                                           # $3
-        payload.idempotency_key,                                      # $4
-        payload.priority,                                             # $5
-        json.dumps(payload.metadata) if payload.metadata else None,   # $6
-        payload.override_model,                                       # $7
-        payload.skip_dedup,                                           # $8
-        payload.skip_cache,                                           # $9
-        payload.dry_run,                                              # $10
-        payload.callback_url,                                         # $11
+        payload.pipeline_id,  # $1
+        pipeline_record["version"],  # $2
+        len(payload.items),  # $3
+        payload.idempotency_key,  # $4
+        payload.priority,  # $5
+        json.dumps(payload.metadata) if payload.metadata else None,  # $6
+        payload.override_model,  # $7
+        payload.skip_dedup,  # $8
+        payload.skip_cache,  # $9
+        payload.dry_run,  # $10
+        payload.callback_url,  # $11
     )
 
     job = _record_to_job(job_record)
@@ -130,14 +130,14 @@ async def create_job(
     for item in payload.items:
         await conn.execute(
             INSERT_ITEM,
-            job.id,                                                        # $1
-            payload.pipeline_id,                                           # $2
-            item.source_url,                                               # $3
-            item.content,                                                  # $4
-            item.content_type,                                             # $5
-            json.dumps(item.metadata) if item.metadata else None,          # $6
-            _compute_hash(item.source_url),                                # $7
-            _compute_hash(item.content),                                   # $8
+            job.id,  # $1
+            payload.pipeline_id,  # $2
+            item.source_url,  # $3
+            item.content,  # $4
+            item.content_type,  # $5
+            json.dumps(item.metadata) if item.metadata else None,  # $6
+            _compute_hash(item.source_url),  # $7
+            _compute_hash(item.content),  # $8
         )
 
     return job
@@ -218,7 +218,10 @@ async def get_job_logs(
     job_id: uuid.UUID,
     conn: Annotated[asyncpg.Connection, Depends(get_db)],
     _key: Annotated[str, Depends(verify_api_key)],
-    step: Annotated[str | None, Query(description="Filtrar por step (ingest, dedup, process, validate, persist)")] = None,
+    step: Annotated[
+        str | None,
+        Query(description="Filtrar por step (ingest, dedup, process, validate, persist)"),
+    ] = None,
 ) -> list[ProcessingLog]:
     job_record = await conn.fetchrow(SELECT_JOB_BY_ID, job_id)
     if job_record is None:

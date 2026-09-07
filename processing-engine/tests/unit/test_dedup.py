@@ -1,4 +1,5 @@
 """Unit tests for dedup plugins."""
+
 from __future__ import annotations
 
 from unittest.mock import AsyncMock, MagicMock
@@ -9,6 +10,7 @@ from app.plugins.protocols import DedupResult
 # ---------------------------------------------------------------------------
 # _sha256 helper
 # ---------------------------------------------------------------------------
+
 
 class TestSha256Helper:
     def test_produces_64_char_hex(self):
@@ -26,6 +28,7 @@ class TestSha256Helper:
 # ---------------------------------------------------------------------------
 # HashDedupStrategy
 # ---------------------------------------------------------------------------
+
 
 class TestHashDedupStrategy:
     """Tests for HashDedupStrategy using a mock asyncpg connection."""
@@ -141,6 +144,7 @@ class TestHashDedupStrategy:
 # ---------------------------------------------------------------------------
 # Registry integration
 # ---------------------------------------------------------------------------
+
 
 class TestDedupRegistryIntegration:
     def test_hash_registered(self):

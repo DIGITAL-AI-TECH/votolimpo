@@ -55,15 +55,17 @@ class TestOrchestratorFullPipeline:
         mock_dedup.check = AsyncMock(return_value=DedupResult(is_duplicate=False))
 
         mock_llm = AsyncMock()
-        mock_llm.complete = AsyncMock(return_value=LLMResponse(
-            content='{"name": "test"}',
-            parsed={"name": "test"},
-            prompt_tokens=10,
-            completion_tokens=5,
-            total_tokens=15,
-            model="gpt-4.1-mini",
-            provider="openai",
-        ))
+        mock_llm.complete = AsyncMock(
+            return_value=LLMResponse(
+                content='{"name": "test"}',
+                parsed={"name": "test"},
+                prompt_tokens=10,
+                completion_tokens=5,
+                total_tokens=15,
+                model="gpt-4.1-mini",
+                provider="openai",
+            )
+        )
 
         mock_validator = MagicMock()
         mock_validator.validate = MagicMock(return_value=ValidationResult(valid=True))
@@ -72,6 +74,7 @@ class TestOrchestratorFullPipeline:
         mock_sink.persist = AsyncMock()
 
         with patch("app.services.orchestrator.get_instance") as mock_get:
+
             def side_effect(ptype, name):
                 return {
                     "ingestor": mock_ingestor,
@@ -80,6 +83,7 @@ class TestOrchestratorFullPipeline:
                     "validator": mock_validator,
                     "sink": mock_sink,
                 }[ptype]
+
             mock_get.side_effect = side_effect
 
             result = await orchestrator.process_item(
@@ -110,15 +114,19 @@ class TestOrchestratorFullPipeline:
         mock_ingestor.ingest = AsyncMock(return_value="text")
 
         mock_dedup = AsyncMock()
-        mock_dedup.check = AsyncMock(return_value=DedupResult(
-            is_duplicate=True, matched_item_id=str(uuid.uuid4()), strategy="hash"
-        ))
+        mock_dedup.check = AsyncMock(
+            return_value=DedupResult(
+                is_duplicate=True, matched_item_id=str(uuid.uuid4()), strategy="hash"
+            )
+        )
 
         mock_llm = AsyncMock()
 
         with patch("app.services.orchestrator.get_instance") as mock_get:
+
             def side_effect(ptype, name):
                 return {"ingestor": mock_ingestor, "dedup": mock_dedup, "llm": mock_llm}[ptype]
+
             mock_get.side_effect = side_effect
 
             result = await orchestrator.process_item(
@@ -147,10 +155,18 @@ class TestOrchestratorFullPipeline:
         mock_dedup.check = AsyncMock(return_value=DedupResult(is_duplicate=False))
 
         mock_llm = AsyncMock()
-        mock_llm.complete = AsyncMock(side_effect=[
-            Exception("rate limit"),
-            LLMResponse(content='{"name":"ok"}', parsed={"name":"ok"}, prompt_tokens=5, completion_tokens=3, total_tokens=8),
-        ])
+        mock_llm.complete = AsyncMock(
+            side_effect=[
+                Exception("rate limit"),
+                LLMResponse(
+                    content='{"name":"ok"}',
+                    parsed={"name": "ok"},
+                    prompt_tokens=5,
+                    completion_tokens=3,
+                    total_tokens=8,
+                ),
+            ]
+        )
 
         mock_validator = MagicMock()
         mock_validator.validate = MagicMock(return_value=ValidationResult(valid=True))
@@ -159,13 +175,25 @@ class TestOrchestratorFullPipeline:
         mock_sink.persist = AsyncMock()
 
         with patch("app.services.orchestrator.get_instance") as mock_get:
+
             def side_effect(ptype, name):
-                return {"ingestor": mock_ingestor, "dedup": mock_dedup, "llm": mock_llm, "validator": mock_validator, "sink": mock_sink}[ptype]
+                return {
+                    "ingestor": mock_ingestor,
+                    "dedup": mock_dedup,
+                    "llm": mock_llm,
+                    "validator": mock_validator,
+                    "sink": mock_sink,
+                }[ptype]
+
             mock_get.side_effect = side_effect
 
             result = await orchestrator.process_item(
-                item_id=item_id, raw_content="text", source_url=None,
-                content_type="text/plain", pipeline=sample_pipeline, conn=mock_conn,
+                item_id=item_id,
+                raw_content="text",
+                source_url=None,
+                content_type="text/plain",
+                pipeline=sample_pipeline,
+                conn=mock_conn,
             )
 
         assert result["output"] == {"name": "ok"}
@@ -183,10 +211,15 @@ class TestOrchestratorFullPipeline:
         mock_dedup.check = AsyncMock(return_value=DedupResult(is_duplicate=False))
 
         mock_llm = AsyncMock()
-        mock_llm.complete = AsyncMock(return_value=LLMResponse(
-            content='{"name":"test"}', parsed={"name":"test"},
-            prompt_tokens=10, completion_tokens=5, total_tokens=15,
-        ))
+        mock_llm.complete = AsyncMock(
+            return_value=LLMResponse(
+                content='{"name":"test"}',
+                parsed={"name": "test"},
+                prompt_tokens=10,
+                completion_tokens=5,
+                total_tokens=15,
+            )
+        )
 
         mock_validator = MagicMock()
         mock_validator.validate = MagicMock(return_value=ValidationResult(valid=True))
@@ -194,13 +227,25 @@ class TestOrchestratorFullPipeline:
         mock_sink = AsyncMock()
 
         with patch("app.services.orchestrator.get_instance") as mock_get:
+
             def side_effect(ptype, name):
-                return {"ingestor": mock_ingestor, "dedup": mock_dedup, "llm": mock_llm, "validator": mock_validator, "sink": mock_sink}[ptype]
+                return {
+                    "ingestor": mock_ingestor,
+                    "dedup": mock_dedup,
+                    "llm": mock_llm,
+                    "validator": mock_validator,
+                    "sink": mock_sink,
+                }[ptype]
+
             mock_get.side_effect = side_effect
 
             result = await orchestrator.process_item(
-                item_id=item_id, raw_content="text", source_url=None,
-                content_type="text/plain", pipeline=sample_pipeline, conn=mock_conn,
+                item_id=item_id,
+                raw_content="text",
+                source_url=None,
+                content_type="text/plain",
+                pipeline=sample_pipeline,
+                conn=mock_conn,
                 dry_run=True,
             )
 
@@ -219,23 +264,39 @@ class TestOrchestratorFullPipeline:
         mock_dedup.check = AsyncMock(return_value=DedupResult(is_duplicate=False))
 
         mock_llm = AsyncMock()
-        mock_llm.complete = AsyncMock(return_value=LLMResponse(
-            content='{"bad": 1}', parsed={"bad": 1},
-            prompt_tokens=10, completion_tokens=5, total_tokens=15,
-        ))
+        mock_llm.complete = AsyncMock(
+            return_value=LLMResponse(
+                content='{"bad": 1}',
+                parsed={"bad": 1},
+                prompt_tokens=10,
+                completion_tokens=5,
+                total_tokens=15,
+            )
+        )
 
         mock_validator = MagicMock()
-        mock_validator.validate = MagicMock(return_value=ValidationResult(
-            valid=False, errors=["'name' is required"]
-        ))
+        mock_validator.validate = MagicMock(
+            return_value=ValidationResult(valid=False, errors=["'name' is required"])
+        )
 
         with patch("app.services.orchestrator.get_instance") as mock_get:
+
             def side_effect(ptype, name):
-                return {"ingestor": mock_ingestor, "dedup": mock_dedup, "llm": mock_llm, "validator": mock_validator}[ptype]
+                return {
+                    "ingestor": mock_ingestor,
+                    "dedup": mock_dedup,
+                    "llm": mock_llm,
+                    "validator": mock_validator,
+                }[ptype]
+
             mock_get.side_effect = side_effect
 
             with pytest.raises(ValueError, match="Validation failed"):
                 await orchestrator.process_item(
-                    item_id=item_id, raw_content="text", source_url=None,
-                    content_type="text/plain", pipeline=sample_pipeline, conn=mock_conn,
+                    item_id=item_id,
+                    raw_content="text",
+                    source_url=None,
+                    content_type="text/plain",
+                    pipeline=sample_pipeline,
+                    conn=mock_conn,
                 )

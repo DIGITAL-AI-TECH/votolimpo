@@ -3,6 +3,7 @@
 Tests use FastAPI dependency overrides with mocked connection.
 No Docker or PostgreSQL required.
 """
+
 from __future__ import annotations
 
 import os
@@ -24,12 +25,14 @@ from app.main import app
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 def _make_pipeline_record(pipeline_id=None):
     pid = pipeline_id or uuid.uuid4()
 
     class FakeRecord(dict):
         def __getitem__(self, key):
             return dict.__getitem__(self, key)
+
         def get(self, key, default=None):
             return dict.get(self, key, default)
 
@@ -38,8 +41,10 @@ def _make_pipeline_record(pipeline_id=None):
 
 class FakeRecord(dict):
     """asyncpg.Record-like dict."""
+
     def __getitem__(self, key):
         return dict.__getitem__(self, key)
+
     def get(self, key, default=None):
         return dict.get(self, key, default)
 
@@ -47,6 +52,7 @@ class FakeRecord(dict):
 # ---------------------------------------------------------------------------
 # Fixtures
 # ---------------------------------------------------------------------------
+
 
 @pytest.fixture
 def mock_conn():
@@ -66,6 +72,7 @@ def api_headers():
 @pytest.fixture
 async def ac(mock_conn):
     """Async test client with dependency overrides."""
+
     async def override_get_db():
         yield mock_conn
 
@@ -86,8 +93,8 @@ async def ac(mock_conn):
 # POST /v1/pool/ingest
 # ---------------------------------------------------------------------------
 
-class TestPoolIngest:
 
+class TestPoolIngest:
     @pytest.mark.asyncio
     async def test_ingest_valid_items(self, ac, mock_conn, api_headers):
         pipeline_id = uuid.uuid4()
@@ -107,14 +114,18 @@ class TestPoolIngest:
 
         mock_conn.fetchval = mock_fetchval
 
-        resp = await ac.post("/v1/pool/ingest", json={
-            "pipeline_id": str(pipeline_id),
-            "source_id": "test-scraper",
-            "items": [
-                {"source_url": f"https://example.com/page{i}", "content": f"Content {i}"}
-                for i in range(3)
-            ],
-        }, headers=api_headers)
+        resp = await ac.post(
+            "/v1/pool/ingest",
+            json={
+                "pipeline_id": str(pipeline_id),
+                "source_id": "test-scraper",
+                "items": [
+                    {"source_url": f"https://example.com/page{i}", "content": f"Content {i}"}
+                    for i in range(3)
+                ],
+            },
+            headers=api_headers,
+        )
 
         assert resp.status_code == 201
         data = resp.json()
@@ -126,10 +137,14 @@ class TestPoolIngest:
     async def test_ingest_invalid_pipeline_404(self, ac, mock_conn, api_headers):
         mock_conn.fetchrow = AsyncMock(return_value=None)
 
-        resp = await ac.post("/v1/pool/ingest", json={
-            "pipeline_id": str(uuid.uuid4()),
-            "items": [{"content": "Test"}],
-        }, headers=api_headers)
+        resp = await ac.post(
+            "/v1/pool/ingest",
+            json={
+                "pipeline_id": str(uuid.uuid4()),
+                "items": [{"content": "Test"}],
+            },
+            headers=api_headers,
+        )
 
         assert resp.status_code == 404
 
@@ -141,10 +156,14 @@ class TestPoolIngest:
         mock_conn.fetchrow = AsyncMock(return_value=_make_pipeline_record(pipeline_id))
         mock_conn.fetchval = AsyncMock(return_value=existing_id)  # url_hash exists
 
-        resp = await ac.post("/v1/pool/ingest", json={
-            "pipeline_id": str(pipeline_id),
-            "items": [{"source_url": "https://example.com/dup", "content": "Dup"}],
-        }, headers=api_headers)
+        resp = await ac.post(
+            "/v1/pool/ingest",
+            json={
+                "pipeline_id": str(pipeline_id),
+                "items": [{"source_url": "https://example.com/dup", "content": "Dup"}],
+            },
+            headers=api_headers,
+        )
 
         assert resp.status_code == 201
         data = resp.json()
@@ -162,10 +181,14 @@ class TestPoolIngest:
         mock_conn.fetchrow = AsyncMock(return_value=_make_pipeline_record(pipeline_id))
         mock_conn.fetchval = AsyncMock(return_value=pool_id)  # INSERT returns id
 
-        resp = await ac.post("/v1/pool/ingest", json={
-            "pipeline_id": str(pipeline_id),
-            "items": [{"content": "No URL, just content"}],
-        }, headers=api_headers)
+        resp = await ac.post(
+            "/v1/pool/ingest",
+            json={
+                "pipeline_id": str(pipeline_id),
+                "items": [{"content": "No URL, just content"}],
+            },
+            headers=api_headers,
+        )
 
         assert resp.status_code == 201
         data = resp.json()
@@ -173,28 +196,40 @@ class TestPoolIngest:
 
     @pytest.mark.asyncio
     async def test_ingest_missing_content_and_url_422(self, ac, api_headers):
-        resp = await ac.post("/v1/pool/ingest", json={
-            "pipeline_id": str(uuid.uuid4()),
-            "items": [{"content_type": "text/plain"}],
-        }, headers=api_headers)
+        resp = await ac.post(
+            "/v1/pool/ingest",
+            json={
+                "pipeline_id": str(uuid.uuid4()),
+                "items": [{"content_type": "text/plain"}],
+            },
+            headers=api_headers,
+        )
 
         assert resp.status_code == 422
 
     @pytest.mark.asyncio
     async def test_ingest_over_500_items_422(self, ac, api_headers):
-        resp = await ac.post("/v1/pool/ingest", json={
-            "pipeline_id": str(uuid.uuid4()),
-            "items": [{"content": f"Item {i}"} for i in range(501)],
-        }, headers=api_headers)
+        resp = await ac.post(
+            "/v1/pool/ingest",
+            json={
+                "pipeline_id": str(uuid.uuid4()),
+                "items": [{"content": f"Item {i}"} for i in range(501)],
+            },
+            headers=api_headers,
+        )
 
         assert resp.status_code == 422
 
     @pytest.mark.asyncio
     async def test_ingest_empty_items_422(self, ac, api_headers):
-        resp = await ac.post("/v1/pool/ingest", json={
-            "pipeline_id": str(uuid.uuid4()),
-            "items": [],
-        }, headers=api_headers)
+        resp = await ac.post(
+            "/v1/pool/ingest",
+            json={
+                "pipeline_id": str(uuid.uuid4()),
+                "items": [],
+            },
+            headers=api_headers,
+        )
 
         assert resp.status_code == 422
 
@@ -212,21 +247,25 @@ class TestPoolIngest:
             nonlocal call_count
             call_count += 1
             result_map = {
-                1: existing_id,   # First item: duplicate
-                2: None,          # Second item: url_hash check OK
-                3: new_pool_id,   # Second item: INSERT
+                1: existing_id,  # First item: duplicate
+                2: None,  # Second item: url_hash check OK
+                3: new_pool_id,  # Second item: INSERT
             }
             return result_map.get(call_count)
 
         mock_conn.fetchval = mock_fetchval
 
-        resp = await ac.post("/v1/pool/ingest", json={
-            "pipeline_id": str(pipeline_id),
-            "items": [
-                {"source_url": "https://example.com/dup", "content": "Duplicate"},
-                {"source_url": "https://example.com/new", "content": "New"},
-            ],
-        }, headers=api_headers)
+        resp = await ac.post(
+            "/v1/pool/ingest",
+            json={
+                "pipeline_id": str(pipeline_id),
+                "items": [
+                    {"source_url": "https://example.com/dup", "content": "Duplicate"},
+                    {"source_url": "https://example.com/new", "content": "New"},
+                ],
+            },
+            headers=api_headers,
+        )
 
         assert resp.status_code == 201
         data = resp.json()
@@ -238,8 +277,8 @@ class TestPoolIngest:
 # POST /v1/pool/ingest/single
 # ---------------------------------------------------------------------------
 
-class TestPoolIngestSingle:
 
+class TestPoolIngestSingle:
     @pytest.mark.asyncio
     async def test_single_ingest_accepted(self, ac, mock_conn, api_headers):
         pipeline_id = uuid.uuid4()
@@ -257,11 +296,15 @@ class TestPoolIngestSingle:
 
         mock_conn.fetchval = mock_fetchval
 
-        resp = await ac.post("/v1/pool/ingest/single", json={
-            "pipeline_id": str(pipeline_id),
-            "source_url": "https://example.com/article",
-            "content": "Article content",
-        }, headers=api_headers)
+        resp = await ac.post(
+            "/v1/pool/ingest/single",
+            json={
+                "pipeline_id": str(pipeline_id),
+                "source_url": "https://example.com/article",
+                "content": "Article content",
+            },
+            headers=api_headers,
+        )
 
         assert resp.status_code == 201
         data = resp.json()
@@ -276,11 +319,15 @@ class TestPoolIngestSingle:
         mock_conn.fetchrow = AsyncMock(return_value=_make_pipeline_record(pipeline_id))
         mock_conn.fetchval = AsyncMock(return_value=existing_id)
 
-        resp = await ac.post("/v1/pool/ingest/single", json={
-            "pipeline_id": str(pipeline_id),
-            "source_url": "https://example.com/dup",
-            "content": "Dup content",
-        }, headers=api_headers)
+        resp = await ac.post(
+            "/v1/pool/ingest/single",
+            json={
+                "pipeline_id": str(pipeline_id),
+                "source_url": "https://example.com/dup",
+                "content": "Dup content",
+            },
+            headers=api_headers,
+        )
 
         assert resp.status_code == 201
         data = resp.json()
@@ -289,9 +336,13 @@ class TestPoolIngestSingle:
 
     @pytest.mark.asyncio
     async def test_single_ingest_missing_content_and_url_422(self, ac, api_headers):
-        resp = await ac.post("/v1/pool/ingest/single", json={
-            "pipeline_id": str(uuid.uuid4()),
-        }, headers=api_headers)
+        resp = await ac.post(
+            "/v1/pool/ingest/single",
+            json={
+                "pipeline_id": str(uuid.uuid4()),
+            },
+            headers=api_headers,
+        )
 
         assert resp.status_code == 422
 
@@ -300,21 +351,23 @@ class TestPoolIngestSingle:
 # GET /v1/pool/status
 # ---------------------------------------------------------------------------
 
-class TestPoolStatus:
 
+class TestPoolStatus:
     @pytest.mark.asyncio
     async def test_pool_status_with_items(self, ac, mock_conn, api_headers):
         pipeline_id = uuid.uuid4()
 
         mock_conn.fetchval = AsyncMock(return_value=35)
-        mock_conn.fetch = AsyncMock(return_value=[
-            FakeRecord(
-                pipeline_id=pipeline_id,
-                pipeline_name="VotoLimpo",
-                pending=35,
-                oldest_pending=None,
-            ),
-        ])
+        mock_conn.fetch = AsyncMock(
+            return_value=[
+                FakeRecord(
+                    pipeline_id=pipeline_id,
+                    pipeline_name="VotoLimpo",
+                    pending=35,
+                    oldest_pending=None,
+                ),
+            ]
+        )
 
         resp = await ac.get("/v1/pool/status", headers=api_headers)
 
@@ -341,6 +394,7 @@ class TestPoolStatus:
 # ---------------------------------------------------------------------------
 # Hash utility
 # ---------------------------------------------------------------------------
+
 
 class TestComputeHash:
     def test_hash_string(self):

@@ -28,9 +28,7 @@ class GroundingValidator:
             if grounding_fields is not None and field_name not in grounding_fields:
                 continue
             if value.lower() not in source_lower:
-                errors.append(
-                    f"{field_name}: value not grounded in source text"
-                )
+                errors.append(f"{field_name}: value not grounded in source text")
 
         if errors:
             return ValidationResult(valid=False, errors=errors)

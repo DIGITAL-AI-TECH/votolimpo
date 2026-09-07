@@ -1,4 +1,5 @@
 """Unit tests for validator plugins."""
+
 from __future__ import annotations
 
 from app.plugins.protocols import ValidationResult
@@ -7,6 +8,7 @@ from app.plugins.validators.schema import SchemaValidator
 # ---------------------------------------------------------------------------
 # SchemaValidator
 # ---------------------------------------------------------------------------
+
 
 class TestSchemaValidator:
     validator = SchemaValidator()
@@ -114,6 +116,7 @@ class TestSchemaValidator:
 # ---------------------------------------------------------------------------
 # Registry integration
 # ---------------------------------------------------------------------------
+
 
 class TestValidatorRegistryIntegration:
     def test_schema_validator_registered(self):

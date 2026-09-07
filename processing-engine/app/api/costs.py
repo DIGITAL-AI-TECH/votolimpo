@@ -80,7 +80,11 @@ async def get_costs(
     )
 
 
-@router.get("/costs/budget/{pipeline_id}", response_model=BudgetStatus, summary="Status do orçamento do pipeline")
+@router.get(
+    "/costs/budget/{pipeline_id}",
+    response_model=BudgetStatus,
+    summary="Status do orçamento do pipeline",
+)
 async def get_budget_status(
     pipeline_id: uuid.UUID,
     conn: Annotated[asyncpg.Connection, Depends(get_db)],

@@ -32,8 +32,7 @@ class ValidationResult:
 
 @runtime_checkable
 class Ingestor(Protocol):
-    async def ingest(self, raw: str | bytes, content_type: str, max_chars: int = 100000) -> str:
-        ...
+    async def ingest(self, raw: str | bytes, content_type: str, max_chars: int = 100000) -> str: ...
 
 
 @runtime_checkable
@@ -44,8 +43,7 @@ class DedupStrategy(Protocol):
         url: str | None,
         pipeline_id: str,
         conn: Any,
-    ) -> DedupResult:
-        ...
+    ) -> DedupResult: ...
 
 
 @runtime_checkable
@@ -56,11 +54,9 @@ class LLMProvider(Protocol):
         system_prompt: str,
         output_schema: dict,
         config: dict,
-    ) -> LLMResponse:
-        ...
+    ) -> LLMResponse: ...
 
-    async def embed(self, text: str) -> list[float]:
-        ...
+    async def embed(self, text: str) -> list[float]: ...
 
 
 @runtime_checkable
@@ -70,8 +66,7 @@ class Validator(Protocol):
         output: dict,
         source_text: str,
         schema: dict,
-    ) -> ValidationResult:
-        ...
+    ) -> ValidationResult: ...
 
 
 @runtime_checkable
@@ -82,5 +77,4 @@ class Sink(Protocol):
         output: dict,
         config: dict,
         conn: Any,
-    ) -> None:
-        ...
+    ) -> None: ...

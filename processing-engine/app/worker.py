@@ -51,8 +51,12 @@ SET status = 'failed', error_message = $2, duration_ms = $3
 WHERE id = $1
 """
 
-_INCREMENT_COMPLETED = "UPDATE processing_engine.jobs SET items_completed = items_completed + 1 WHERE id = $1"
-_INCREMENT_FAILED = "UPDATE processing_engine.jobs SET items_failed = items_failed + 1 WHERE id = $1"
+_INCREMENT_COMPLETED = (
+    "UPDATE processing_engine.jobs SET items_completed = items_completed + 1 WHERE id = $1"
+)
+_INCREMENT_FAILED = (
+    "UPDATE processing_engine.jobs SET items_failed = items_failed + 1 WHERE id = $1"
+)
 
 _FINALIZE_JOB = """
 UPDATE processing_engine.jobs
@@ -97,7 +101,12 @@ class Worker:
                 return False
 
             job = dict(job_record)
-            logger.info("Claimed job %s (pipeline=%s, items=%d)", job["id"], job["pipeline_id"], job["items_total"])
+            logger.info(
+                "Claimed job %s (pipeline=%s, items=%d)",
+                job["id"],
+                job["pipeline_id"],
+                job["items_total"],
+            )
 
             try:
                 await self._process_job(job, pool)
@@ -192,17 +201,25 @@ class Worker:
             else:
                 final_status = "partial"
             await conn.execute(_FINALIZE_JOB, job["id"], final_status)
-            logger.info("Job %s finished: %s (completed=%d, failed=%d)",
-                        job["id"], final_status, uj["items_completed"], uj["items_failed"])
+            logger.info(
+                "Job %s finished: %s (completed=%d, failed=%d)",
+                job["id"],
+                final_status,
+                uj["items_completed"],
+                uj["items_failed"],
+            )
 
         # Send callback if configured
         callback_url = job.get("callback_url")
         if callback_url:
             callback = CallbackService()
-            await callback.send(callback_url, {
-                "job_id": str(job["id"]),
-                "status": final_status,
-                "items_completed": uj["items_completed"],
-                "items_failed": uj["items_failed"],
-                "items_total": uj["items_total"],
-            })
+            await callback.send(
+                callback_url,
+                {
+                    "job_id": str(job["id"]),
+                    "status": final_status,
+                    "items_completed": uj["items_completed"],
+                    "items_failed": uj["items_failed"],
+                    "items_total": uj["items_total"],
+                },
+            )

@@ -2,6 +2,7 @@
 
 Tests use mocks — no Docker or PostgreSQL required.
 """
+
 from __future__ import annotations
 
 import os
@@ -20,6 +21,7 @@ from app.services.auto_batcher import AutoBatcher
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 def _make_pool_item(pipeline_id=None, pool_id=None, source_url="https://example.com"):
     pool_id = pool_id or uuid.uuid4()
     pipeline_id = pipeline_id or uuid.uuid4()
@@ -27,6 +29,7 @@ def _make_pool_item(pipeline_id=None, pool_id=None, source_url="https://example.
     class FakeRecord(dict):
         def __getitem__(self, key):
             return dict.__getitem__(self, key)
+
         def get(self, key, default=None):
             return dict.get(self, key, default)
 
@@ -53,6 +56,7 @@ def _make_pipeline_record(pipeline_id=None, version=1):
     class FakeRecord(dict):
         def __getitem__(self, key):
             return dict.__getitem__(self, key)
+
         def get(self, key, default=None):
             return dict.get(self, key, default)
 
@@ -65,6 +69,7 @@ def _make_job_record(job_id=None):
     class FakeRecord(dict):
         def __getitem__(self, key):
             return dict.__getitem__(self, key)
+
         def get(self, key, default=None):
             return dict.get(self, key, default)
 
@@ -95,8 +100,8 @@ def _make_mock_pool():
 # Tests
 # ---------------------------------------------------------------------------
 
-class TestAutoBatcher:
 
+class TestAutoBatcher:
     @pytest.mark.asyncio
     async def test_claim_and_create_jobs_creates_job(self):
         """Items claimed from pool should become jobs."""
@@ -106,10 +111,12 @@ class TestAutoBatcher:
         job_record = _make_job_record()
 
         # fetchrow calls: 1) pipeline lookup, 2) INSERT job
-        mock_conn.fetchrow = AsyncMock(side_effect=[
-            _make_pipeline_record(pipeline_id),  # pipeline lookup
-            job_record,                          # INSERT job
-        ])
+        mock_conn.fetchrow = AsyncMock(
+            side_effect=[
+                _make_pipeline_record(pipeline_id),  # pipeline lookup
+                job_record,  # INSERT job
+            ]
+        )
         # fetch calls: 1) CLAIM_PENDING_ITEMS
         mock_conn.fetch = AsyncMock(return_value=[pool_item])
         mock_conn.execute = AsyncMock()
@@ -145,14 +152,16 @@ class TestAutoBatcher:
                 return dict.__getitem__(self, key)
 
         # First fetch: GET_PENDING_PIPELINE_IDS
-        mock_conn.fetch = AsyncMock(return_value=[
-            FakeRow(pipeline_id=pid1),
-            FakeRow(pipeline_id=pid2),
-        ])
+        mock_conn.fetch = AsyncMock(
+            return_value=[
+                FakeRow(pipeline_id=pid1),
+                FakeRow(pipeline_id=pid2),
+            ]
+        )
 
         batcher = AutoBatcher(pool=mock_pool, poll_interval=1, batch_size=10)
 
-        with patch.object(batcher, '_claim_and_create_jobs', new_callable=AsyncMock) as mock_claim:
+        with patch.object(batcher, "_claim_and_create_jobs", new_callable=AsyncMock) as mock_claim:
             mock_claim.return_value = 0
             await batcher._batch_cycle()
 

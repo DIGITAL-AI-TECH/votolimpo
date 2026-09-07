@@ -52,6 +52,7 @@ class PostgreSQLSink:
 def _validate_table_name(name: str) -> None:
     """Validate that table name is in schema.table format with safe characters."""
     import re
+
     pattern = r"^[a-zA-Z_][a-zA-Z0-9_]*\.[a-zA-Z_][a-zA-Z0-9_]*$"
     if not re.match(pattern, name):
         raise ValueError(
@@ -63,6 +64,7 @@ def _validate_table_name(name: str) -> None:
 def _validate_identifier(name: str) -> None:
     """Validate a SQL identifier (column name)."""
     import re
+
     pattern = r"^[a-zA-Z_][a-zA-Z0-9_]*$"
     if not re.match(pattern, name):
         raise ValueError(

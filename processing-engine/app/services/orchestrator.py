@@ -61,16 +61,14 @@ class Orchestrator:
         # --- 1. INGEST ---
         await conn.execute(_UPDATE_ITEM_STATUS, item_id, "ingesting")
         ingested = await self._run_step(
-            conn, item_id, "ingest",
-            self._ingest, raw_content, content_type, pipeline
+            conn, item_id, "ingest", self._ingest, raw_content, content_type, pipeline
         )
 
         # --- 2. DEDUP ---
         if not skip_dedup:
             await conn.execute(_UPDATE_ITEM_STATUS, item_id, "deduplicating")
             dedup_result: DedupResult = await self._run_step(
-                conn, item_id, "dedup",
-                self._dedup, ingested, source_url, pipeline, conn
+                conn, item_id, "dedup", self._dedup, ingested, source_url, pipeline, conn
             )
             if dedup_result.is_duplicate:
                 result["dedup_result"] = "duplicate"
@@ -78,7 +76,9 @@ class Orchestrator:
                 await conn.execute(_UPDATE_ITEM_STATUS, item_id, "duplicate")
                 return result
         else:
-            await self._log(conn, item_id, "dedup", "skipped", 0, meta={"reason": "skip_dedup=true"})
+            await self._log(
+                conn, item_id, "dedup", "skipped", 0, meta={"reason": "skip_dedup=true"}
+            )
 
         # --- CACHE CHECK (after dedup, before LLM) ---
         content_hash = hashlib.sha256(ingested.encode("utf-8")).hexdigest()
@@ -88,7 +88,11 @@ class Orchestrator:
             cache_duration = int((time.monotonic() - cache_start) * 1000)
             if cache_hit:
                 await conn.execute(INCREMENT_CACHE_HIT, content_hash, pipeline["id"])
-                result["output"] = json.loads(cache_hit["output"]) if isinstance(cache_hit["output"], str) else cache_hit["output"]
+                result["output"] = (
+                    json.loads(cache_hit["output"])
+                    if isinstance(cache_hit["output"], str)
+                    else cache_hit["output"]
+                )
                 result["cached"] = True
                 result["duration_ms"] = int((time.monotonic() - total_start) * 1000)
                 await conn.execute(_UPDATE_ITEM_STATUS, item_id, "completed")
@@ -96,13 +100,20 @@ class Orchestrator:
                 return result
             await self._log(conn, item_id, "cache", "miss", cache_duration)
         else:
-            await self._log(conn, item_id, "cache", "skipped", 0, meta={"reason": "skip_cache=true"})
+            await self._log(
+                conn, item_id, "cache", "skipped", 0, meta={"reason": "skip_cache=true"}
+            )
 
         # --- 3. PROCESS (LLM) ---
         await conn.execute(_UPDATE_ITEM_STATUS, item_id, "processing")
         llm_response: LLMResponse = await self._run_step_with_retry(
-            conn, item_id, "process",
-            self._process_llm, ingested, pipeline, override_model,
+            conn,
+            item_id,
+            "process",
+            self._process_llm,
+            ingested,
+            pipeline,
+            override_model,
             max_retries=pipeline.get("max_retries", 3),
             backoff_base=pipeline.get("retry_backoff_base", 2.0),
         )
@@ -135,8 +146,7 @@ class Orchestrator:
         # --- 4. VALIDATE ---
         await conn.execute(_UPDATE_ITEM_STATUS, item_id, "validating")
         validation: ValidationResult = await self._run_step(
-            conn, item_id, "validate",
-            self._validate, result["output"], ingested, pipeline
+            conn, item_id, "validate", self._validate, result["output"], ingested, pipeline
         )
         if not validation.valid:
             raise ValueError(f"Validation failed: {validation.errors}")
@@ -145,8 +155,7 @@ class Orchestrator:
         if not dry_run:
             await conn.execute(_UPDATE_ITEM_STATUS, item_id, "persisting")
             await self._run_step(
-                conn, item_id, "persist",
-                self._persist, item_id, result["output"], pipeline, conn
+                conn, item_id, "persist", self._persist, item_id, result["output"], pipeline, conn
             )
 
         # Save to cache
@@ -176,11 +185,15 @@ class Orchestrator:
         ingestor = get_instance("ingestor", pipeline.get("ingestor_type", "auto"))
         return await ingestor.ingest(raw, content_type, pipeline.get("max_content_chars", 100000))
 
-    async def _dedup(self, content: str, url: str | None, pipeline: dict, conn: asyncpg.Connection) -> DedupResult:
+    async def _dedup(
+        self, content: str, url: str | None, pipeline: dict, conn: asyncpg.Connection
+    ) -> DedupResult:
         strategy = get_instance("dedup", pipeline.get("dedup_strategy", "hash"))
         return await strategy.check(content, url, str(pipeline["id"]), conn)
 
-    async def _process_llm(self, content: str, pipeline: dict, override_model: str | None) -> LLMResponse:
+    async def _process_llm(
+        self, content: str, pipeline: dict, override_model: str | None
+    ) -> LLMResponse:
         provider = get_instance("llm", pipeline.get("llm_provider", "openai"))
         config = {
             "model": override_model or pipeline.get("llm_model", "gpt-4.1-mini"),
@@ -201,7 +214,9 @@ class Orchestrator:
         validator = get_instance("validator", validators[0] if validators else "schema")
         return validator.validate(output, source, pipeline.get("output_schema", {}))
 
-    async def _persist(self, item_id: uuid.UUID, output: dict, pipeline: dict, conn: asyncpg.Connection) -> None:
+    async def _persist(
+        self, item_id: uuid.UUID, output: dict, pipeline: dict, conn: asyncpg.Connection
+    ) -> None:
         sink = get_instance("sink", pipeline.get("sink_type", "postgresql"))
         await sink.persist(str(item_id), output, pipeline.get("sink_config", {}), conn)
 
@@ -220,7 +235,9 @@ class Orchestrator:
             await self._log(conn, item_id, step_name, "error", duration_ms, str(e))
             raise
 
-    async def _run_step_with_retry(self, conn, item_id, step_name, fn, *args, max_retries=3, backoff_base=2.0) -> Any:
+    async def _run_step_with_retry(
+        self, conn, item_id, step_name, fn, *args, max_retries=3, backoff_base=2.0
+    ) -> Any:
         """Run step with exponential backoff retries."""
         last_error = None
         for attempt in range(max_retries + 1):
@@ -235,17 +252,35 @@ class Orchestrator:
                 last_error = e
                 duration_ms = int((time.monotonic() - start) * 1000)
                 if attempt < max_retries:
-                    await self._log(conn, item_id, step_name, "retry", duration_ms, str(e),
-                                    {"attempt": attempt + 1, "max_retries": max_retries})
-                    await asyncio.sleep(backoff_base ** attempt)
+                    await self._log(
+                        conn,
+                        item_id,
+                        step_name,
+                        "retry",
+                        duration_ms,
+                        str(e),
+                        {"attempt": attempt + 1, "max_retries": max_retries},
+                    )
+                    await asyncio.sleep(backoff_base**attempt)
                 else:
-                    await self._log(conn, item_id, step_name, "error", duration_ms, str(e),
-                                    {"attempts_exhausted": max_retries + 1})
+                    await self._log(
+                        conn,
+                        item_id,
+                        step_name,
+                        "error",
+                        duration_ms,
+                        str(e),
+                        {"attempts_exhausted": max_retries + 1},
+                    )
         raise last_error  # type: ignore[misc]
 
     async def _log(self, conn, item_id, step, status, duration_ms, error=None, meta=None):
         await conn.execute(
             _INSERT_LOG,
-            item_id, step, status, duration_ms, error,
+            item_id,
+            step,
+            status,
+            duration_ms,
+            error,
             json.dumps(meta) if meta else None,
         )

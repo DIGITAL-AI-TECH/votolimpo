@@ -47,8 +47,7 @@ def get_pool() -> asyncpg.Pool:
     """
     if _pool is None:
         raise RuntimeError(
-            "Database pool has not been initialized. "
-            "Call create_pool() before using get_pool()."
+            "Database pool has not been initialized. Call create_pool() before using get_pool()."
         )
     return _pool
 

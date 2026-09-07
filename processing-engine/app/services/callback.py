@@ -30,12 +30,17 @@ class CallbackService:
                     if resp.status_code < 400:
                         logger.info("Callback sent to %s (status=%d)", url, resp.status_code)
                         return True
-                    logger.warning("Callback to %s returned %d (attempt %d)", url, resp.status_code, attempt + 1)
+                    logger.warning(
+                        "Callback to %s returned %d (attempt %d)",
+                        url,
+                        resp.status_code,
+                        attempt + 1,
+                    )
             except Exception as e:
                 logger.warning("Callback to %s failed (attempt %d): %s", url, attempt + 1, e)
 
             if attempt < self.max_retries:
-                await asyncio.sleep(self.backoff_base ** attempt)
+                await asyncio.sleep(self.backoff_base**attempt)
 
         logger.error("Callback to %s failed after %d attempts", url, self.max_retries + 1)
         return False

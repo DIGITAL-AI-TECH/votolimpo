@@ -22,7 +22,9 @@ class PDFIngestor:
         try:
             import fitz  # PyMuPDF
         except ImportError as exc:
-            raise ImportError("PyMuPDF is required for PDF ingestion. Install with: pip install PyMuPDF") from exc
+            raise ImportError(
+                "PyMuPDF is required for PDF ingestion. Install with: pip install PyMuPDF"
+            ) from exc
 
         if isinstance(raw, str):
             raise ValueError("PDFIngestor expects bytes input, not str.")

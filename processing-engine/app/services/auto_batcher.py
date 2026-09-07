@@ -3,6 +3,7 @@
 Polls the pool table for pending items, claims them with SKIP LOCKED,
 and creates one job per item (v1: 1:1 granularity).
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -87,9 +88,7 @@ class AutoBatcher:
                         pipeline_id,
                     )
             except Exception:
-                logger.exception(
-                    "Auto-Batcher: error processing pipeline %s", pipeline_id
-                )
+                logger.exception("Auto-Batcher: error processing pipeline %s", pipeline_id)
 
     async def _claim_and_create_jobs(self, pipeline_id) -> int:
         """Claim pending items and create one job per item."""
@@ -102,17 +101,13 @@ class AutoBatcher:
                     pipeline_id,
                 )
                 # Mark all pending items for this pipeline as error
-                claimed = await conn.fetch(
-                    CLAIM_PENDING_ITEMS, pipeline_id, self._batch_size
-                )
+                claimed = await conn.fetch(CLAIM_PENDING_ITEMS, pipeline_id, self._batch_size)
                 for item in claimed:
                     await conn.execute(UPDATE_POOL_STATUS_ERROR, item["id"])
                 return 0
 
             pipeline_version = pipeline["version"]
-            claimed_items = await conn.fetch(
-                CLAIM_PENDING_ITEMS, pipeline_id, self._batch_size
-            )
+            claimed_items = await conn.fetch(CLAIM_PENDING_ITEMS, pipeline_id, self._batch_size)
 
             if not claimed_items:
                 return 0
@@ -123,17 +118,17 @@ class AutoBatcher:
                     # Create job (1:1 granularity)
                     job_record = await conn.fetchrow(
                         INSERT_JOB,
-                        pipeline_id,                    # $1 pipeline_id
-                        pipeline_version,               # $2 pipeline_version
-                        1,                              # $3 items_total
-                        None,                           # $4 idempotency_key
-                        pool_item["priority"],          # $5 priority
-                        None,                           # $6 metadata
-                        None,                           # $7 override_model
-                        False,                          # $8 skip_dedup
-                        False,                          # $9 skip_cache
-                        False,                          # $10 dry_run
-                        None,                           # $11 callback_url
+                        pipeline_id,  # $1 pipeline_id
+                        pipeline_version,  # $2 pipeline_version
+                        1,  # $3 items_total
+                        None,  # $4 idempotency_key
+                        pool_item["priority"],  # $5 priority
+                        None,  # $6 metadata
+                        None,  # $7 override_model
+                        False,  # $8 skip_dedup
+                        False,  # $9 skip_cache
+                        False,  # $10 dry_run
+                        None,  # $11 callback_url
                     )
                     job_id = job_record["id"]
 
@@ -146,14 +141,14 @@ class AutoBatcher:
 
                     await conn.execute(
                         INSERT_ITEM,
-                        job_id,                         # $1 job_id
-                        pipeline_id,                    # $2 pipeline_id
-                        pool_item["source_url"],        # $3 source_url
-                        pool_item["content"],           # $4 content
-                        pool_item["content_type"],      # $5 content_type
-                        metadata_str,                   # $6 metadata
-                        pool_item["url_hash"],          # $7 url_hash
-                        pool_item["content_hash"],      # $8 content_hash
+                        job_id,  # $1 job_id
+                        pipeline_id,  # $2 pipeline_id
+                        pool_item["source_url"],  # $3 source_url
+                        pool_item["content"],  # $4 content
+                        pool_item["content_type"],  # $5 content_type
+                        metadata_str,  # $6 metadata
+                        pool_item["url_hash"],  # $7 url_hash
+                        pool_item["content_hash"],  # $8 content_hash
                     )
 
                     # Link pool item to job

@@ -157,9 +157,7 @@ async def test_update_pipeline_bumps_version(client) -> None:
 async def test_update_nonexistent_pipeline(client) -> None:
     """PUT em UUID inexistente deve retornar 404."""
     fake_id = "00000000-0000-0000-0000-000000000002"
-    response = await client.put(
-        f"/v1/pipelines/{fake_id}", json=VALID_PAYLOAD, headers=HEADERS
-    )
+    response = await client.put(f"/v1/pipelines/{fake_id}", json=VALID_PAYLOAD, headers=HEADERS)
     assert response.status_code == 404
 
 
@@ -178,7 +176,5 @@ async def test_requires_api_key(client) -> None:
 @pytest.mark.asyncio
 async def test_invalid_api_key_rejected(client) -> None:
     """Chave inválida deve retornar 401."""
-    response = await client.get(
-        "/v1/pipelines", headers={"X-Api-Key": "wrong-key"}
-    )
+    response = await client.get("/v1/pipelines", headers={"X-Api-Key": "wrong-key"})
     assert response.status_code == 401

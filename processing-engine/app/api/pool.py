@@ -64,9 +64,7 @@ async def _ingest_items(
 
             # Check URL dedup
             if url_hash is not None:
-                existing_id = await conn.fetchval(
-                    CHECK_URL_HASH_EXISTS, url_hash, pipeline_id
-                )
+                existing_id = await conn.fetchval(CHECK_URL_HASH_EXISTS, url_hash, pipeline_id)
                 if existing_id is not None:
                     rejections.append(
                         PoolRejection(
@@ -80,17 +78,17 @@ async def _ingest_items(
             # Insert accepted item
             pool_id = await conn.fetchval(
                 INSERT_POOL_ITEM,
-                pipeline_id,                                            # $1
-                item.source_url,                                        # $2
-                item.content,                                           # $3
-                item.content_type,                                      # $4
-                json.dumps(item.metadata) if item.metadata else "{}",   # $5
-                url_hash,                                               # $6
-                content_hash,                                           # $7
-                "pending",                                              # $8
-                priority,                                               # $9
-                source_id,                                              # $10
-                batch_ref,                                              # $11
+                pipeline_id,  # $1
+                item.source_url,  # $2
+                item.content,  # $3
+                item.content_type,  # $4
+                json.dumps(item.metadata) if item.metadata else "{}",  # $5
+                url_hash,  # $6
+                content_hash,  # $7
+                "pending",  # $8
+                priority,  # $9
+                source_id,  # $10
+                batch_ref,  # $11
             )
             accepted_ids.append(pool_id)
 

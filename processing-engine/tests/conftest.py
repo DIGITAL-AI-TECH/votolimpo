@@ -110,9 +110,11 @@ async def client(database_url, db_pool) -> AsyncGenerator[AsyncClient, None]:
 
     # Reset the pool to use test database
     from app import db as db_module
+
     db_module._pool = db_pool
 
     from app.main import app
+
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as ac:
         yield ac
