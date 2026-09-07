@@ -248,10 +248,15 @@ jobs:
             --compose-file processing-engine/docker-stack.yml \
             "${STACK_NAME}"
 
+          # Clear any "update paused" state from previous failed deploys
+          # Without this, docker service update --force will refuse to run
+          echo "Clearing any paused update state..."
+          docker service update --rollback "${STACK_NAME}_api" 2>/dev/null || true
+          sleep 3
+
           # Force the api service to use the new image
           # docker stack deploy may not update if only env vars changed
           echo "Forcing image update on api service..."
-          sleep 5
           docker service update \
             --image "${IMG}" \
             --with-registry-auth \
