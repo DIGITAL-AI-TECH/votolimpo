@@ -210,14 +210,11 @@ jobs:
           timeout 300 docker pull "${IMG}"
           echo "Pull OK."
 
-      - name: Deploy stack
+      - name: Validate secrets
         env:
-          TAG: ${{ needs.docker.outputs.image_sha }}
           DB_PASSWORD: ${{ secrets.PE_DB_PASSWORD }}
-          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
           API_KEY: ${{ secrets.PE_API_KEY }}
         run: |
-          # Validate required secrets
           MISSING=""
           [ -z "${DB_PASSWORD}" ] && MISSING="${MISSING} PE_DB_PASSWORD"
           [ -z "${API_KEY}" ] && MISSING="${MISSING} PE_API_KEY"
@@ -227,14 +224,46 @@ jobs:
           fi
           echo "All secrets present (DB_PASSWORD length: ${#DB_PASSWORD})"
 
-          # Export env vars — docker stack deploy interpolates from shell env
-          export TAG DB_PASSWORD OPENAI_API_KEY API_KEY
-
+      - name: Reset stack & PG volume (clean password state)
+        timeout-minutes: 3
+        run: |
           STACK_NAME="processing-engine"
 
-          # Deploy (create or update). Env vars in docker-stack.yml are
-          # interpolated by the shell at this point — no docker exec needed.
-          # Same pattern as ifans.click which deploys successfully.
+          # Clean up any leftover temp services from previous failed runs
+          docker service rm pe-pw-sync 2>/dev/null || true
+
+          # Remove existing stack so PG volume can be reset
+          # (POSTGRES_PASSWORD env var only applies on first initdb — if the
+          # volume already has an old password, the DB ignores the env var)
+          if docker stack ls --format "{{.Name}}" | grep -q "^${STACK_NAME}$"; then
+            echo "Removing existing stack..."
+            docker stack rm "${STACK_NAME}"
+            for i in $(seq 1 30); do
+              SERVICES=$(docker service ls --filter "name=${STACK_NAME}" -q 2>/dev/null | wc -l)
+              if [ "$SERVICES" -eq 0 ]; then
+                echo "Stack removed (${i}×2s)."
+                break
+              fi
+              echo "  [$i/30] Waiting... ($SERVICES services left)"
+              sleep 2
+            done
+          fi
+
+          # Remove PG data volume (safe — no production data in processing_engine)
+          docker volume rm "${STACK_NAME}_pgdata" 2>/dev/null && echo "PG volume removed." || echo "No volume to remove."
+          sleep 3
+          echo "Ready for fresh deploy."
+
+      - name: Deploy stack
+        env:
+          TAG: ${{ needs.docker.outputs.image_sha }}
+          DB_PASSWORD: ${{ secrets.PE_DB_PASSWORD }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          API_KEY: ${{ secrets.PE_API_KEY }}
+        run: |
+          export TAG DB_PASSWORD OPENAI_API_KEY API_KEY
+          STACK_NAME="processing-engine"
+
           for attempt in 1 2 3; do
             echo "Deploy attempt ${attempt}/3..."
             if docker stack deploy \
@@ -245,105 +274,13 @@ jobs:
               break
             fi
             if [ $attempt -lt 3 ]; then
-              echo "Deploy failed. Retrying in 15s..."
-              sleep 15
+              echo "Deploy failed. Retrying in 10s..."
+              sleep 10
             else
-              echo "Deploy failed after 3 attempts."
+              echo "::error::Deploy failed after 3 attempts."
               exit 1
             fi
           done
-
-      - name: Sync PostgreSQL password
-        env:
-          DB_PASSWORD: ${{ secrets.PE_DB_PASSWORD }}
-        run: |
-          STACK_NAME="processing-engine"
-          echo "Syncing PostgreSQL password via Swarm task..."
-
-          # Wait for PG to be Running first
-          for i in $(seq 1 60); do
-            PG_STATE=$(docker service ps "${STACK_NAME}_postgres" \
-              --filter "desired-state=running" \
-              --format "{{.CurrentState}}" 2>/dev/null | head -1)
-            if echo "${PG_STATE}" | grep -q "^Running"; then
-              echo "PostgreSQL is Running."
-              break
-            fi
-            echo "  [$i/60] Waiting for PG: ${PG_STATE}"
-            if [ "$i" -eq 60 ]; then
-              echo "::error::PostgreSQL not running after 300s"
-              exit 1
-            fi
-            sleep 5
-          done
-
-          # Find which node PG is on
-          PG_NODE=$(docker service ps "${STACK_NAME}_postgres" \
-            --filter "desired-state=running" \
-            --format "{{.Node}}" 2>/dev/null | head -1)
-          echo "PostgreSQL is on node: ${PG_NODE}"
-
-          # Use a temporary service to run ALTER ROLE on the SAME node as PG.
-          # This is the ONLY way to reach PG from CI when it's on a different node.
-          # The temp service connects to PG via the pe-net overlay network.
-          ESCAPED_PW=$(echo "${DB_PASSWORD}" | sed "s/'/''/g")
-          echo "Creating temp service to sync password..."
-          docker service create \
-            --name pe-pw-sync \
-            --network processing-engine_pe-net \
-            --restart-condition none \
-            --constraint "node.hostname==${PG_NODE}" \
-            pgvector/pgvector:pg16 \
-            sh -c "
-              for i in \$(seq 1 30); do
-                if PGPASSWORD='${ESCAPED_PW}' psql -h postgres -U postgres -d processing_engine -c 'SELECT 1' 2>/dev/null; then
-                  echo 'Password already correct.'
-                  exit 0
-                fi
-                # Try trust auth (Unix socket not available cross-container, try common passwords)
-                for OLD_PW in '' 'changeme' 'postgres'; do
-                  if PGPASSWORD=\"\${OLD_PW}\" psql -h postgres -U postgres -c \"ALTER ROLE postgres WITH PASSWORD '\${ESCAPED_PW}'\" 2>/dev/null; then
-                    echo 'Password synced with old password.'
-                    exit 0
-                  fi
-                done
-                echo \"Attempt \$i/30 failed, retrying...\"
-                sleep 2
-              done
-              echo 'WARNING: Could not sync password (PG may need manual intervention)'
-              exit 1
-            " 2>&1 || true
-
-          # Wait for sync service to complete (max 90s)
-          echo "Waiting for password sync..."
-          for i in $(seq 1 18); do
-            SYNC_STATE=$(docker service ps pe-pw-sync \
-              --format "{{.CurrentState}}" 2>/dev/null | head -1)
-            echo "  [$i/18] Sync: ${SYNC_STATE}"
-            if echo "${SYNC_STATE}" | grep -q "^Complete"; then
-              echo "Password sync completed."
-              break
-            fi
-            if echo "${SYNC_STATE}" | grep -q "^Failed"; then
-              echo "Password sync failed — checking logs..."
-              docker service logs pe-pw-sync --raw 2>&1 || true
-              break
-            fi
-            sleep 5
-          done
-
-          # Show sync logs and cleanup
-          echo "=== Sync service logs ==="
-          docker service logs pe-pw-sync --raw 2>&1 || true
-          docker service rm pe-pw-sync 2>/dev/null || true
-          echo "Sync step done."
-
-      - name: Restart API after password sync
-        run: |
-          # Force the API service to restart so it picks up the (potentially updated) password
-          echo "Restarting API service..."
-          docker service update --force processing-engine_api 2>&1 || true
-          echo "API restart triggered."
 
       - name: Health Check
         env:
