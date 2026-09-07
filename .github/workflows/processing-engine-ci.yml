@@ -69,7 +69,12 @@ jobs:
         with:
           python-version: "3.12"
       - run: pip install -e ".[dev]"
-      - run: pytest -v --tb=short
+      - run: |
+          # Run migrations against service container
+          alembic upgrade head
+          # Unit + contract tests (no Docker-in-Docker needed)
+          # E2E/integration tests use testcontainers and need Docker-in-Docker
+          pytest tests/unit tests/contract -v --tb=short
 
   # ──────────────────────────────────────────────
   # Job 3: Build + Push to Registry (only on main push)
