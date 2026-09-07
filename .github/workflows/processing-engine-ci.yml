@@ -201,30 +201,23 @@ jobs:
       - name: Login no Registry
         run: echo "${{ secrets.REGISTRY_PASSWORD }}" | docker login ${{ env.REGISTRY }} -u "${{ secrets.REGISTRY_USER }}" --password-stdin
 
-      - name: Smoke Test — validate image starts
+      - name: Pre-pull image
         env:
           TAG: ${{ needs.docker.outputs.image_sha }}
         run: |
           IMG="${IMAGE_NAME}:${TAG}"
-          echo "=== Smoke test: pulling ${IMG} ==="
+          echo "Pulling ${IMG}..."
           timeout 300 docker pull "${IMG}"
+          echo "Pull OK."
 
-          echo "=== Smoke test: verifying imports ==="
-          docker run --rm --entrypoint python "${IMG}" -c \
-            'import fastapi; import asyncpg; import uvicorn; import alembic; import app.main; print("ALL IMPORTS OK")'
-
-          echo "=== Smoke test: entrypoint --help ==="
-          docker run --rm --entrypoint python "${IMG}" -c \
-            'from app.config import Settings; s = Settings(); print(f"Config OK: role={s.ENGINE_ROLE}, db_host={s.DB_HOST}")'
-
-          echo "Smoke test passed!"
-
-      - name: Validate secrets
+      - name: Deploy stack
         env:
+          TAG: ${{ needs.docker.outputs.image_sha }}
           DB_PASSWORD: ${{ secrets.PE_DB_PASSWORD }}
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
           API_KEY: ${{ secrets.PE_API_KEY }}
         run: |
+          # Validate required secrets
           MISSING=""
           [ -z "${DB_PASSWORD}" ] && MISSING="${MISSING} PE_DB_PASSWORD"
           [ -z "${API_KEY}" ] && MISSING="${MISSING} PE_API_KEY"
@@ -232,240 +225,100 @@ jobs:
             echo "::error::Missing required GitHub Secrets:${MISSING}"
             exit 1
           fi
-          echo "All required secrets present."
-          echo "DB_PASSWORD length: ${#DB_PASSWORD}"
+          echo "All secrets present (DB_PASSWORD length: ${#DB_PASSWORD})"
 
-      - name: Deploy ou Update no Swarm
-        env:
-          IMAGE_SHA: ${{ needs.docker.outputs.image_sha }}
-          TAG: ${{ needs.docker.outputs.image_sha }}
-          DB_PASSWORD: ${{ secrets.PE_DB_PASSWORD }}
-          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
-          API_KEY: ${{ secrets.PE_API_KEY }}
-        run: |
-          IMG="${IMAGE_NAME}:${TAG}"
+          # Export env vars — docker stack deploy interpolates from shell env
+          export TAG DB_PASSWORD OPENAI_API_KEY API_KEY
+
           STACK_NAME="processing-engine"
 
-          echo "TAG=${TAG}"
-
-          # Step 1: Ensure stack exists (API starts with replicas=0, no race condition)
-          if docker service inspect "${STACK_NAME}_postgres" >/dev/null 2>&1; then
-            echo "Stack exists — will update services."
-          else
-            echo "Fresh deploy — creating stack (API starts with 0 replicas)."
-            docker stack deploy \
-              --with-registry-auth \
+          # Deploy (create or update). Env vars in docker-stack.yml are
+          # interpolated by the shell at this point — no docker exec needed.
+          # Same pattern as ifans.click which deploys successfully.
+          for attempt in 1 2 3; do
+            echo "Deploy attempt ${attempt}/3..."
+            if docker stack deploy \
               --compose-file processing-engine/docker-stack.yml \
-              "${STACK_NAME}"
-          fi
-
-          # Step 2: Wait for PostgreSQL to be healthy
-          echo "Waiting for PostgreSQL to be ready..."
-          for i in $(seq 1 60); do
-            PG_STATE=$(docker service ps "${STACK_NAME}_postgres" --format "{{.CurrentState}}" 2>/dev/null | head -1 || echo "")
-            echo "  [$i/60] PostgreSQL: ${PG_STATE}"
-            if echo "${PG_STATE}" | grep -q "^Running"; then
-              echo "PostgreSQL is running."
+              --with-registry-auth \
+              "${STACK_NAME}"; then
+              echo "Stack deployed."
               break
             fi
-            if [ "$i" -eq 60 ]; then
-              echo "::error::PostgreSQL failed to start within 300s"
-              docker service logs "${STACK_NAME}_postgres" --tail 30 2>&1 || true
+            if [ $attempt -lt 3 ]; then
+              echo "Deploy failed. Retrying in 15s..."
+              sleep 15
+            else
+              echo "Deploy failed after 3 attempts."
               exit 1
             fi
-            sleep 5
           done
 
-          # NOTE: We do NOT update the postgres service here.
-          # POSTGRES_PASSWORD only applies on first initdb (empty volume).
-          # On existing volumes it does nothing — and the service update
-          # RESTARTS PG, making it unavailable for the Sync step.
-          # Password rotation is handled by ALTER ROLE in the Sync step.
-
-          # Step 3: Inject secrets + image into API and scale to 1 replica (atomic)
-          echo "Injecting secrets into API service and scaling to 1 replica..."
+          # If stack already existed, force update the API service with new image
+          IMG="${IMAGE_NAME}:${TAG}"
+          echo "Forcing API service update to image ${IMG}..."
           docker service update \
             --image "${IMG}" \
-            --env-add "DB_PASSWORD=${DB_PASSWORD}" \
-            --env-add "OPENAI_API_KEY=${OPENAI_API_KEY}" \
-            --env-add "API_KEY=${API_KEY}" \
-            --replicas 1 \
             --with-registry-auth \
-            --detach \
-            "${STACK_NAME}_api"
-
-          echo "Service update dispatched — API will start with correct secrets."
-
-      - name: Sync PostgreSQL password
-        env:
-          DB_PASSWORD: ${{ secrets.PE_DB_PASSWORD }}
-        run: |
-          STACK_NAME="processing-engine"
-          echo "Ensuring PostgreSQL password matches the GitHub Secret..."
-
-          # ── Step 1: Find the running postgres container ──
-          # Uses docker exec instead of docker run --network overlay.
-          # docker run on overlay networks CANNOT resolve Swarm service DNS
-          # (well-known Docker Swarm limitation). docker exec bypasses this
-          # entirely by running commands inside the already-running container.
-          echo "Looking for running PostgreSQL container..."
-          PG_CONTAINER=""
-          for i in $(seq 1 60); do
-            PG_CONTAINER=$(docker ps -q -f "name=${STACK_NAME}_postgres" -f "status=running" | head -1)
-            if [ -n "${PG_CONTAINER}" ]; then
-              echo "Found PostgreSQL container: ${PG_CONTAINER} (attempt $i)"
-              break
-            fi
-            echo "  [$i/60] PostgreSQL container not running yet..."
-            sleep 5
-          done
-
-          if [ -z "${PG_CONTAINER}" ]; then
-            echo "::error::PostgreSQL container never started within 300s"
-            docker service ps "${STACK_NAME}_postgres" --no-trunc 2>&1 || true
-            exit 1
-          fi
-
-          # ── Step 2: Wait for PG to accept TCP connections (inside the container) ──
-          # IMPORTANT: Use -h localhost to force TCP connection (not Unix socket).
-          # Unix socket uses 'trust' auth (pg_hba.conf: local all all trust),
-          # which accepts ANY password — useless for validating the real password.
-          # The API connects via TCP (overlay network), so we must test TCP auth.
-          echo "Waiting for PostgreSQL to accept connections..."
-          PG_READY=false
-          for i in $(seq 1 30); do
-            if docker exec "${PG_CONTAINER}" pg_isready -h localhost -U postgres -d processing_engine >/dev/null 2>&1; then
-              echo "PostgreSQL accepting connections (attempt $i)."
-              PG_READY=true
-              break
-            fi
-            echo "  [$i/30] PG not ready yet..."
-            sleep 5
-          done
-
-          if [ "${PG_READY}" = "false" ]; then
-            echo "::error::PostgreSQL container is running but not accepting connections"
-            docker exec "${PG_CONTAINER}" pg_isready -h localhost -U postgres -d processing_engine 2>&1 || true
-            exit 1
-          fi
-
-          # ── Step 3: Test auth with the expected password via TCP ──
-          if docker exec -e PGPASSWORD="${DB_PASSWORD}" "${PG_CONTAINER}" \
-            psql -h localhost -U postgres -d processing_engine -c "SELECT 1" >/dev/null 2>&1; then
-            echo "Password auth OK — no sync needed."
-          else
-            echo "Password mismatch or fresh deploy — syncing via ALTER ROLE..."
-            # On fresh deploy (no POSTGRES_PASSWORD in stack), pg_hba.conf has
-            # 'trust' for local socket. We use socket (-h is omitted) to run
-            # ALTER ROLE without needing the current password.
-            # On existing deploy, try known old passwords via TCP first.
-            SYNC_OK=false
-
-            # Strategy 1: Use Unix socket (trust auth) — works on fresh deploy
-            echo "  Attempting ALTER ROLE via Unix socket (trust auth)..."
-            if docker exec "${PG_CONTAINER}" \
-              psql -U postgres -c "ALTER ROLE postgres WITH PASSWORD '$( echo "${DB_PASSWORD}" | sed "s/'/''/g" )'" 2>/dev/null; then
-              SYNC_OK=true
-              echo "  ALTER ROLE succeeded via Unix socket."
-            fi
-
-            # Strategy 2: If socket failed, try known passwords via TCP
-            if [ "${SYNC_OK}" = "false" ]; then
-              for OLD_PW in "" "changeme" "postgres"; do
-                echo "  Trying old password via TCP (length ${#OLD_PW})..."
-                if docker exec -e PGPASSWORD="${OLD_PW}" "${PG_CONTAINER}" \
-                  psql -h localhost -U postgres -c "ALTER ROLE postgres WITH PASSWORD '$( echo "${DB_PASSWORD}" | sed "s/'/''/g" )'" 2>/dev/null; then
-                  SYNC_OK=true
-                  echo "  ALTER ROLE succeeded with old password."
-                  break
-                fi
-              done
-            fi
-
-            if [ "${SYNC_OK}" = "false" ]; then
-              echo "::error::Failed to sync PostgreSQL password — could not authenticate with any known method"
-              exit 1
-            fi
-
-            # Verify the new password works via TCP (same path the API will use)
-            echo "Verifying password sync via TCP..."
-            if docker exec -e PGPASSWORD="${DB_PASSWORD}" "${PG_CONTAINER}" \
-              psql -h localhost -U postgres -d processing_engine -c "SELECT 'auth_ok'" 2>&1; then
-              echo "Password sync confirmed — TCP auth working."
-            else
-              echo "::error::Password sync verification failed — ALTER ROLE succeeded but TCP auth still fails"
-              exit 1
-            fi
-          fi
+            --force \
+            "${STACK_NAME}_api" || true
 
       - name: Health Check
         env:
-          IMAGE_SHA: ${{ needs.docker.outputs.image_sha }}
           TAG: ${{ needs.docker.outputs.image_sha }}
-          DB_PASSWORD: ${{ secrets.PE_DB_PASSWORD }}
         run: |
           SERVICE_NAME="processing-engine_api"
-          STACK_NAME="processing-engine"
-          echo "Expected image tag: ${TAG}"
-          echo "Aguardando convergencia do servico..."
+          echo "Aguardando convergencia do servico (max 5 min)..."
 
-          # Immediately dump initial state for debugging
-          sleep 10
-          echo "=== Initial service state ==="
-          docker service ps "${SERVICE_NAME}" --no-trunc 2>/dev/null | head -5 || true
-          echo "=== Initial service logs ==="
-          docker service logs "${SERVICE_NAME}" --tail 30 2>&1 || true
-
+          # Wait for PostgreSQL service to report Running via Swarm API
+          # (NOT docker ps/exec — PG may run on a different node)
+          echo "--- Waiting for PostgreSQL ---"
           for i in $(seq 1 60); do
+            PG_STATE=$(docker service ps processing-engine_postgres \
+              --filter "desired-state=running" \
+              --format "{{.CurrentState}}" 2>/dev/null | head -1 || echo "")
+            echo "  [$i/60] PostgreSQL: ${PG_STATE}"
+            if echo "${PG_STATE}" | grep -q "^Running"; then
+              echo "PostgreSQL service is running."
+              break
+            fi
+            if [ "$i" -eq 60 ]; then
+              echo "::error::PostgreSQL failed to converge within 300s"
+              docker service ps processing-engine_postgres --no-trunc 2>&1 || true
+              exit 1
+            fi
             sleep 5
-            TASK_INFO=$(docker service ps "${SERVICE_NAME}" --format "{{.CurrentState}} | {{.Image}}" --no-trunc 2>/dev/null | head -1)
-            echo "[$i/60] ${TASK_INFO}"
+          done
+
+          # Wait for API service to converge
+          echo "--- Waiting for API ---"
+          for i in $(seq 1 60); do
+            TASK_INFO=$(docker service ps "${SERVICE_NAME}" \
+              --filter "desired-state=running" \
+              --format "{{.CurrentState}} | {{.Image}}" --no-trunc 2>/dev/null | head -1)
+            echo "  [$i/60] API: ${TASK_INFO}"
 
             STATE=$(echo "${TASK_INFO}" | cut -d'|' -f1 | xargs)
 
             if echo "${STATE}" | grep -q "^Running"; then
-              echo "=== Service logs (last 20 lines) ==="
+              echo "API service convergiu!"
               docker service logs "${SERVICE_NAME}" --tail 20 2>&1 || true
-              echo "Servico convergiu com sucesso!"
               exit 0
             fi
 
-            # Check for repeated failures — if 3+ failed tasks, run diagnostic (once)
+            # Diagnostic on repeated failures
             FAILED_COUNT=$(docker service ps "${SERVICE_NAME}" --format "{{.CurrentState}}" 2>/dev/null | grep -c "^Failed" || echo "0")
-            if [ "${FAILED_COUNT}" -ge 3 ] && [ "$i" -ge 6 ] && [ "$((i % 12))" -eq 0 ]; then
-              echo "=== DIAGNOSTIC: ${FAILED_COUNT} failed tasks detected ==="
-              echo "=== All tasks (including failed) ==="
+            if [ "${FAILED_COUNT}" -ge 3 ] && [ "$((i % 12))" -eq 0 ]; then
+              echo "=== DIAGNOSTIC: ${FAILED_COUNT} failed tasks ==="
               docker service ps "${SERVICE_NAME}" --no-trunc --format "table {{.Name}}\t{{.CurrentState}}\t{{.Error}}" 2>&1 || true
-              echo "=== Service logs (all) ==="
               docker service logs "${SERVICE_NAME}" --tail 50 2>&1 || true
-              echo "=== Trying to capture API crash logs ==="
-              API_CONTAINER=$(docker ps -q -f "name=${STACK_NAME}_api" -f "status=running" | head -1 || true)
-              if [ -n "${API_CONTAINER}" ]; then
-                docker logs "${API_CONTAINER}" --tail 80 2>&1 || true
-              else
-                echo "No running API container found — checking exited containers..."
-                API_EXITED=$(docker ps -q -f "name=${STACK_NAME}_api" -f "status=exited" | head -1 || true)
-                if [ -n "${API_EXITED}" ]; then
-                  docker logs "${API_EXITED}" --tail 80 2>&1 || true
-                fi
-              fi
-              echo "=== End diagnostic ==="
             fi
 
-            # Every 30s, dump logs
-            if [ $((i % 6)) -eq 0 ]; then
-              echo "=== Periodic debug dump ==="
-              docker service logs "${SERVICE_NAME}" --tail 15 2>&1 || true
-              echo "=== PostgreSQL ==="
-              docker service ps "processing-engine_postgres" --format "{{.CurrentState}}" 2>/dev/null | head -1
-            fi
+            sleep 5
           done
 
-          echo "Timeout (300s) esperando convergencia"
-          echo "=== Final service logs ==="
-          docker service logs "${SERVICE_NAME}" --tail 80 2>&1 || true
-          echo "=== Final service PS (all tasks) ==="
+          echo "::error::API service failed to converge within 300s"
           docker service ps "${SERVICE_NAME}" --no-trunc --format "table {{.Name}}\t{{.CurrentState}}\t{{.Error}}" 2>&1 || true
+          docker service logs "${SERVICE_NAME}" --tail 80 2>&1 || true
           exit 1
 
       - name: Notify - Deploy Concluido

@@ -8,11 +8,9 @@ services:
       - DB_PORT=5432
       - DB_NAME=processing_engine
       - DB_USER=postgres
-      # DB_PASSWORD, OPENAI_API_KEY, API_KEY are NEVER set here.
-      # They are injected ONLY via `docker service update --env-add`
-      # in the CI/CD pipeline after PG is healthy. This eliminates:
-      # 1. Shell/Compose variable interpolation issues with special chars
-      # 2. Race condition where API starts with wrong password before update
+      - DB_PASSWORD=${DB_PASSWORD}
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - API_KEY=${API_KEY}
       - ENGINE_ROLE=both
       - WORKER_POLL_INTERVAL_SECONDS=1.0
       - LOG_LEVEL=INFO
@@ -23,10 +21,7 @@ services:
       - traefik_public
       - pe-net
     deploy:
-      # Start with 0 replicas — CI/CD pipeline scales up AFTER injecting
-      # secrets via `docker service update`. This prevents the race condition
-      # where the API starts before secrets are available.
-      replicas: 0
+      replicas: 1
       resources:
         limits:
           cpus: "1.0"
@@ -65,10 +60,7 @@ services:
     environment:
       - POSTGRES_DB=processing_engine
       - POSTGRES_USER=postgres
-      # POSTGRES_PASSWORD is injected via `docker service update --env-add`
-      # in CI/CD. On very first deploy (empty volume), PG starts with trust
-      # auth until the password is set. The CI pipeline always syncs via
-      # ALTER ROLE after the service is up.
+      - POSTGRES_PASSWORD=${DB_PASSWORD}
     volumes:
       - type: volume
         source: pgdata
