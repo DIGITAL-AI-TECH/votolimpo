@@ -308,26 +308,54 @@ jobs:
           echo "Service update dispatched. Health Check step will monitor convergence."
 
       - name: Debug - Verify env vars in services
+        env:
+          DB_PASSWORD: ${{ secrets.PE_DB_PASSWORD }}
         run: |
-          echo "=== Checking if DB_PASSWORD in API matches POSTGRES_PASSWORD ==="
-          # Extract raw password values from service inspect and hash them
+          echo "=== Password comparison (service inspect vs GitHub secret) ==="
+          # 1. GitHub Secret (source of truth)
+          SECRET_HASH=$(printf '%s' "$DB_PASSWORD" | md5sum | cut -d' ' -f1)
+          echo "GitHub Secret PE_DB_PASSWORD: len=${#DB_PASSWORD}, md5=${SECRET_HASH}"
+
+          # 2. Service inspect (what Docker stored)
           API_PW=$(docker service inspect processing-engine_api \
             --format '{{range .Spec.TaskTemplate.ContainerSpec.Env}}{{println .}}{{end}}' 2>/dev/null | \
             grep '^DB_PASSWORD=' | cut -d'=' -f2-)
           PG_PW=$(docker service inspect processing-engine_postgres \
             --format '{{range .Spec.TaskTemplate.ContainerSpec.Env}}{{println .}}{{end}}' 2>/dev/null | \
             grep '^POSTGRES_PASSWORD=' | cut -d'=' -f2-)
-          # Compare via md5 hash (never log the password itself)
           API_HASH=$(printf '%s' "$API_PW" | md5sum | cut -d' ' -f1)
           PG_HASH=$(printf '%s' "$PG_PW" | md5sum | cut -d' ' -f1)
           echo "API DB_PASSWORD:      len=${#API_PW}, md5=${API_HASH}"
           echo "PG POSTGRES_PASSWORD: len=${#PG_PW}, md5=${PG_HASH}"
-          if [ "$API_HASH" = "$PG_HASH" ]; then
-            echo "MATCH: Passwords are identical."
+
+          # 3. Check if $$ escaping was correctly resolved
+          if [ "$API_HASH" = "$SECRET_HASH" ]; then
+            echo "API password MATCHES GitHub Secret."
           else
-            echo "MISMATCH: API and PostgreSQL have DIFFERENT passwords!"
-            echo "API first/last char: ${API_PW:0:1}...${API_PW: -1}"
-            echo "PG  first/last char: ${PG_PW:0:1}...${PG_PW: -1}"
+            echo "API password DIFFERS from GitHub Secret!"
+            echo "  Secret first 3: ${DB_PASSWORD:0:3}"
+            echo "  API    first 3: ${API_PW:0:3}"
+            echo "  Check if API has double-dollar: $(echo "$API_PW" | grep -c '\\$\\$' || true)"
+          fi
+          if [ "$PG_HASH" = "$SECRET_HASH" ]; then
+            echo "PG password MATCHES GitHub Secret."
+          else
+            echo "PG password DIFFERS from GitHub Secret!"
+            echo "  Secret first 3: ${DB_PASSWORD:0:3}"
+            echo "  PG     first 3: ${PG_PW:0:3}"
+          fi
+
+          # 4. Try to connect to PG directly from the manager node
+          echo "=== Testing direct pg_isready ==="
+          PG_CONTAINER=$(docker ps --filter "label=com.docker.swarm.service.name=processing-engine_postgres" -q | head -1)
+          if [ -n "$PG_CONTAINER" ]; then
+            echo "PG container: $PG_CONTAINER"
+            docker exec "$PG_CONTAINER" pg_isready -U postgres 2>&1 || true
+            # Try to verify password by running psql
+            # Pass password via env to avoid shell interpolation of special chars
+            docker exec -e PGPASSWORD="$DB_PASSWORD" "$PG_CONTAINER" psql -U postgres -d processing_engine -c "SELECT 1" 2>&1 || echo "psql auth failed with GitHub Secret password"
+          else
+            echo "No PG container found on this node"
           fi
 
       - name: Health Check
