@@ -1,29 +1,32 @@
 from __future__ import annotations
 
 import asyncio
+import os
 from logging.config import fileConfig
 
 from sqlalchemy import pool
 from sqlalchemy.engine import Connection
 from sqlalchemy.ext.asyncio import async_engine_from_config
 
-from alembic import context
-
 # Import all models so SQLAlchemy metadata is populated
 import db_models.base  # noqa: F401
-import db_models.pipeline  # noqa: F401
-import db_models.job  # noqa: F401
-import db_models.item  # noqa: F401
-import db_models.processing_log  # noqa: F401
 import db_models.cache_entry  # noqa: F401
+import db_models.item  # noqa: F401
+import db_models.job  # noqa: F401
 import db_models.llm_call_log  # noqa: F401
 import db_models.model_pricing  # noqa: F401
+import db_models.pipeline  # noqa: F401
 import db_models.pool  # noqa: F401
-
+import db_models.processing_log  # noqa: F401
+from alembic import context
 from db_models.base import Base
 
 # Alembic Config object — provides access to values in alembic.ini
 config = context.config
+
+# Override sqlalchemy.url from DATABASE_URL env var if set
+if os.environ.get("DATABASE_URL"):
+    config.set_main_option("sqlalchemy.url", os.environ["DATABASE_URL"])
 
 # Interpret the config file for Python logging
 if config.config_file_name is not None:
