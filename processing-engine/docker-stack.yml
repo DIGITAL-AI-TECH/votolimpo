@@ -4,7 +4,7 @@ services:
   api:
     image: registry.digital-ai.tech/processing-engine:${TAG:-latest}
     environment:
-      - DB_HOST=postgres
+      - DB_HOST=pe-postgres
       - DB_PORT=5432
       - DB_NAME=processing_engine
       - DB_USER=postgres
@@ -71,7 +71,9 @@ services:
         source: pgdata
         target: /var/lib/postgresql/data
     networks:
-      - pe-net
+      pe-net:
+        aliases:
+          - pe-postgres
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U postgres -d processing_engine"]
       interval: 10s

@@ -380,13 +380,28 @@ jobs:
                 docker exec "$PG_CONTAINER" psql -U postgres -c "SELECT rolname, rolpassword IS NOT NULL AS has_password, length(rolpassword) AS pw_hash_len FROM pg_authid WHERE rolname='postgres';" 2>&1 || true
                 echo "=== END PG Auth Test ==="
 
+                # DNS diagnostic: check if 'postgres' and 'pe-postgres' resolve to same IP
+                echo "=== DNS Resolution Diagnostic ==="
+                docker run --rm --network processing-engine_pe-net alpine sh -c '
+                  apk add --no-cache bind-tools >/dev/null 2>&1
+                  echo "postgres resolves to: $(dig +short postgres 2>/dev/null || getent hosts postgres 2>/dev/null || echo UNRESOLVABLE)"
+                  echo "pe-postgres resolves to: $(dig +short pe-postgres 2>/dev/null || getent hosts pe-postgres 2>/dev/null || echo UNRESOLVABLE)"
+                ' 2>&1 || echo "  DNS diagnostic failed (non-fatal)"
+
+                # Also test DNS from a container on BOTH networks (like the API)
+                docker run --rm --network processing-engine_pe-net --network oraculusnet_v2 alpine sh -c '
+                  apk add --no-cache bind-tools >/dev/null 2>&1
+                  echo "[dual-network] postgres resolves to: $(dig +short postgres 2>/dev/null || getent hosts postgres 2>/dev/null || echo UNRESOLVABLE)"
+                  echo "[dual-network] pe-postgres resolves to: $(dig +short pe-postgres 2>/dev/null || getent hosts pe-postgres 2>/dev/null || echo UNRESOLVABLE)"
+                ' 2>&1 || echo "  Dual-network DNS diagnostic failed (non-fatal)"
+                echo "=== END DNS Diagnostic ==="
+
                 # Test from ANOTHER container via overlay network
-                # (simulates what the API does — crosses nodes)
                 echo "=== Overlay Network Auth Test (cross-container) ==="
                 docker run --rm --network processing-engine_pe-net \
                   -e PGPASSWORD="${DB_PASSWORD}" \
                   pgvector/pgvector:pg16 \
-                  psql -h postgres -U postgres -d processing_engine \
+                  psql -h pe-postgres -U postgres -d processing_engine \
                   -c "SELECT 1 AS overlay_psql_auth_ok;" 2>&1 || echo "  OVERLAY PSQL AUTH FAILED!"
 
                 # Test with asyncpg specifically (same image as API)
@@ -394,7 +409,7 @@ jobs:
                 docker run --rm --network processing-engine_pe-net \
                   -e DB_PASSWORD="${DB_PASSWORD}" \
                   "${IMAGE_NAME}:${TAG}" \
-                  python -c "import asyncio,os;pw=os.environ['DB_PASSWORD'];print(f'asyncpg test: pw_len={len(pw)}');exec('import asyncpg\nasync def t():\n c=await asyncpg.connect(host=\"postgres\",port=5432,user=\"postgres\",password=pw,database=\"processing_engine\")\n print(\"asyncpg: CONNECTED OK\")\n await c.close()\nasyncio.run(t())')" 2>&1 || echo "  ASYNCPG OVERLAY AUTH FAILED!"
+                  python -c "import asyncio,os;pw=os.environ['DB_PASSWORD'];print(f'asyncpg test: pw_len={len(pw)}');exec('import asyncpg\nasync def t():\n c=await asyncpg.connect(host=\"pe-postgres\",port=5432,user=\"postgres\",password=pw,database=\"processing_engine\")\n print(\"asyncpg: CONNECTED OK\")\n await c.close()\nasyncio.run(t())')" 2>&1 || echo "  ASYNCPG OVERLAY AUTH FAILED!"
                 echo "=== END Overlay Auth Test ==="
               else
                 echo "WARNING: PG container not found on this node ($(hostname)). Cannot run local auth test."
