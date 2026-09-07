@@ -372,6 +372,33 @@ jobs:
                 echo "--- Check password in pg_authid ---"
                 docker exec "$PG_CONTAINER" psql -U postgres -c "SELECT rolname, rolpassword IS NOT NULL AS has_password, length(rolpassword) AS pw_hash_len FROM pg_authid WHERE rolname='postgres';" 2>&1 || true
                 echo "=== END PG Auth Test ==="
+
+                # Test from ANOTHER container via overlay network
+                # (simulates what the API does — crosses nodes)
+                echo "=== Overlay Network Auth Test (cross-container) ==="
+                docker run --rm --network processing-engine_pe-net \
+                  -e PGPASSWORD="${DB_PASSWORD}" \
+                  pgvector/pgvector:pg16 \
+                  psql -h postgres -U postgres -d processing_engine \
+                  -c "SELECT 1 AS overlay_psql_auth_ok;" 2>&1 || echo "  OVERLAY PSQL AUTH FAILED!"
+
+                # Test with asyncpg specifically (same image as API)
+                echo "--- Overlay asyncpg test ---"
+                docker run --rm --network processing-engine_pe-net \
+                  -e DB_PASSWORD="${DB_PASSWORD}" \
+                  "${IMAGE_NAME}:${TAG}" \
+                  python -c "
+import asyncio, os
+async def test():
+    import asyncpg
+    pw = os.environ['DB_PASSWORD']
+    print(f'asyncpg test: pw_len={len(pw)}')
+    conn = await asyncpg.connect(host='postgres', port=5432, user='postgres', password=pw, database='processing_engine')
+    print('asyncpg: CONNECTED OK')
+    await conn.close()
+asyncio.run(test())
+" 2>&1 || echo "  ASYNCPG OVERLAY AUTH FAILED!"
+                echo "=== END Overlay Auth Test ==="
               else
                 echo "WARNING: PG container not found on this node ($(hostname)). Cannot run local auth test."
               fi
