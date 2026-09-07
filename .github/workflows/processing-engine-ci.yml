@@ -257,7 +257,6 @@ jobs:
           IMAGE_SHA: ${{ needs.docker.outputs.image_sha }}
           TAG: ${{ needs.docker.outputs.image_sha }}
           DB_PASSWORD: ${{ secrets.PE_DB_PASSWORD }}
-          DATABASE_URL: "postgresql://postgres:${{ secrets.PE_DB_PASSWORD }}@postgres:5432/processing_engine"
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
           API_KEY: ${{ secrets.PE_API_KEY }}
         run: |
@@ -269,7 +268,6 @@ jobs:
 
           echo "TAG=${TAG}"
           echo "DB_PASSWORD length: ${#DB_PASSWORD}"
-          echo "DATABASE_URL set: $([ -n \"${DATABASE_URL}\" ] && echo yes || echo no)"
           echo "Image to deploy: ${IMG}"
 
           STACK_NAME="processing-engine"

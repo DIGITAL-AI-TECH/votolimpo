@@ -1,6 +1,18 @@
 #!/bin/sh
 set -e
 
+# Build DATABASE_URL from individual components if not already set.
+# This avoids URL-encoding issues when the password contains special chars
+# like $, @, :, /, etc. that break Docker Compose interpolation.
+if [ -z "${DATABASE_URL}" ] && [ -n "${DB_PASSWORD}" ]; then
+    # URL-encode the password using Python (handles all special chars safely)
+    ENCODED_PW=$(python -c "import urllib.parse, os; print(urllib.parse.quote(os.environ['DB_PASSWORD'], safe=''))")
+    export DATABASE_URL="postgresql://${DB_USER:-postgres}:${ENCODED_PW}@${DB_HOST:-postgres}:${DB_PORT:-5432}/${DB_NAME:-processing_engine}"
+    echo "DATABASE_URL constructed from components (password URL-encoded)."
+else
+    echo "Using provided DATABASE_URL."
+fi
+
 echo "Running database migrations..."
 # Use 'python -m alembic' instead of 'alembic' CLI directly.
 # Python -m adds CWD (/app) to sys.path, which is needed for db_models imports.
