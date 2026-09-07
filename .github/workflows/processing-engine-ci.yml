@@ -266,7 +266,11 @@ jobs:
           echo "Pulling ${IMG}..."
           timeout 300 docker pull "${IMG}" || echo "WARNING: pull timed out — Swarm will pull via --with-registry-auth"
 
-          echo "TAG=${TAG} | DB_PASSWORD is set: $([ -n \"${DB_PASSWORD}\" ] && echo yes || echo no)"
+          echo "TAG=${TAG}"
+          echo "DB_PASSWORD length: ${#DB_PASSWORD}"
+          echo "DB_PASSWORD first char: ${DB_PASSWORD:0:1}"
+          echo "DB_PASSWORD last char: ${DB_PASSWORD: -1}"
+          echo "DB_PASSWORD md5: $(echo -n "${DB_PASSWORD}" | md5sum | cut -d' ' -f1)"
           echo "Image to deploy: ${IMG}"
 
           STACK_NAME="processing-engine"
@@ -301,6 +305,30 @@ jobs:
             "${STACK_NAME}_api"
 
           echo "Service update dispatched. Health Check step will monitor convergence."
+
+      - name: Debug - Verify env vars in services
+        run: |
+          echo "=== API service env vars (sanitized) ==="
+          docker service inspect processing-engine_api --format '{{range .Spec.TaskTemplate.ContainerSpec.Env}}{{println .}}{{end}}' 2>/dev/null | \
+            sed -E 's/(PASSWORD|KEY)=(.)(.*)(.)$/\1=\2***\4/' || echo "Could not inspect api service"
+          echo ""
+          echo "=== PostgreSQL service env vars (sanitized) ==="
+          docker service inspect processing-engine_postgres --format '{{range .Spec.TaskTemplate.ContainerSpec.Env}}{{println .}}{{end}}' 2>/dev/null | \
+            sed -E 's/(PASSWORD|KEY)=(.)(.*)(.)$/\1=\2***\4/' || echo "Could not inspect postgres service"
+          echo ""
+          echo "=== Checking if DB_PASSWORD in API matches PostgreSQL ==="
+          API_PW=$(docker service inspect processing-engine_api --format '{{range .Spec.TaskTemplate.ContainerSpec.Env}}{{println .}}{{end}}' 2>/dev/null | grep 'DB_PASSWORD\|postgresql://' | head -1)
+          PG_PW=$(docker service inspect processing-engine_postgres --format '{{range .Spec.TaskTemplate.ContainerSpec.Env}}{{println .}}{{end}}' 2>/dev/null | grep 'POSTGRES_PASSWORD' | head -1)
+          # Extract just the password values for comparison (md5 hash)
+          API_HASH=$(echo "$API_PW" | grep -oP '(?<=:)[^@]+(?=@)' | md5sum | cut -d' ' -f1 || echo "n/a")
+          PG_HASH=$(echo "$PG_PW" | cut -d'=' -f2 | md5sum | cut -d' ' -f1 || echo "n/a")
+          echo "API DB password hash: ${API_HASH}"
+          echo "PG POSTGRES_PASSWORD hash: ${PG_HASH}"
+          if [ "$API_HASH" = "$PG_HASH" ]; then
+            echo "MATCH: Passwords are identical."
+          else
+            echo "MISMATCH: API and PostgreSQL have DIFFERENT passwords!"
+          fi
 
       - name: Health Check
         env:
