@@ -348,10 +348,30 @@ jobs:
             echo "  [$i/60] PostgreSQL: ${PG_STATE}"
             if echo "${PG_STATE}" | grep -q "^Running"; then
               echo "PostgreSQL service is running."
-              # Show PG logs to confirm initdb vs reuse
-              echo "--- PostgreSQL Logs (checking for initdb) ---"
-              sleep 5  # give PG a moment to log
+              sleep 5  # give PG a moment to finish init
+              echo "--- PostgreSQL Logs (initdb check) ---"
               docker service logs processing-engine_postgres --tail 30 --raw 2>&1 | head -40 || true
+
+              # === CRITICAL DIAGNOSTIC: Test PG auth from inside the container ===
+              PG_CONTAINER=$(docker ps -q --filter "name=processing-engine_postgres" | head -1)
+              if [ -n "$PG_CONTAINER" ]; then
+                echo "=== PG Container Auth Test (container: ${PG_CONTAINER}) ==="
+                echo "--- MD5 of POSTGRES_PASSWORD inside PG container ---"
+                docker exec "$PG_CONTAINER" sh -c 'echo -n "$POSTGRES_PASSWORD" | md5sum' 2>&1 || echo "  (failed to get md5)"
+                echo "--- MD5 of DB_PASSWORD from GitHub Secret ---"
+                echo -n "${DB_PASSWORD}" | md5sum
+                echo "--- Local socket auth (should always work) ---"
+                docker exec "$PG_CONTAINER" psql -U postgres -c "SELECT 1 AS socket_auth_ok;" 2>&1 || echo "  SOCKET AUTH FAILED!"
+                echo "--- TCP auth with POSTGRES_PASSWORD (simulates API connection) ---"
+                docker exec "$PG_CONTAINER" sh -c 'PGPASSWORD=$POSTGRES_PASSWORD psql -h 127.0.0.1 -U postgres -c "SELECT 1 AS tcp_auth_ok;"' 2>&1 || echo "  TCP AUTH FAILED!"
+                echo "--- pg_hba.conf ---"
+                docker exec "$PG_CONTAINER" cat /var/lib/postgresql/data/pg_hba.conf 2>&1 | grep -v "^#" | grep -v "^$" || true
+                echo "--- Check password in pg_authid ---"
+                docker exec "$PG_CONTAINER" psql -U postgres -c "SELECT rolname, rolpassword IS NOT NULL AS has_password, length(rolpassword) AS pw_hash_len FROM pg_authid WHERE rolname='postgres';" 2>&1 || true
+                echo "=== END PG Auth Test ==="
+              else
+                echo "WARNING: PG container not found on this node ($(hostname)). Cannot run local auth test."
+              fi
               break
             fi
             if [ "$i" -eq 60 ]; then
