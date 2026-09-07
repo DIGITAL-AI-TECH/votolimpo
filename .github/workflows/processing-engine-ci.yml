@@ -201,6 +201,24 @@ jobs:
       - name: Login no Registry
         run: echo "${{ secrets.REGISTRY_PASSWORD }}" | docker login ${{ env.REGISTRY }} -u "${{ secrets.REGISTRY_USER }}" --password-stdin
 
+      - name: Smoke Test — validate image starts
+        env:
+          TAG: ${{ needs.docker.outputs.image_sha }}
+        run: |
+          IMG="${IMAGE_NAME}:${TAG}"
+          echo "=== Smoke test: pulling ${IMG} ==="
+          timeout 300 docker pull "${IMG}"
+
+          echo "=== Smoke test: verifying imports ==="
+          docker run --rm --entrypoint python "${IMG}" -c \
+            'import fastapi; import asyncpg; import uvicorn; import alembic; import app.main; print("ALL IMPORTS OK")'
+
+          echo "=== Smoke test: entrypoint --help ==="
+          docker run --rm --entrypoint python "${IMG}" -c \
+            'from app.config import Settings; s = Settings(); print(f"Config OK: role={s.ENGINE_ROLE}, db_host={s.DB_HOST}")'
+
+          echo "Smoke test passed!"
+
       - name: Deploy ou Update no Swarm
         env:
           IMAGE_SHA: ${{ needs.docker.outputs.image_sha }}
@@ -211,9 +229,6 @@ jobs:
         run: |
           IMG="${IMAGE_NAME}:${TAG}"
           STACK_NAME="processing-engine"
-
-          echo "Pulling ${IMG}..."
-          timeout 300 docker pull "${IMG}" || echo "WARNING: pull timed out"
 
           echo "TAG=${TAG}"
           echo "DB_PASSWORD length: ${#DB_PASSWORD}"
@@ -310,31 +325,60 @@ jobs:
         env:
           IMAGE_SHA: ${{ needs.docker.outputs.image_sha }}
           TAG: ${{ needs.docker.outputs.image_sha }}
+          DB_PASSWORD: ${{ secrets.PE_DB_PASSWORD }}
         run: |
           SERVICE_NAME="processing-engine_api"
+          STACK_NAME="processing-engine"
           echo "Expected image tag: ${TAG}"
           echo "Aguardando convergencia do servico..."
 
+          # Immediately dump initial state for debugging
+          sleep 10
+          echo "=== Initial service state ==="
+          docker service ps "${SERVICE_NAME}" --no-trunc 2>/dev/null | head -5 || true
+          echo "=== Initial service logs ==="
+          docker service logs "${SERVICE_NAME}" --tail 30 2>&1 || true
+
           for i in $(seq 1 60); do
             sleep 5
-            # Get current state and image of the most recent task
             TASK_INFO=$(docker service ps "${SERVICE_NAME}" --format "{{.CurrentState}} | {{.Image}}" --no-trunc 2>/dev/null | head -1)
             echo "[$i/60] ${TASK_INFO}"
 
             STATE=$(echo "${TASK_INFO}" | cut -d'|' -f1 | xargs)
 
             if echo "${STATE}" | grep -q "^Running"; then
-              # Verify it's actually healthy by checking the container
               echo "=== Service logs (last 20 lines) ==="
               docker service logs "${SERVICE_NAME}" --tail 20 2>&1 || true
               echo "Servico convergiu com sucesso!"
               exit 0
             fi
 
-            # Every 30s, dump logs for debugging
+            # Check for repeated failures — if 3+ failed tasks, run diagnostic
+            FAILED_COUNT=$(docker service ps "${SERVICE_NAME}" --format "{{.CurrentState}}" 2>/dev/null | grep -c "^Failed" || echo "0")
+            if [ "${FAILED_COUNT}" -ge 3 ] && [ "$i" -eq 6 ]; then
+              echo "=== DIAGNOSTIC: ${FAILED_COUNT} failed tasks detected ==="
+              echo "=== All tasks (including failed) ==="
+              docker service ps "${SERVICE_NAME}" --no-trunc --format "table {{.Name}}\t{{.CurrentState}}\t{{.Error}}" 2>&1 || true
+              echo "=== Service logs (all) ==="
+              docker service logs "${SERVICE_NAME}" --tail 50 2>&1 || true
+              echo "=== Trying direct docker run to capture crash ==="
+              timeout 30 docker run --rm \
+                --network "${STACK_NAME}_internal" \
+                -e DB_HOST=postgres \
+                -e DB_PORT=5432 \
+                -e DB_NAME=processing_engine \
+                -e DB_USER=postgres \
+                -e "DB_PASSWORD=${DB_PASSWORD}" \
+                -e ENGINE_ROLE=both \
+                -e LOG_LEVEL=DEBUG \
+                "${IMAGE_NAME}:${TAG}" 2>&1 | head -80 || true
+              echo "=== End diagnostic ==="
+            fi
+
+            # Every 30s, dump logs
             if [ $((i % 6)) -eq 0 ]; then
               echo "=== Periodic debug dump ==="
-              docker service logs "${SERVICE_NAME}" --tail 10 2>&1 || true
+              docker service logs "${SERVICE_NAME}" --tail 15 2>&1 || true
               echo "=== PostgreSQL ==="
               docker service ps "processing-engine_postgres" --format "{{.CurrentState}}" 2>/dev/null | head -1
             fi
@@ -343,8 +387,8 @@ jobs:
           echo "Timeout (300s) esperando convergencia"
           echo "=== Final service logs ==="
           docker service logs "${SERVICE_NAME}" --tail 80 2>&1 || true
-          echo "=== Final service PS ==="
-          docker service ps "${SERVICE_NAME}" --no-trunc 2>&1 || true
+          echo "=== Final service PS (all tasks) ==="
+          docker service ps "${SERVICE_NAME}" --no-trunc --format "table {{.Name}}\t{{.CurrentState}}\t{{.Error}}" 2>&1 || true
           exit 1
 
       - name: Notify - Deploy Concluido
