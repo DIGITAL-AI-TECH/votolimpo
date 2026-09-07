@@ -201,44 +201,35 @@ jobs:
       - name: Login no Registry
         run: echo "${{ secrets.REGISTRY_PASSWORD }}" | docker login ${{ env.REGISTRY }} -u "${{ secrets.REGISTRY_USER }}" --password-stdin
 
-      - name: Clean broken stack (first-time fix)
+      - name: Clean broken stack (one-time password reset)
+        env:
+          DB_PASSWORD: ${{ secrets.PE_DB_PASSWORD }}
         run: |
           STACK_NAME="processing-engine"
-          # This stack has never had production data — safe to remove and re-create.
-          # Removes if: postgres unhealthy OR api service stuck in paused/failed state.
+          # ONE-TIME FIX: The pgdata volume was initialized with an empty password
+          # during the first deploy. Even though PostgreSQL is "Running", it has the
+          # wrong password stored in pg_hba.conf/data. We must nuke the volume.
+          # TODO: Remove this step once the stack is stable with correct password.
           if docker stack ls | grep -q "^${STACK_NAME} "; then
-            echo "Stack exists — checking service health..."
-
-            PG_STATUS=$(docker service ps "${STACK_NAME}_postgres" --format "{{.CurrentState}}" 2>/dev/null | head -1 || echo "unknown")
-            API_STATUS=$(docker service ps "${STACK_NAME}_api" --format "{{.CurrentState}}" 2>/dev/null | head -1 || echo "unknown")
-            # Check if api service update is paused
-            API_UPDATE=$(docker service inspect "${STACK_NAME}_api" --format "{{.UpdateStatus.State}}" 2>/dev/null || echo "unknown")
-
-            echo "PostgreSQL: ${PG_STATUS}"
-            echo "API: ${API_STATUS}"
-            echo "API update state: ${API_UPDATE}"
-
-            NEEDS_CLEAN=false
-            if ! echo "${PG_STATUS}" | grep -q "^Running"; then
-              echo "PostgreSQL unhealthy — needs clean start"
-              NEEDS_CLEAN=true
-            fi
-            if echo "${API_UPDATE}" | grep -qi "paused"; then
-              echo "API service update is paused — needs clean start"
-              NEEDS_CLEAN=true
-            fi
-
-            if [ "${NEEDS_CLEAN}" = "true" ]; then
-              echo "Removing stack for fresh start..."
-              docker stack rm "${STACK_NAME}"
-              echo "Waiting for stack removal..."
-              sleep 20
-              # Remove the volume with potentially wrong password
-              docker volume rm "${STACK_NAME}_pgdata" 2>/dev/null || true
-              echo "Clean slate ready."
-            else
-              echo "Stack healthy — will update in-place."
-            fi
+            echo "Stack exists — removing for clean password reset..."
+            docker stack rm "${STACK_NAME}"
+            echo "Waiting for stack removal (services + containers)..."
+            # Wait until all containers from the stack are gone
+            for i in $(seq 1 30); do
+              REMAINING=$(docker ps --filter "label=com.docker.stack.namespace=${STACK_NAME}" -q | wc -l)
+              echo "  [$i/30] Remaining containers: ${REMAINING}"
+              if [ "${REMAINING}" -eq 0 ]; then
+                echo "All containers removed."
+                break
+              fi
+              sleep 2
+            done
+            # Remove the volume with wrong password
+            echo "Removing pgdata volume..."
+            docker volume rm "${STACK_NAME}_pgdata" 2>/dev/null || true
+            echo "Clean slate ready — will deploy with correct DB_PASSWORD."
+          else
+            echo "No existing stack — fresh deploy."
           fi
 
       - name: Deploy ou Update no Swarm
