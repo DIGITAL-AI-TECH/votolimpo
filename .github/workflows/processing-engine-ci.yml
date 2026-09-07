@@ -307,81 +307,89 @@ jobs:
 
           echo "Service update dispatched. Health Check step will monitor convergence."
 
-      - name: Debug - Verify env vars in services
+      - name: Debug - Verify env vars and PG auth
         env:
           DB_PASSWORD: ${{ secrets.PE_DB_PASSWORD }}
         run: |
-          echo "=== Password comparison (service inspect vs GitHub secret) ==="
-          # 1. GitHub Secret (source of truth)
+          echo "=== 1. Service inspect — password comparison ==="
           SECRET_HASH=$(printf '%s' "$DB_PASSWORD" | md5sum | cut -d' ' -f1)
-          echo "GitHub Secret PE_DB_PASSWORD: len=${#DB_PASSWORD}, md5=${SECRET_HASH}"
+          echo "GitHub Secret: len=${#DB_PASSWORD}, md5=${SECRET_HASH}"
 
-          # 2. Service inspect (what Docker stored)
-          API_PW=$(docker service inspect processing-engine_api \
-            --format '{{range .Spec.TaskTemplate.ContainerSpec.Env}}{{println .}}{{end}}' 2>/dev/null | \
-            grep '^DB_PASSWORD=' | cut -d'=' -f2-)
           PG_PW=$(docker service inspect processing-engine_postgres \
             --format '{{range .Spec.TaskTemplate.ContainerSpec.Env}}{{println .}}{{end}}' 2>/dev/null | \
             grep '^POSTGRES_PASSWORD=' | cut -d'=' -f2-)
-          API_HASH=$(printf '%s' "$API_PW" | md5sum | cut -d' ' -f1)
           PG_HASH=$(printf '%s' "$PG_PW" | md5sum | cut -d' ' -f1)
-          echo "API DB_PASSWORD:      len=${#API_PW}, md5=${API_HASH}"
           echo "PG POSTGRES_PASSWORD: len=${#PG_PW}, md5=${PG_HASH}"
+          [ "$PG_HASH" = "$SECRET_HASH" ] && echo "MATCH" || echo "MISMATCH!"
 
-          # 3. Check if $$ escaping was correctly resolved
-          if [ "$API_HASH" = "$SECRET_HASH" ]; then
-            echo "API password MATCHES GitHub Secret."
+          echo ""
+          echo "=== 2. Wait for PG container to be healthy ==="
+          for i in $(seq 1 30); do
+            PG_CONTAINER=$(docker ps --filter "name=processing-engine_postgres" --filter "status=running" -q | head -1)
+            if [ -n "$PG_CONTAINER" ]; then
+              echo "Found PG container: $PG_CONTAINER (attempt $i)"
+              break
+            fi
+            echo "  [$i/30] Waiting for PG container..."
+            sleep 3
+          done
+
+          if [ -z "$PG_CONTAINER" ]; then
+            echo "ERROR: PG container not found on this node!"
+            echo "All containers:"
+            docker ps -a --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}" | head -20
+            echo "Services:"
+            docker service ps processing-engine_postgres --no-trunc 2>&1 | head -10
           else
-            echo "API password DIFFERS from GitHub Secret!"
-            echo "  Secret first 3: ${DB_PASSWORD:0:3}"
-            echo "  API    first 3: ${API_PW:0:3}"
-            echo "  Check if API has double-dollar: $(echo "$API_PW" | grep -c '\\$\\$' || true)"
-          fi
-          if [ "$PG_HASH" = "$SECRET_HASH" ]; then
-            echo "PG password MATCHES GitHub Secret."
-          else
-            echo "PG password DIFFERS from GitHub Secret!"
-            echo "  Secret first 3: ${DB_PASSWORD:0:3}"
-            echo "  PG     first 3: ${PG_PW:0:3}"
+            echo ""
+            echo "=== 3. Check POSTGRES_PASSWORD env inside PG container ==="
+            INSIDE_PW=$(docker exec "$PG_CONTAINER" sh -c 'echo $POSTGRES_PASSWORD' 2>&1)
+            INSIDE_HASH=$(printf '%s' "$INSIDE_PW" | md5sum | cut -d' ' -f1)
+            INSIDE_LEN=${#INSIDE_PW}
+            echo "Inside PG container: len=${INSIDE_LEN}, md5=${INSIDE_HASH}"
+            [ "$INSIDE_HASH" = "$SECRET_HASH" ] && echo "MATCH with GitHub Secret" || echo "MISMATCH with GitHub Secret!"
+
+            echo ""
+            echo "=== 4. Test psql auth INSIDE PG container ==="
+            docker exec -e PGPASSWORD="$DB_PASSWORD" "$PG_CONTAINER" \
+              psql -U postgres -d processing_engine -c "SELECT 'auth_ok' as result" \
+              2>&1 || echo "FAILED: psql with GitHub Secret password"
+
+            echo ""
+            echo "=== 5. Test psql with INSIDE password ==="
+            docker exec "$PG_CONTAINER" \
+              psql -U postgres -d processing_engine -c "SELECT 'local_auth_ok' as result" \
+              2>&1 || echo "FAILED: psql without explicit password (local trust)"
+
+            echo ""
+            echo "=== 6. Check pg_hba.conf ==="
+            docker exec "$PG_CONTAINER" cat /var/lib/postgresql/data/pg_hba.conf 2>&1 | tail -10
+
+            echo ""
+            echo "=== 7. PG password hash from pg_authid ==="
+            docker exec "$PG_CONTAINER" \
+              psql -U postgres -c "SELECT rolname, left(rolpassword,25) as pw_hash FROM pg_authid WHERE rolname='postgres'" \
+              2>&1 || echo "Could not query pg_authid"
+
+            echo ""
+            echo "=== 8. Hex dump comparison ==="
+            echo "GitHub Secret hex:"
+            printf '%s' "${DB_PASSWORD}" | xxd | head -3
+            echo "Inside PG env hex:"
+            printf '%s' "${INSIDE_PW}" | xxd | head -3
           fi
 
-          # 4. Test PG auth via temporary container on overlay network
-          echo "=== Testing PG auth via overlay network ==="
+          echo ""
+          echo "=== 9. Test via attachable overlay network ==="
           docker run --rm --network processing-engine_internal \
             -e PGPASSWORD="${DB_PASSWORD}" \
             pgvector/pgvector:pg16 \
-            psql -h postgres -U postgres -d processing_engine -c "SELECT 1 as ok" \
-            2>&1 || echo "FAILED: psql auth test with GitHub Secret password"
+            psql -h postgres -U postgres -d processing_engine -c "SELECT 'overlay_ok' as result" \
+            2>&1 || echo "FAILED: overlay network psql test"
 
-          # 5. Check what password PG actually has (hash from pg_authid)
-          docker run --rm --network processing-engine_internal \
-            -e PGPASSWORD="${DB_PASSWORD}" \
-            pgvector/pgvector:pg16 \
-            psql -h postgres -U postgres -d processing_engine \
-            -c "SELECT rolname, left(rolpassword,20) as pw_prefix FROM pg_authid WHERE rolname='postgres'" \
-            2>&1 || echo "Could not query pg_authid (auth failed)"
-
-          # 6. Try pg_isready (no auth) to see if PG is reachable
-          docker run --rm --network processing-engine_internal \
-            pgvector/pgvector:pg16 \
-            pg_isready -h postgres -U postgres \
-            2>&1 || echo "pg_isready failed - PG may not be reachable"
-
-          # 7. Try with EMPTY password — if this works, PG was initialized without password
-          echo "=== Testing with EMPTY password ==="
-          docker run --rm --network processing-engine_internal \
-            -e PGPASSWORD="" \
-            pgvector/pgvector:pg16 \
-            psql -h postgres -U postgres -d processing_engine -c "SELECT 'empty_pw_works' as result" \
-            2>&1 || echo "Empty password also failed (expected)"
-
-          # 8. Print raw bytes of password (hex) to detect hidden chars
-          echo "=== Password hex dump ==="
-          printf '%s' "${DB_PASSWORD}" | xxd | head -5
-          echo "API_PW hex:"
-          printf '%s' "${API_PW}" | xxd | head -5
-          echo "PG_PW hex:"
-          printf '%s' "${PG_PW}" | xxd | head -5
+          echo ""
+          echo "=== 10. API container logs (last 20 lines) ==="
+          docker service logs processing-engine_api --tail 20 2>&1 || echo "No API logs yet"
 
       - name: Health Check
         env:
