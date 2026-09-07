@@ -213,20 +213,40 @@ jobs:
           if docker stack ls | grep -q "^${STACK_NAME} "; then
             echo "Stack exists — removing for clean password reset..."
             docker stack rm "${STACK_NAME}"
-            echo "Waiting for stack removal (services + containers)..."
-            # Wait until all containers from the stack are gone
-            for i in $(seq 1 30); do
-              REMAINING=$(docker ps --filter "label=com.docker.stack.namespace=${STACK_NAME}" -q | wc -l)
-              echo "  [$i/30] Remaining containers: ${REMAINING}"
-              if [ "${REMAINING}" -eq 0 ]; then
-                echo "All containers removed."
+            echo "Waiting for stack removal (services + networks)..."
+            # Wait until the stack is fully removed (services, networks, containers)
+            for i in $(seq 1 60); do
+              # Check if any containers from the stack still exist (including on all nodes)
+              REMAINING=$(docker ps -a --filter "label=com.docker.stack.namespace=${STACK_NAME}" -q | wc -l)
+              # Also check if services still exist
+              SVCS=$(docker service ls --filter "label=com.docker.stack.namespace=${STACK_NAME}" -q | wc -l)
+              echo "  [$i/60] Remaining containers: ${REMAINING}, services: ${SVCS}"
+              if [ "${REMAINING}" -eq 0 ] && [ "${SVCS}" -eq 0 ]; then
+                echo "Stack fully removed."
                 break
               fi
               sleep 2
             done
-            # Remove the volume with wrong password
+            # Extra wait to ensure filesystem handles are released
+            sleep 5
+            # Remove the volume with wrong password — MUST succeed
             echo "Removing pgdata volume..."
-            docker volume rm "${STACK_NAME}_pgdata" 2>/dev/null || true
+            if docker volume rm "${STACK_NAME}_pgdata" 2>&1; then
+              echo "Volume removed successfully."
+            else
+              echo "WARNING: volume rm failed — trying force..."
+              # List what might be using it
+              docker volume inspect "${STACK_NAME}_pgdata" 2>&1 || true
+              docker volume rm "${STACK_NAME}_pgdata" 2>&1 || echo "CRITICAL: Could not remove volume!"
+            fi
+            # Verify volume is gone
+            if docker volume inspect "${STACK_NAME}_pgdata" >/dev/null 2>&1; then
+              echo "CRITICAL: Volume still exists after removal attempt!"
+              docker volume inspect "${STACK_NAME}_pgdata" 2>&1 || true
+              exit 1
+            else
+              echo "Confirmed: volume does not exist."
+            fi
             echo "Clean slate ready — will deploy with correct DB_PASSWORD."
           else
             echo "No existing stack — fresh deploy."
