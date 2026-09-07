@@ -201,9 +201,33 @@ jobs:
       - name: Login no Registry
         run: echo "${{ secrets.REGISTRY_PASSWORD }}" | docker login ${{ env.REGISTRY }} -u "${{ secrets.REGISTRY_USER }}" --password-stdin
 
+      - name: Clean broken stack (first-time fix)
+        run: |
+          STACK_NAME="processing-engine"
+          # Remove stack only if PostgreSQL volume was initialized with wrong password
+          # (first deploy had empty DB_PASSWORD). Safe: no production data yet.
+          if docker stack ls | grep -q "^${STACK_NAME} "; then
+            echo "Stack exists — checking if PostgreSQL is healthy..."
+            PG_STATUS=$(docker service ps "${STACK_NAME}_postgres" --format "{{.CurrentState}}" 2>/dev/null | head -1 || echo "unknown")
+            echo "PostgreSQL status: ${PG_STATUS}"
+            # If postgres service doesn't exist or is not running, do a clean re-deploy
+            if ! echo "${PG_STATUS}" | grep -q "^Running"; then
+              echo "PostgreSQL unhealthy — removing stack for fresh start..."
+              docker stack rm "${STACK_NAME}"
+              echo "Waiting for stack removal..."
+              sleep 15
+              # Remove the volume with wrong password
+              docker volume rm "${STACK_NAME}_pgdata" 2>/dev/null || true
+              echo "Clean slate ready."
+            fi
+          fi
+
       - name: Deploy ou Update no Swarm
         env:
           IMAGE_SHA: ${{ needs.docker.outputs.image_sha }}
+          DB_PASSWORD: ${{ secrets.PE_DB_PASSWORD }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          API_KEY: ${{ secrets.PE_API_KEY }}
         run: |
           IMG="${IMAGE_NAME}:${IMAGE_SHA}"
 
@@ -212,21 +236,18 @@ jobs:
           timeout 300 docker pull "${IMG}" || echo "WARNING: pull timed out — Swarm will pull via --with-registry-auth"
 
           STACK_NAME="processing-engine"
-          SERVICE_NAME="${STACK_NAME}_api"
 
-          if docker stack ls | grep -q "^${STACK_NAME} "; then
-            echo "Stack existe — fazendo service update..."
-            docker service update \
-              --image "${IMG}" \
-              --with-registry-auth \
-              "${SERVICE_NAME}"
-          else
-            echo "Stack nao existe — fazendo primeiro deploy..."
-            docker stack deploy \
-              --with-registry-auth \
-              --compose-file processing-engine/docker-stack.yml \
-              "${STACK_NAME}"
-          fi
+          # Usar TAG para que o compose resolva a imagem correta
+          export TAG="${IMAGE_SHA}"
+
+          # docker stack deploy atualiza servicos existentes e cria novos
+          # Env vars (DB_PASSWORD, OPENAI_API_KEY, API_KEY, TAG) sao interpoladas
+          # pelo shell no docker-stack.yml via ${VAR}
+          echo "Deploying stack ${STACK_NAME} with image ${IMG}..."
+          docker stack deploy \
+            --with-registry-auth \
+            --compose-file processing-engine/docker-stack.yml \
+            "${STACK_NAME}"
 
       - name: Health Check
         env:
@@ -234,10 +255,10 @@ jobs:
         run: |
           SERVICE_NAME="processing-engine_api"
           echo "Aguardando convergencia do servico..."
-          for i in $(seq 1 24); do
+          for i in $(seq 1 36); do
             sleep 5
             STATUS=$(docker service ps "${SERVICE_NAME}" --format "{{.CurrentState}}" 2>/dev/null | head -1)
-            echo "[$i/24] ${STATUS}"
+            echo "[$i/36] ${STATUS}"
             if echo "${STATUS}" | grep -q "^Running"; then
               echo "Servico saudavel!"
               exit 0

@@ -18,6 +18,9 @@ COPY app/ ./app/
 COPY db_models/ ./db_models/
 COPY alembic/ ./alembic/
 COPY alembic.ini ./
+COPY entrypoint.sh ./
+
+RUN chmod +x entrypoint.sh
 
 ENV PYTHONUNBUFFERED=1 \
     ENGINE_ROLE=both \
@@ -29,4 +32,4 @@ EXPOSE 8000
 HEALTHCHECK --interval=30s --timeout=5s --retries=3 \
     CMD python -c "import httpx; httpx.get('http://localhost:8000/health').raise_for_status()"
 
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+CMD ["./entrypoint.sh"]
