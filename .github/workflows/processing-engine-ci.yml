@@ -232,26 +232,63 @@ jobs:
           # Clean up any leftover temp services from previous failed runs
           docker service rm pe-pw-sync 2>/dev/null || true
 
+          # Show existing volumes before cleanup
+          echo "=== Volumes before cleanup ==="
+          docker volume ls --filter "name=processing" 2>/dev/null || true
+
           # Remove existing stack so PG volume can be reset
           # (POSTGRES_PASSWORD env var only applies on first initdb — if the
           # volume already has an old password, the DB ignores the env var)
           if docker stack ls --format "{{.Name}}" | grep -q "^${STACK_NAME}$"; then
             echo "Removing existing stack..."
             docker stack rm "${STACK_NAME}"
+            # Wait for ALL containers (not just services) to be fully gone
             for i in $(seq 1 30); do
               SERVICES=$(docker service ls --filter "name=${STACK_NAME}" -q 2>/dev/null | wc -l)
-              if [ "$SERVICES" -eq 0 ]; then
-                echo "Stack removed (${i}×2s)."
+              CONTAINERS=$(docker ps -q --filter "name=${STACK_NAME}" 2>/dev/null | wc -l)
+              if [ "$SERVICES" -eq 0 ] && [ "$CONTAINERS" -eq 0 ]; then
+                echo "Stack fully removed (${i}×3s). Services=0, Containers=0."
                 break
               fi
-              echo "  [$i/30] Waiting... ($SERVICES services left)"
-              sleep 2
+              echo "  [$i/30] Waiting... (services=$SERVICES, containers=$CONTAINERS)"
+              sleep 3
             done
+            # Extra grace period for Docker to release volume references
+            echo "Grace period for volume release..."
+            sleep 5
           fi
 
-          # Remove PG data volume (safe — no production data in processing_engine)
-          docker volume rm "${STACK_NAME}_pgdata" 2>/dev/null && echo "PG volume removed." || echo "No volume to remove."
-          sleep 3
+          # Show volumes after stack removal
+          echo "=== Volumes after stack removal ==="
+          docker volume ls --filter "name=processing" 2>/dev/null || true
+
+          # Remove PG data volume with retry (container may still be releasing it)
+          VOLUME_NAME="${STACK_NAME}_pgdata"
+          VOLUME_REMOVED=false
+          for attempt in $(seq 1 5); do
+            if docker volume rm "${VOLUME_NAME}" 2>&1; then
+              echo "PG volume '${VOLUME_NAME}' removed on attempt ${attempt}."
+              VOLUME_REMOVED=true
+              break
+            else
+              echo "  Volume rm attempt ${attempt}/5 failed (may still be in use). Waiting 5s..."
+              sleep 5
+            fi
+          done
+
+          if [ "$VOLUME_REMOVED" = "false" ]; then
+            echo "WARNING: Could not remove volume '${VOLUME_NAME}'. Checking if it exists..."
+            if docker volume inspect "${VOLUME_NAME}" >/dev/null 2>&1; then
+              echo "::error::Volume ${VOLUME_NAME} EXISTS but cannot be removed — PG will reuse old data/password!"
+              docker volume inspect "${VOLUME_NAME}" 2>&1 || true
+              exit 1
+            else
+              echo "Volume does not exist — PG will do fresh initdb. OK."
+            fi
+          fi
+
+          echo "=== Volumes after cleanup ==="
+          docker volume ls --filter "name=processing" 2>/dev/null || true
           echo "Ready for fresh deploy."
 
       - name: Deploy stack
@@ -303,7 +340,6 @@ jobs:
           docker service inspect processing-engine_postgres --format '{{range .Spec.TaskTemplate.ContainerSpec.Env}}{{println .}}{{end}}' 2>/dev/null | grep -E "DB_PASSWORD|POSTGRES_PASSWORD" | sed 's/=.*/=***/' || echo "N/A"
 
           # Wait for PostgreSQL service to report Running via Swarm API
-          # (NOT docker ps/exec — PG may run on a different node)
           echo "--- Waiting for PostgreSQL ---"
           for i in $(seq 1 60); do
             PG_STATE=$(docker service ps processing-engine_postgres \
@@ -312,11 +348,16 @@ jobs:
             echo "  [$i/60] PostgreSQL: ${PG_STATE}"
             if echo "${PG_STATE}" | grep -q "^Running"; then
               echo "PostgreSQL service is running."
+              # Show PG logs to confirm initdb vs reuse
+              echo "--- PostgreSQL Logs (checking for initdb) ---"
+              sleep 5  # give PG a moment to log
+              docker service logs processing-engine_postgres --tail 30 --raw 2>&1 | head -40 || true
               break
             fi
             if [ "$i" -eq 60 ]; then
               echo "::error::PostgreSQL failed to converge within 300s"
               docker service ps processing-engine_postgres --no-trunc 2>&1 || true
+              docker service logs processing-engine_postgres --tail 50 --raw 2>&1 || true
               exit 1
             fi
             sleep 5
