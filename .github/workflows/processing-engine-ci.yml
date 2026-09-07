@@ -301,63 +301,99 @@ jobs:
           DB_PASSWORD: ${{ secrets.PE_DB_PASSWORD }}
         run: |
           STACK_NAME="processing-engine"
-          NETWORK="${STACK_NAME}_pe-net"
-          PG_HOST="postgres"
-          PG_IMAGE="pgvector/pgvector:pg16"
           echo "Ensuring PostgreSQL password matches the GitHub Secret..."
 
-          # Wait for PG service to be healthy and accepting connections
+          # ── Step 1: Find the running postgres container ──
+          # Uses docker exec instead of docker run --network overlay.
+          # docker run on overlay networks CANNOT resolve Swarm service DNS
+          # (well-known Docker Swarm limitation). docker exec bypasses this
+          # entirely by running commands inside the already-running container.
+          echo "Looking for running PostgreSQL container..."
+          PG_CONTAINER=""
+          for i in $(seq 1 60); do
+            PG_CONTAINER=$(docker ps -q -f "name=${STACK_NAME}_postgres" -f "status=running" | head -1)
+            if [ -n "${PG_CONTAINER}" ]; then
+              echo "Found PostgreSQL container: ${PG_CONTAINER} (attempt $i)"
+              break
+            fi
+            echo "  [$i/60] PostgreSQL container not running yet..."
+            sleep 5
+          done
+
+          if [ -z "${PG_CONTAINER}" ]; then
+            echo "::error::PostgreSQL container never started within 300s"
+            docker service ps "${STACK_NAME}_postgres" --no-trunc 2>&1 || true
+            exit 1
+          fi
+
+          # ── Step 2: Wait for PG to accept TCP connections (inside the container) ──
+          # IMPORTANT: Use -h localhost to force TCP connection (not Unix socket).
+          # Unix socket uses 'trust' auth (pg_hba.conf: local all all trust),
+          # which accepts ANY password — useless for validating the real password.
+          # The API connects via TCP (overlay network), so we must test TCP auth.
           echo "Waiting for PostgreSQL to accept connections..."
           PG_READY=false
-          for i in $(seq 1 60); do
-            if docker run --rm --network "${NETWORK}" "${PG_IMAGE}" \
-              pg_isready -h "${PG_HOST}" -U postgres -d processing_engine >/dev/null 2>&1; then
+          for i in $(seq 1 30); do
+            if docker exec "${PG_CONTAINER}" pg_isready -h localhost -U postgres -d processing_engine >/dev/null 2>&1; then
               echo "PostgreSQL accepting connections (attempt $i)."
               PG_READY=true
               break
             fi
-            echo "  [$i/60] PG not ready yet..."
+            echo "  [$i/30] PG not ready yet..."
             sleep 5
           done
 
           if [ "${PG_READY}" = "false" ]; then
-            echo "::error::PostgreSQL never became ready for connections"
+            echo "::error::PostgreSQL container is running but not accepting connections"
+            docker exec "${PG_CONTAINER}" pg_isready -h localhost -U postgres -d processing_engine 2>&1 || true
             exit 1
           fi
 
-          # Test auth with the expected password
-          if docker run --rm --network "${NETWORK}" \
-            -e PGPASSWORD="${DB_PASSWORD}" "${PG_IMAGE}" \
-            psql -h "${PG_HOST}" -U postgres -d processing_engine -c "SELECT 1" >/dev/null 2>&1; then
+          # ── Step 3: Test auth with the expected password via TCP ──
+          if docker exec -e PGPASSWORD="${DB_PASSWORD}" "${PG_CONTAINER}" \
+            psql -h localhost -U postgres -d processing_engine -c "SELECT 1" >/dev/null 2>&1; then
             echo "Password auth OK — no sync needed."
           else
-            echo "Password mismatch — syncing via ALTER ROLE..."
-            # Try with 'changeme' (default from first deploy without POSTGRES_PASSWORD)
+            echo "Password mismatch or fresh deploy — syncing via ALTER ROLE..."
+            # On fresh deploy (no POSTGRES_PASSWORD in stack), pg_hba.conf has
+            # 'trust' for local socket. We use socket (-h is omitted) to run
+            # ALTER ROLE without needing the current password.
+            # On existing deploy, try known old passwords via TCP first.
             SYNC_OK=false
-            for OLD_PW in "changeme" "" "postgres"; do
-              echo "  Trying old password (length ${#OLD_PW})..."
-              if docker run --rm --network "${NETWORK}" \
-                -e PGPASSWORD="${OLD_PW}" -e NEWPW="${DB_PASSWORD}" "${PG_IMAGE}" \
-                sh -c 'psql -h '"${PG_HOST}"' -U postgres -c "ALTER ROLE postgres WITH PASSWORD '\''${NEWPW}'\''"' 2>&1; then
-                SYNC_OK=true
-                echo "  ALTER ROLE succeeded with old password."
-                break
-              fi
-            done
+
+            # Strategy 1: Use Unix socket (trust auth) — works on fresh deploy
+            echo "  Attempting ALTER ROLE via Unix socket (trust auth)..."
+            if docker exec "${PG_CONTAINER}" \
+              psql -U postgres -c "ALTER ROLE postgres WITH PASSWORD '$( echo "${DB_PASSWORD}" | sed "s/'/''/g" )'" 2>/dev/null; then
+              SYNC_OK=true
+              echo "  ALTER ROLE succeeded via Unix socket."
+            fi
+
+            # Strategy 2: If socket failed, try known passwords via TCP
+            if [ "${SYNC_OK}" = "false" ]; then
+              for OLD_PW in "" "changeme" "postgres"; do
+                echo "  Trying old password via TCP (length ${#OLD_PW})..."
+                if docker exec -e PGPASSWORD="${OLD_PW}" "${PG_CONTAINER}" \
+                  psql -h localhost -U postgres -c "ALTER ROLE postgres WITH PASSWORD '$( echo "${DB_PASSWORD}" | sed "s/'/''/g" )'" 2>/dev/null; then
+                  SYNC_OK=true
+                  echo "  ALTER ROLE succeeded with old password."
+                  break
+                fi
+              done
+            fi
 
             if [ "${SYNC_OK}" = "false" ]; then
-              echo "::error::Failed to sync PostgreSQL password — could not authenticate with any known old password"
+              echo "::error::Failed to sync PostgreSQL password — could not authenticate with any known method"
               exit 1
             fi
 
-            # Verify the new password works
-            echo "Verifying password sync..."
-            if docker run --rm --network "${NETWORK}" \
-              -e PGPASSWORD="${DB_PASSWORD}" "${PG_IMAGE}" \
-              psql -h "${PG_HOST}" -U postgres -d processing_engine -c "SELECT 'auth_ok'" 2>&1; then
-              echo "Password sync confirmed."
+            # Verify the new password works via TCP (same path the API will use)
+            echo "Verifying password sync via TCP..."
+            if docker exec -e PGPASSWORD="${DB_PASSWORD}" "${PG_CONTAINER}" \
+              psql -h localhost -U postgres -d processing_engine -c "SELECT 'auth_ok'" 2>&1; then
+              echo "Password sync confirmed — TCP auth working."
             else
-              echo "::error::Password sync verification failed — ALTER ROLE succeeded but auth still fails"
+              echo "::error::Password sync verification failed — ALTER ROLE succeeded but TCP auth still fails"
               exit 1
             fi
           fi
@@ -402,17 +438,17 @@ jobs:
               docker service ps "${SERVICE_NAME}" --no-trunc --format "table {{.Name}}\t{{.CurrentState}}\t{{.Error}}" 2>&1 || true
               echo "=== Service logs (all) ==="
               docker service logs "${SERVICE_NAME}" --tail 50 2>&1 || true
-              echo "=== Trying direct docker run to capture crash ==="
-              timeout 30 docker run --rm \
-                --network "${STACK_NAME}_pe-net" \
-                -e DB_HOST=postgres \
-                -e DB_PORT=5432 \
-                -e DB_NAME=processing_engine \
-                -e DB_USER=postgres \
-                -e "DB_PASSWORD=${DB_PASSWORD}" \
-                -e ENGINE_ROLE=both \
-                -e LOG_LEVEL=DEBUG \
-                "${IMAGE_NAME}:${TAG}" 2>&1 | head -80 || true
+              echo "=== Trying to capture API crash logs ==="
+              API_CONTAINER=$(docker ps -q -f "name=${STACK_NAME}_api" -f "status=running" | head -1 || true)
+              if [ -n "${API_CONTAINER}" ]; then
+                docker logs "${API_CONTAINER}" --tail 80 2>&1 || true
+              else
+                echo "No running API container found — checking exited containers..."
+                API_EXITED=$(docker ps -q -f "name=${STACK_NAME}_api" -f "status=exited" | head -1 || true)
+                if [ -n "${API_EXITED}" ]; then
+                  docker logs "${API_EXITED}" --tail 80 2>&1 || true
+                fi
+              fi
               echo "=== End diagnostic ==="
             fi
 
