@@ -18,7 +18,7 @@ services:
       - BATCHER_POLL_INTERVAL_SECONDS=5
       - BATCHER_DEFAULT_BATCH_SIZE=50
     networks:
-      - traefik_public
+      - oraculusnet_v2
       - pe-net
     deploy:
       replicas: 1
@@ -31,9 +31,10 @@ services:
           memory: 128M
       labels:
         - "traefik.enable=true"
+        - "traefik.docker.network=oraculusnet_v2"
         - "traefik.http.routers.processing-engine.rule=Host(`processing-engine.digital-ai.tech`)"
         - "traefik.http.routers.processing-engine.entrypoints=websecure"
-        - "traefik.http.routers.processing-engine.tls.certresolver=letsencrypt"
+        - "traefik.http.routers.processing-engine.tls.certresolver=letsencryptresolver"
         - "traefik.http.services.processing-engine.loadbalancer.server.port=8000"
         # HTTP -> HTTPS redirect
         - "traefik.http.routers.processing-engine-http.rule=Host(`processing-engine.digital-ai.tech`)"
@@ -83,7 +84,7 @@ services:
           memory: 1G
 
 networks:
-  traefik_public:
+  oraculusnet_v2:
     external: true
   pe-net:
     driver: overlay
