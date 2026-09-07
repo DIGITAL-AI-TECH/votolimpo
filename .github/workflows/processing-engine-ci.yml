@@ -291,6 +291,7 @@ jobs:
 
           # Wait for API service to converge
           echo "--- Waiting for API ---"
+          DUMPED_LOGS=false
           for i in $(seq 1 60); do
             TASK_INFO=$(docker service ps "${SERVICE_NAME}" \
               --filter "desired-state=running" \
@@ -305,12 +306,12 @@ jobs:
               exit 0
             fi
 
-            # Diagnostic on repeated failures
-            FAILED_COUNT=$(docker service ps "${SERVICE_NAME}" --format "{{.CurrentState}}" 2>/dev/null | grep -c "^Failed" || echo "0")
-            if [ "${FAILED_COUNT}" -ge 3 ] && [ "$((i % 12))" -eq 0 ]; then
-              echo "=== DIAGNOSTIC: ${FAILED_COUNT} failed tasks ==="
+            # Dump service logs early (at 30s and every 60s) to diagnose crash-loops
+            if [ "$i" -eq 6 ] || [ "$((i % 12))" -eq 0 ]; then
+              echo "=== SERVICE LOGS (iteration $i) ==="
               docker service ps "${SERVICE_NAME}" --no-trunc --format "table {{.Name}}\t{{.CurrentState}}\t{{.Error}}" 2>&1 || true
-              docker service logs "${SERVICE_NAME}" --tail 50 2>&1 || true
+              docker service logs "${SERVICE_NAME}" --tail 80 --no-task-ids 2>&1 || true
+              echo "=== END LOGS ==="
             fi
 
             sleep 5
@@ -318,7 +319,7 @@ jobs:
 
           echo "::error::API service failed to converge within 300s"
           docker service ps "${SERVICE_NAME}" --no-trunc --format "table {{.Name}}\t{{.CurrentState}}\t{{.Error}}" 2>&1 || true
-          docker service logs "${SERVICE_NAME}" --tail 80 2>&1 || true
+          docker service logs "${SERVICE_NAME}" --tail 100 --no-task-ids 2>&1 || true
           exit 1
 
       - name: Notify - Deploy Concluido
