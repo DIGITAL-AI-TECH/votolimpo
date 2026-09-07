@@ -87,23 +87,34 @@ def do_run_migrations(connection: Connection) -> None:
 
 async def run_async_migrations() -> None:
     """Run migrations in 'online' mode using asyncpg."""
-    # Override the URL driver to use asyncpg
-    ini_section = config.get_section(config.config_ini_section, {})
-    url = ini_section.get("sqlalchemy.url", "")
+    from sqlalchemy.ext.asyncio import create_async_engine
 
-    # Replace postgresql:// with postgresql+asyncpg:// if needed
-    if url.startswith("postgresql://") and "+asyncpg" not in url:
-        url = url.replace("postgresql://", "postgresql+asyncpg://", 1)
-    elif url.startswith("postgresql+psycopg2://"):
-        url = url.replace("postgresql+psycopg2://", "postgresql+asyncpg://", 1)
+    db_password = os.environ.get("DB_PASSWORD")
 
-    configuration = {**ini_section, "sqlalchemy.url": url}
+    if db_password and not os.environ.get("DATABASE_URL"):
+        # Build engine with individual params to avoid URL-encoding issues.
+        # asyncpg receives the raw password — no encoding/decoding.
+        db_user = os.environ.get("DB_USER", "postgres")
+        db_host = os.environ.get("DB_HOST", "localhost")
+        db_port = os.environ.get("DB_PORT", "5432")
+        db_name = os.environ.get("DB_NAME", "processing_engine")
 
-    connectable = async_engine_from_config(
-        configuration,
-        prefix="sqlalchemy.",
-        poolclass=pool.NullPool,
-    )
+        connectable = create_async_engine(
+            f"postgresql+asyncpg://{db_user}@{db_host}:{db_port}/{db_name}",
+            poolclass=pool.NullPool,
+            connect_args={"password": db_password},
+        )
+    else:
+        # Use URL from config (set by _resolve_database_url or alembic.ini)
+        ini_section = config.get_section(config.config_ini_section, {})
+        url = ini_section.get("sqlalchemy.url", "")
+
+        if url.startswith("postgresql://") and "+asyncpg" not in url:
+            url = url.replace("postgresql://", "postgresql+asyncpg://", 1)
+        elif url.startswith("postgresql+psycopg2://"):
+            url = url.replace("postgresql+psycopg2://", "postgresql+asyncpg://", 1)
+
+        connectable = create_async_engine(url, poolclass=pool.NullPool)
 
     async with connectable.connect() as connection:
         await connection.run_sync(do_run_migrations)

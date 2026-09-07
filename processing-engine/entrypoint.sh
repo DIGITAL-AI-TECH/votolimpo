@@ -1,21 +1,23 @@
 #!/bin/sh
 set -e
 
-# The app (FastAPI/asyncpg) connects using individual DB_* env vars directly,
-# avoiding URL-encoding issues with special characters in passwords.
-#
-# Alembic (SQLAlchemy) builds DATABASE_URL internally in alembic/env.py
-# using urllib.parse.quote — no shell interpolation of the password.
-# We do NOT set DATABASE_URL here to avoid shell mangling special chars.
+# The app (FastAPI/asyncpg) connects using individual DB_* env vars directly.
+# Alembic also uses individual params via connect_args (alembic/env.py).
+# No DATABASE_URL construction needed — avoids shell/URL encoding issues.
 
-# Debug: print password hash (not the password itself) to verify what we received
-python -c "
+# Debug: print connection info (password hashed, never plaintext)
+python -c '
 import os, hashlib
-pw = os.environ.get('DB_PASSWORD', '')
+pw = os.environ.get("DB_PASSWORD", "")
 h = hashlib.md5(pw.encode()).hexdigest()
-print(f'DB connection: host={os.environ.get(\"DB_HOST\",\"?\")}, port={os.environ.get(\"DB_PORT\",\"?\")}, db={os.environ.get(\"DB_NAME\",\"?\")}, user={os.environ.get(\"DB_USER\",\"?\")}, pw_len={len(pw)}, pw_md5={h}')
-print(f'DATABASE_URL set: {bool(os.environ.get(\"DATABASE_URL\"))}')
-"
+host = os.environ.get("DB_HOST", "?")
+port = os.environ.get("DB_PORT", "?")
+db = os.environ.get("DB_NAME", "?")
+user = os.environ.get("DB_USER", "?")
+has_url = bool(os.environ.get("DATABASE_URL"))
+print(f"DB connection: host={host}, port={port}, db={db}, user={user}, pw_len={len(pw)}, pw_md5={h}")
+print(f"DATABASE_URL set: {has_url}")
+'
 
 echo "Running database migrations..."
 MAX_RETRIES=30
