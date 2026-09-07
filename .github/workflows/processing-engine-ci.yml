@@ -204,21 +204,40 @@ jobs:
       - name: Clean broken stack (first-time fix)
         run: |
           STACK_NAME="processing-engine"
-          # Remove stack only if PostgreSQL volume was initialized with wrong password
-          # (first deploy had empty DB_PASSWORD). Safe: no production data yet.
+          # This stack has never had production data — safe to remove and re-create.
+          # Removes if: postgres unhealthy OR api service stuck in paused/failed state.
           if docker stack ls | grep -q "^${STACK_NAME} "; then
-            echo "Stack exists — checking if PostgreSQL is healthy..."
+            echo "Stack exists — checking service health..."
+
             PG_STATUS=$(docker service ps "${STACK_NAME}_postgres" --format "{{.CurrentState}}" 2>/dev/null | head -1 || echo "unknown")
-            echo "PostgreSQL status: ${PG_STATUS}"
-            # If postgres service doesn't exist or is not running, do a clean re-deploy
+            API_STATUS=$(docker service ps "${STACK_NAME}_api" --format "{{.CurrentState}}" 2>/dev/null | head -1 || echo "unknown")
+            # Check if api service update is paused
+            API_UPDATE=$(docker service inspect "${STACK_NAME}_api" --format "{{.UpdateStatus.State}}" 2>/dev/null || echo "unknown")
+
+            echo "PostgreSQL: ${PG_STATUS}"
+            echo "API: ${API_STATUS}"
+            echo "API update state: ${API_UPDATE}"
+
+            NEEDS_CLEAN=false
             if ! echo "${PG_STATUS}" | grep -q "^Running"; then
-              echo "PostgreSQL unhealthy — removing stack for fresh start..."
+              echo "PostgreSQL unhealthy — needs clean start"
+              NEEDS_CLEAN=true
+            fi
+            if echo "${API_UPDATE}" | grep -qi "paused"; then
+              echo "API service update is paused — needs clean start"
+              NEEDS_CLEAN=true
+            fi
+
+            if [ "${NEEDS_CLEAN}" = "true" ]; then
+              echo "Removing stack for fresh start..."
               docker stack rm "${STACK_NAME}"
               echo "Waiting for stack removal..."
-              sleep 15
-              # Remove the volume with wrong password
+              sleep 20
+              # Remove the volume with potentially wrong password
               docker volume rm "${STACK_NAME}_pgdata" 2>/dev/null || true
               echo "Clean slate ready."
+            else
+              echo "Stack healthy — will update in-place."
             fi
           fi
 
@@ -248,20 +267,29 @@ jobs:
             --compose-file processing-engine/docker-stack.yml \
             "${STACK_NAME}"
 
-          # Clear any "update paused" state from previous failed deploys
-          # Without this, docker service update --force will refuse to run
-          echo "Clearing any paused update state..."
-          docker service update --rollback "${STACK_NAME}_api" 2>/dev/null || true
-          sleep 3
+          # Wait for postgres to be ready before forcing api update
+          echo "Waiting for PostgreSQL to start..."
+          for i in $(seq 1 30); do
+            PG_STATE=$(docker service ps "${STACK_NAME}_postgres" --format "{{.CurrentState}}" 2>/dev/null | head -1 || echo "")
+            echo "  [$i/30] PostgreSQL: ${PG_STATE}"
+            if echo "${PG_STATE}" | grep -q "^Running"; then
+              echo "PostgreSQL is running."
+              break
+            fi
+            sleep 5
+          done
 
-          # Force the api service to use the new image
-          # docker stack deploy may not update if only env vars changed
+          # Force the api service to use the new image (--detach to not block)
+          # The Health Check step handles convergence monitoring
           echo "Forcing image update on api service..."
           docker service update \
             --image "${IMG}" \
             --with-registry-auth \
             --force \
+            --detach \
             "${STACK_NAME}_api"
+
+          echo "Service update dispatched. Health Check step will monitor convergence."
 
       - name: Health Check
         env:
