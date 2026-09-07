@@ -1,0 +1,262 @@
+openapi: "3.1.0"
+info:
+  title: Processing Engine — Pool Architecture API
+  version: "0.2.0"
+  description: >
+    Endpoints da Pool de Ingestão Desacoplada.
+    Complementa a API Core (v0.1.0) com canal de entrada para N coletores independentes.
+
+servers:
+  - url: http://localhost:8000
+    description: Development
+  - url: https://processing-engine.digital-ai.tech
+    description: Production
+
+security:
+  - ApiKeyAuth: []
+
+components:
+  securitySchemes:
+    ApiKeyAuth:
+      type: apiKey
+      in: header
+      name: X-API-Key
+
+  schemas:
+    PoolIngestItem:
+      type: object
+      description: Item individual para ingestão na pool
+      properties:
+        source_url:
+          type: string
+          description: URL de origem do conteúdo
+          example: "https://g1.globo.com/politica/noticia/2026/09/07/artigo.ghtml"
+        content:
+          type: string
+          description: Conteúdo bruto (texto, HTML, JSON)
+          example: "<html><body>Conteúdo do artigo...</body></html>"
+        content_type:
+          type: string
+          default: "text/plain"
+          description: MIME type do conteúdo
+          example: "text/html"
+        metadata:
+          type: object
+          default: {}
+          description: Metadados livres do coletor
+          example:
+            source_name: "G1"
+            collected_at: "2026-09-07T10:00:00Z"
+      # Pelo menos content ou source_url obrigatório (validado no servidor)
+
+    PoolIngestRequest:
+      type: object
+      required:
+        - pipeline_id
+        - items
+      properties:
+        pipeline_id:
+          type: string
+          format: uuid
+          description: ID do pipeline que processará os itens
+        source_id:
+          type: string
+          description: Identificador do coletor (para rastreio)
+          example: "votolimpo-scraper"
+        batch_ref:
+          type: string
+          description: Referência do batch no coletor (para debug)
+          example: "scrape-2026-09-07-14h"
+        priority:
+          type: integer
+          default: 0
+          description: Prioridade (maior = processa antes)
+        items:
+          type: array
+          minItems: 1
+          maxItems: 500
+          items:
+            $ref: "#/components/schemas/PoolIngestItem"
+
+    PoolRejection:
+      type: object
+      properties:
+        index:
+          type: integer
+          description: Índice do item no array original
+        reason:
+          type: string
+          enum: ["duplicate_url", "duplicate_content", "validation_error"]
+          description: Motivo da rejeição
+        existing_pool_id:
+          type: string
+          format: uuid
+          description: ID do item existente na pool (se duplicata)
+
+    PoolIngestResponse:
+      type: object
+      required:
+        - accepted
+        - rejected
+        - pool_ids
+        - rejections
+      properties:
+        accepted:
+          type: integer
+          description: Quantidade de itens aceitos
+        rejected:
+          type: integer
+          description: Quantidade de itens rejeitados
+        pool_ids:
+          type: array
+          items:
+            type: string
+            format: uuid
+          description: IDs dos itens aceitos na pool
+        rejections:
+          type: array
+          items:
+            $ref: "#/components/schemas/PoolRejection"
+
+    PoolSingleIngestRequest:
+      type: object
+      required:
+        - pipeline_id
+      properties:
+        pipeline_id:
+          type: string
+          format: uuid
+        source_id:
+          type: string
+        source_url:
+          type: string
+        content:
+          type: string
+        content_type:
+          type: string
+          default: "text/plain"
+        metadata:
+          type: object
+          default: {}
+
+    PoolSingleIngestResponse:
+      type: object
+      required:
+        - pool_id
+        - status
+      properties:
+        pool_id:
+          type: string
+          format: uuid
+          nullable: true
+        status:
+          type: string
+          enum: ["accepted", "duplicate"]
+        existing_pool_id:
+          type: string
+          format: uuid
+          description: Presente apenas quando status=duplicate
+
+    PoolPipelineStatus:
+      type: object
+      properties:
+        pipeline_id:
+          type: string
+          format: uuid
+        pipeline_name:
+          type: string
+        pending:
+          type: integer
+        oldest_pending:
+          type: string
+          format: date-time
+          nullable: true
+
+    PoolStatusResponse:
+      type: object
+      required:
+        - pending_total
+        - by_pipeline
+      properties:
+        pending_total:
+          type: integer
+        by_pipeline:
+          type: array
+          items:
+            $ref: "#/components/schemas/PoolPipelineStatus"
+
+paths:
+  /v1/pool/ingest:
+    post:
+      operationId: pool_ingest
+      summary: Depositar itens na pool para processamento
+      description: >
+        Aceita 1 a 500 itens de um coletor externo.
+        Faz dedup imediato por url_hash.
+        Itens aceitos entram com status "pending" para o Auto-Batcher consumir.
+      tags: [Pool]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PoolIngestRequest"
+      responses:
+        "201":
+          description: Itens processados (aceitos e/ou rejeitados)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PoolIngestResponse"
+        "404":
+          description: Pipeline não encontrado
+        "422":
+          description: Erro de validação (campos obrigatórios ausentes)
+
+  /v1/pool/ingest/single:
+    post:
+      operationId: pool_ingest_single
+      summary: Depositar item único na pool
+      description: >
+        Atalho para depositar 1 item sem wrapper de array.
+        Útil para webhooks e integrações simples.
+      tags: [Pool]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PoolSingleIngestRequest"
+      responses:
+        "201":
+          description: Item aceito
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PoolSingleIngestResponse"
+        "404":
+          description: Pipeline não encontrado
+        "409":
+          description: Duplicata detectada
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PoolSingleIngestResponse"
+        "422":
+          description: Erro de validação
+
+  /v1/pool/status:
+    get:
+      operationId: pool_status
+      summary: Status da pool de ingestão
+      description: >
+        Retorna total de itens pendentes e breakdown por pipeline.
+        Útil para dashboards e monitoramento.
+      tags: [Pool]
+      responses:
+        "200":
+          description: Status da pool
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PoolStatusResponse"
