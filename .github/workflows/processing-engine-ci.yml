@@ -336,11 +336,18 @@ jobs:
           PW_MD5=$(echo -n "${DB_PASSWORD}" | md5sum | cut -d' ' -f1)
           echo "GitHub Secret PE_DB_PASSWORD: len=${PW_LEN}, md5=${PW_MD5}"
 
-          # Show what env vars the services actually have (password masked)
-          echo "--- API service env (DB_PASSWORD) ---"
-          docker service inspect processing-engine_api --format '{{range .Spec.TaskTemplate.ContainerSpec.Env}}{{println .}}{{end}}' 2>/dev/null | grep -E "DB_PASSWORD|POSTGRES_PASSWORD" | sed 's/=.*/=***/' || echo "N/A"
-          echo "--- PG service env (POSTGRES_PASSWORD) ---"
-          docker service inspect processing-engine_postgres --format '{{range .Spec.TaskTemplate.ContainerSpec.Env}}{{println .}}{{end}}' 2>/dev/null | grep -E "DB_PASSWORD|POSTGRES_PASSWORD" | sed 's/=.*/=***/' || echo "N/A"
+          # Show env vars and verify password hash matches between services
+          echo "--- API service DB_PASSWORD (md5 + length) ---"
+          API_PW=$(docker service inspect processing-engine_api --format '{{range .Spec.TaskTemplate.ContainerSpec.Env}}{{println .}}{{end}}' 2>/dev/null | grep "^DB_PASSWORD=" | cut -d= -f2-)
+          echo "  len=${#API_PW}, md5=$(echo -n "${API_PW}" | md5sum | cut -d' ' -f1)"
+          echo "--- PG service POSTGRES_PASSWORD (md5 + length) ---"
+          PG_PW=$(docker service inspect processing-engine_postgres --format '{{range .Spec.TaskTemplate.ContainerSpec.Env}}{{println .}}{{end}}' 2>/dev/null | grep "^POSTGRES_PASSWORD=" | cut -d= -f2-)
+          echo "  len=${#PG_PW}, md5=$(echo -n "${PG_PW}" | md5sum | cut -d' ' -f1)"
+          echo "--- Expected (from deploy env) ---"
+          echo "  len=${#DB_PASSWORD}, md5=$(echo -n "${DB_PASSWORD}" | md5sum | cut -d' ' -f1)"
+          if [ "$(echo -n "${API_PW}" | md5sum)" != "$(echo -n "${DB_PASSWORD}" | md5sum)" ]; then
+            echo "::warning::API DB_PASSWORD does NOT match deploy env! First char: '${API_PW:0:1}', Last char: '${API_PW: -1}'"
+          fi
 
           # Wait for PostgreSQL service to report Running via Swarm API
           echo "--- Waiting for PostgreSQL ---"
