@@ -272,18 +272,41 @@ jobs:
 
           STACK_NAME="processing-engine"
 
-          # Step 1: envsubst resolves ${VAR} patterns with actual values
-          envsubst < processing-engine/docker-stack.yml > /tmp/docker-stack-envsubst.yml
+          # Resolve compose file with Python to avoid shell/$-interpolation issues.
+          # Python reads env vars as raw bytes and escapes $ as $$ for Compose.
+          python3 << 'PYEOF'
+import os, re
 
-          # Step 2: Escape any remaining $ in resolved values so Docker Compose
-          # does NOT re-interpolate them. Passwords with $ (e.g. "abc$def") would
-          # otherwise be mangled by Compose's own variable expansion.
-          # We escape ALL $ as $$ EXCEPT for ${ which would be a Compose variable.
-          # Since envsubst already resolved all ${VAR}, any remaining $ is literal.
-          sed 's/\$/\$\$/g' /tmp/docker-stack-envsubst.yml > /tmp/docker-stack-resolved.yml
+with open("processing-engine/docker-stack.yml") as f:
+    content = f.read()
 
-          echo "=== Resolved compose file (sanitized) ==="
-          sed -E 's/(PASSWORD|KEY|URL)=(.{3}).*(..)/\1=\2***\3/' /tmp/docker-stack-resolved.yml || true
+def replace_var(m):
+    var_name = m.group(1)
+    default = m.group(2) or ""
+    val = os.environ.get(var_name, default)
+    # Escape literal $ as $$ so Docker Compose doesn't re-interpolate
+    return val.replace("$", "$$")
+
+# Match ${VAR} and ${VAR:-default}
+content = re.sub(r"\$\{([A-Za-z_]\w*)(?::-([^}]*))?\}", replace_var, content)
+
+with open("/tmp/docker-stack-resolved.yml", "w") as f:
+    f.write(content)
+
+# Print sanitized version for logs
+import hashlib
+for line in content.splitlines():
+    if any(k in line for k in ["PASSWORD", "KEY", "URL"]):
+        # Mask values
+        if "=" in line:
+            key, _, val = line.partition("=")
+            if len(val) > 4:
+                print(f"{key}={val[:2]}***{val[-2:]}")
+            else:
+                print(f"{key}=***")
+        else:
+            print(line)
+PYEOF
 
           docker stack deploy \
             --with-registry-auth \
