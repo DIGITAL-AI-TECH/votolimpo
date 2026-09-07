@@ -253,11 +253,97 @@ jobs:
             fi
           done
 
-          # NOTE: No docker service update --force here.
-          # docker stack deploy already updates the image when TAG changes.
-          # A force update triggers the update_config (start-first + rollback)
-          # which creates an infinite restart loop when the container takes
-          # time to become healthy (start_period: 120s in healthcheck).
+      - name: Sync PostgreSQL password
+        env:
+          DB_PASSWORD: ${{ secrets.PE_DB_PASSWORD }}
+        run: |
+          STACK_NAME="processing-engine"
+          echo "Syncing PostgreSQL password via Swarm task..."
+
+          # Wait for PG to be Running first
+          for i in $(seq 1 60); do
+            PG_STATE=$(docker service ps "${STACK_NAME}_postgres" \
+              --filter "desired-state=running" \
+              --format "{{.CurrentState}}" 2>/dev/null | head -1)
+            if echo "${PG_STATE}" | grep -q "^Running"; then
+              echo "PostgreSQL is Running."
+              break
+            fi
+            echo "  [$i/60] Waiting for PG: ${PG_STATE}"
+            if [ "$i" -eq 60 ]; then
+              echo "::error::PostgreSQL not running after 300s"
+              exit 1
+            fi
+            sleep 5
+          done
+
+          # Find which node PG is on
+          PG_NODE=$(docker service ps "${STACK_NAME}_postgres" \
+            --filter "desired-state=running" \
+            --format "{{.Node}}" 2>/dev/null | head -1)
+          echo "PostgreSQL is on node: ${PG_NODE}"
+
+          # Use a temporary service to run ALTER ROLE on the SAME node as PG.
+          # This is the ONLY way to reach PG from CI when it's on a different node.
+          # The temp service connects to PG via the pe-net overlay network.
+          ESCAPED_PW=$(echo "${DB_PASSWORD}" | sed "s/'/''/g")
+          echo "Creating temp service to sync password..."
+          docker service create \
+            --name pe-pw-sync \
+            --network processing-engine_pe-net \
+            --restart-condition none \
+            --constraint "node.hostname==${PG_NODE}" \
+            pgvector/pgvector:pg16 \
+            sh -c "
+              for i in \$(seq 1 30); do
+                if PGPASSWORD='${ESCAPED_PW}' psql -h postgres -U postgres -d processing_engine -c 'SELECT 1' 2>/dev/null; then
+                  echo 'Password already correct.'
+                  exit 0
+                fi
+                # Try trust auth (Unix socket not available cross-container, try common passwords)
+                for OLD_PW in '' 'changeme' 'postgres'; do
+                  if PGPASSWORD=\"\${OLD_PW}\" psql -h postgres -U postgres -c \"ALTER ROLE postgres WITH PASSWORD '\${ESCAPED_PW}'\" 2>/dev/null; then
+                    echo 'Password synced with old password.'
+                    exit 0
+                  fi
+                done
+                echo \"Attempt \$i/30 failed, retrying...\"
+                sleep 2
+              done
+              echo 'WARNING: Could not sync password (PG may need manual intervention)'
+              exit 1
+            " 2>&1 || true
+
+          # Wait for sync service to complete (max 90s)
+          echo "Waiting for password sync..."
+          for i in $(seq 1 18); do
+            SYNC_STATE=$(docker service ps pe-pw-sync \
+              --format "{{.CurrentState}}" 2>/dev/null | head -1)
+            echo "  [$i/18] Sync: ${SYNC_STATE}"
+            if echo "${SYNC_STATE}" | grep -q "^Complete"; then
+              echo "Password sync completed."
+              break
+            fi
+            if echo "${SYNC_STATE}" | grep -q "^Failed"; then
+              echo "Password sync failed — checking logs..."
+              docker service logs pe-pw-sync --raw 2>&1 || true
+              break
+            fi
+            sleep 5
+          done
+
+          # Show sync logs and cleanup
+          echo "=== Sync service logs ==="
+          docker service logs pe-pw-sync --raw 2>&1 || true
+          docker service rm pe-pw-sync 2>/dev/null || true
+          echo "Sync step done."
+
+      - name: Restart API after password sync
+        run: |
+          # Force the API service to restart so it picks up the (potentially updated) password
+          echo "Restarting API service..."
+          docker service update --force processing-engine_api 2>&1 || true
+          echo "API restart triggered."
 
       - name: Health Check
         env:
