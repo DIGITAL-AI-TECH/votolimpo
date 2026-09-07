@@ -43,12 +43,13 @@ services:
       update_config:
         parallelism: 1
         delay: 10s
-        order: start-first
-        failure_action: rollback
+        order: stop-first
+        failure_action: pause
+        monitor: 30s
       rollback_config:
         parallelism: 1
         delay: 5s
-        order: start-first
+        order: stop-first
     healthcheck:
       test: ["CMD-SHELL", "python -c \"import httpx; r=httpx.get('http://localhost:8000/health'); exit(0 if r.status_code in (200,503) else 1)\""]
       interval: 15s

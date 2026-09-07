@@ -253,14 +253,11 @@ jobs:
             fi
           done
 
-          # If stack already existed, force update the API service with new image
-          IMG="${IMAGE_NAME}:${TAG}"
-          echo "Forcing API service update to image ${IMG}..."
-          docker service update \
-            --image "${IMG}" \
-            --with-registry-auth \
-            --force \
-            "${STACK_NAME}_api" || true
+          # NOTE: No docker service update --force here.
+          # docker stack deploy already updates the image when TAG changes.
+          # A force update triggers the update_config (start-first + rollback)
+          # which creates an infinite restart loop when the container takes
+          # time to become healthy (start_period: 120s in healthcheck).
 
       - name: Health Check
         env:
@@ -290,8 +287,14 @@ jobs:
           done
 
           # Wait for API service to converge
-          echo "--- Waiting for API ---"
-          DUMPED_LOGS=false
+          echo "--- Waiting for API (start_period=120s, timeout=300s) ---"
+
+          # Show where services are running (which node)
+          echo "=== Service placement ==="
+          docker service ps "${SERVICE_NAME}" --format "{{.Node}} {{.CurrentState}}" 2>/dev/null | head -3 || true
+          docker service ps processing-engine_postgres --format "{{.Node}} {{.CurrentState}}" 2>/dev/null | head -1 || true
+          echo "Runner hostname: $(hostname)"
+
           for i in $(seq 1 60); do
             TASK_INFO=$(docker service ps "${SERVICE_NAME}" \
               --filter "desired-state=running" \
@@ -302,24 +305,35 @@ jobs:
 
             if echo "${STATE}" | grep -q "^Running"; then
               echo "API service convergiu!"
-              docker service logs "${SERVICE_NAME}" --tail 20 2>&1 || true
+              docker service logs "${SERVICE_NAME}" --tail 20 --raw 2>&1 || true
               exit 0
             fi
 
-            # Dump service logs early (at 30s and every 60s) to diagnose crash-loops
-            if [ "$i" -eq 6 ] || [ "$((i % 12))" -eq 0 ]; then
-              echo "=== SERVICE LOGS (iteration $i) ==="
-              docker service ps "${SERVICE_NAME}" --no-trunc --format "table {{.Name}}\t{{.CurrentState}}\t{{.Error}}" 2>&1 || true
-              docker service logs "${SERVICE_NAME}" --tail 80 --no-task-ids 2>&1 || true
-              echo "=== END LOGS ==="
+            # Dump detailed diagnostics at 30s, 90s, 150s, etc.
+            if [ "$i" -eq 6 ] || [ "$i" -eq 18 ] || [ "$i" -eq 30 ] || [ "$i" -eq 50 ]; then
+              echo "=== DIAGNOSTIC (iteration $i) ==="
+              echo "--- Task States ---"
+              docker service ps "${SERVICE_NAME}" --no-trunc \
+                --format "table {{.Name}}\t{{.Node}}\t{{.CurrentState}}\t{{.Error}}" 2>&1 | head -15 || true
+              echo "--- Container Logs (service logs --raw) ---"
+              docker service logs "${SERVICE_NAME}" --tail 60 --raw 2>&1 || true
+              echo "--- Service Inspect (update status) ---"
+              docker service inspect "${SERVICE_NAME}" --format '{{json .UpdateStatus}}' 2>/dev/null || true
+              echo ""
+              echo "=== END DIAGNOSTIC ==="
             fi
 
             sleep 5
           done
 
           echo "::error::API service failed to converge within 300s"
-          docker service ps "${SERVICE_NAME}" --no-trunc --format "table {{.Name}}\t{{.CurrentState}}\t{{.Error}}" 2>&1 || true
-          docker service logs "${SERVICE_NAME}" --tail 100 --no-task-ids 2>&1 || true
+          echo "=== FINAL DIAGNOSTIC ==="
+          docker service ps "${SERVICE_NAME}" --no-trunc \
+            --format "table {{.Name}}\t{{.Node}}\t{{.CurrentState}}\t{{.Error}}" 2>&1 | head -20 || true
+          echo "--- Final Container Logs ---"
+          docker service logs "${SERVICE_NAME}" --tail 100 --raw 2>&1 || true
+          echo "--- Update Status ---"
+          docker service inspect "${SERVICE_NAME}" --format '{{json .UpdateStatus}}' 2>/dev/null || true
           exit 1
 
       - name: Notify - Deploy Concluido
