@@ -2,11 +2,13 @@
 set -e
 
 echo "Running database migrations..."
-# Retry loop: wait for PostgreSQL to be ready before running migrations
+# Use 'python -m alembic' instead of 'alembic' CLI directly.
+# Python -m adds CWD (/app) to sys.path, which is needed for db_models imports.
+# The 'alembic' CLI script adds /usr/local/bin/ to sys.path instead.
 MAX_RETRIES=30
 RETRY_INTERVAL=2
 for i in $(seq 1 $MAX_RETRIES); do
-    if alembic upgrade head 2>&1; then
+    if python -m alembic upgrade head 2>&1; then
         echo "Migrations completed successfully."
         break
     fi
