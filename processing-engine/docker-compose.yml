@@ -9,6 +9,31 @@ services:
       - "5432:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  api:
+    build: .
+    ports:
+      - "8000:8000"
+    environment:
+      DATABASE_URL: postgresql://postgres:postgres@postgres:5432/processing_engine
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-sk-dummy}
+      API_KEY: ${API_KEY:-dev-api-key}
+      ENGINE_ROLE: both
+      LOG_LEVEL: DEBUG
+      BATCHER_ENABLED: "true"
+      BATCHER_POLL_INTERVAL_SECONDS: "5"
+      BATCHER_DEFAULT_BATCH_SIZE: "50"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    volumes:
+      - ./app:/app/app
+      - ./db_models:/app/db_models
 
 volumes:
   pgdata:
