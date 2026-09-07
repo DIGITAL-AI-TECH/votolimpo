@@ -261,43 +261,41 @@ jobs:
       - name: Health Check
         env:
           IMAGE_SHA: ${{ needs.docker.outputs.image_sha }}
+          TAG: ${{ needs.docker.outputs.image_sha }}
         run: |
           SERVICE_NAME="processing-engine_api"
+          echo "Expected image tag: ${TAG}"
           echo "Aguardando convergencia do servico..."
 
-          # Dump logs once early for debugging
-          sleep 15
-          echo "=== PostgreSQL service status ==="
-          docker service ps "processing-engine_postgres" --no-trunc 2>&1 || true
-          echo "=== PostgreSQL logs ==="
-          docker service logs "processing-engine_postgres" --tail 20 2>&1 || true
-          echo "=== API service logs ==="
-          docker service logs "${SERVICE_NAME}" --tail 50 2>&1 || true
-          echo "=== End early logs ==="
-
-          for i in $(seq 1 36); do
+          for i in $(seq 1 60); do
             sleep 5
-            STATUS=$(docker service ps "${SERVICE_NAME}" --format "{{.CurrentState}}" 2>/dev/null | head -1)
-            echo "[$i/36] ${STATUS}"
-            if echo "${STATUS}" | grep -q "^Running"; then
-              echo "=== Service logs ==="
+            # Get current state and image of the most recent task
+            TASK_INFO=$(docker service ps "${SERVICE_NAME}" --format "{{.CurrentState}} | {{.Image}}" --no-trunc 2>/dev/null | head -1)
+            echo "[$i/60] ${TASK_INFO}"
+
+            STATE=$(echo "${TASK_INFO}" | cut -d'|' -f1 | xargs)
+
+            if echo "${STATE}" | grep -q "^Running"; then
+              # Verify it's actually healthy by checking the container
+              echo "=== Service logs (last 20 lines) ==="
               docker service logs "${SERVICE_NAME}" --tail 20 2>&1 || true
-              echo "Servico saudavel!"
+              echo "Servico convergiu com sucesso!"
               exit 0
             fi
-            if echo "${STATUS}" | grep -qE "^(Failed|Rejected|Shutdown)"; then
-              echo "Servico falhou: ${STATUS}"
-              echo "=== Service logs ==="
-              docker service logs "${SERVICE_NAME}" --tail 50 2>&1 || true
-              echo "=== Service PS (full) ==="
-              docker service ps "${SERVICE_NAME}" --no-trunc 2>&1 || true
-              exit 1
+
+            # Every 30s, dump logs for debugging
+            if [ $((i % 6)) -eq 0 ]; then
+              echo "=== Periodic debug dump ==="
+              docker service logs "${SERVICE_NAME}" --tail 10 2>&1 || true
+              echo "=== PostgreSQL ==="
+              docker service ps "processing-engine_postgres" --format "{{.CurrentState}}" 2>/dev/null | head -1
             fi
           done
-          echo "Timeout esperando convergencia — verificar manualmente"
-          echo "=== Service logs ==="
-          docker service logs "${SERVICE_NAME}" --tail 50 2>&1 || true
-          echo "=== Service PS ==="
+
+          echo "Timeout (300s) esperando convergencia"
+          echo "=== Final service logs ==="
+          docker service logs "${SERVICE_NAME}" --tail 80 2>&1 || true
+          echo "=== Final service PS ==="
           docker service ps "${SERVICE_NAME}" --no-trunc 2>&1 || true
           exit 1
 

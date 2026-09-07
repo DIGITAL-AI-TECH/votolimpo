@@ -38,8 +38,8 @@ services:
       update_config:
         parallelism: 1
         delay: 10s
-        order: start-first
-        failure_action: rollback
+        order: stop-first
+        failure_action: pause
       rollback_config:
         parallelism: 1
         delay: 5s
