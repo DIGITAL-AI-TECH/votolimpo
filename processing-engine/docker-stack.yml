@@ -8,9 +8,13 @@ services:
       - DB_PORT=5432
       - DB_NAME=processing_engine
       - DB_USER=postgres
-      - DB_PASSWORD=${DB_PASSWORD}
-      - OPENAI_API_KEY=${OPENAI_API_KEY}
-      - API_KEY=${API_KEY}
+      # DB_PASSWORD, OPENAI_API_KEY, API_KEY are injected via
+      # `docker service update --env-add` in the CI/CD pipeline.
+      # This avoids shell/Compose variable interpolation issues with
+      # special characters ($, !, etc.) in secrets.
+      - DB_PASSWORD=${DB_PASSWORD:-changeme}
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-placeholder}
+      - API_KEY=${API_KEY:-placeholder}
       - ENGINE_ROLE=both
       - WORKER_POLL_INTERVAL_SECONDS=1.0
       - LOG_LEVEL=INFO
@@ -60,7 +64,8 @@ services:
     environment:
       - POSTGRES_DB=processing_engine
       - POSTGRES_USER=postgres
-      - POSTGRES_PASSWORD=${DB_PASSWORD}
+      # Password set via initial deploy env or synced via ALTER ROLE in CI/CD.
+      - POSTGRES_PASSWORD=${DB_PASSWORD:-changeme}
     volumes:
       - type: volume
         source: pgdata

@@ -201,57 +201,6 @@ jobs:
       - name: Login no Registry
         run: echo "${{ secrets.REGISTRY_PASSWORD }}" | docker login ${{ env.REGISTRY }} -u "${{ secrets.REGISTRY_USER }}" --password-stdin
 
-      - name: Clean broken stack (one-time password reset)
-        env:
-          DB_PASSWORD: ${{ secrets.PE_DB_PASSWORD }}
-        run: |
-          STACK_NAME="processing-engine"
-          # ONE-TIME FIX: The pgdata volume was initialized with an empty password
-          # during the first deploy. Even though PostgreSQL is "Running", it has the
-          # wrong password stored in pg_hba.conf/data. We must nuke the volume.
-          # TODO: Remove this step once the stack is stable with correct password.
-          if docker stack ls | grep -q "^${STACK_NAME} "; then
-            echo "Stack exists — removing for clean password reset..."
-            docker stack rm "${STACK_NAME}"
-            echo "Waiting for stack removal (services + networks)..."
-            # Wait until the stack is fully removed (services, networks, containers)
-            for i in $(seq 1 60); do
-              # Check if any containers from the stack still exist (including on all nodes)
-              REMAINING=$(docker ps -a --filter "label=com.docker.stack.namespace=${STACK_NAME}" -q | wc -l)
-              # Also check if services still exist
-              SVCS=$(docker service ls --filter "label=com.docker.stack.namespace=${STACK_NAME}" -q | wc -l)
-              echo "  [$i/60] Remaining containers: ${REMAINING}, services: ${SVCS}"
-              if [ "${REMAINING}" -eq 0 ] && [ "${SVCS}" -eq 0 ]; then
-                echo "Stack fully removed."
-                break
-              fi
-              sleep 2
-            done
-            # Extra wait to ensure filesystem handles are released
-            sleep 5
-            # Remove the volume with wrong password — MUST succeed
-            echo "Removing pgdata volume..."
-            if docker volume rm "${STACK_NAME}_pgdata" 2>&1; then
-              echo "Volume removed successfully."
-            else
-              echo "WARNING: volume rm failed — trying force..."
-              # List what might be using it
-              docker volume inspect "${STACK_NAME}_pgdata" 2>&1 || true
-              docker volume rm "${STACK_NAME}_pgdata" 2>&1 || echo "CRITICAL: Could not remove volume!"
-            fi
-            # Verify volume is gone
-            if docker volume inspect "${STACK_NAME}_pgdata" >/dev/null 2>&1; then
-              echo "CRITICAL: Volume still exists after removal attempt!"
-              docker volume inspect "${STACK_NAME}_pgdata" 2>&1 || true
-              exit 1
-            else
-              echo "Confirmed: volume does not exist."
-            fi
-            echo "Clean slate ready — will deploy with correct DB_PASSWORD."
-          else
-            echo "No existing stack — fresh deploy."
-          fi
-
       - name: Deploy ou Update no Swarm
         env:
           IMAGE_SHA: ${{ needs.docker.outputs.image_sha }}
@@ -261,73 +210,68 @@ jobs:
           API_KEY: ${{ secrets.PE_API_KEY }}
         run: |
           IMG="${IMAGE_NAME}:${TAG}"
+          STACK_NAME="processing-engine"
 
-          # Pull da nova imagem no manager para que o Swarm nao re-baixe durante deploy
           echo "Pulling ${IMG}..."
-          timeout 300 docker pull "${IMG}" || echo "WARNING: pull timed out — Swarm will pull via --with-registry-auth"
+          timeout 300 docker pull "${IMG}" || echo "WARNING: pull timed out"
 
           echo "TAG=${TAG}"
           echo "DB_PASSWORD length: ${#DB_PASSWORD}"
-          echo "Image to deploy: ${IMG}"
 
-          STACK_NAME="processing-engine"
+          # Check if stack already exists
+          FRESH_DEPLOY=false
+          if docker service inspect "${STACK_NAME}_postgres" >/dev/null 2>&1; then
+            echo "Stack exists — will update API service."
+          else
+            echo "Fresh deploy — creating stack from scratch."
+            FRESH_DEPLOY=true
 
-          # Resolve compose file with Python to avoid shell/$-interpolation issues.
-          # Python reads env vars as raw bytes and escapes $ as $$ for Compose.
-          python3 processing-engine/scripts/resolve_compose.py \
-            processing-engine/docker-stack.yml \
-            /tmp/docker-stack-resolved.yml
+            docker stack deploy \
+              --with-registry-auth \
+              --compose-file processing-engine/docker-stack.yml \
+              "${STACK_NAME}"
 
-          docker stack deploy \
-            --with-registry-auth \
-            --compose-file /tmp/docker-stack-resolved.yml \
-            "${STACK_NAME}"
+            # Wait for postgres service to be created
+            echo "Waiting for PostgreSQL to start..."
+            for i in $(seq 1 30); do
+              PG_STATE=$(docker service ps "${STACK_NAME}_postgres" --format "{{.CurrentState}}" 2>/dev/null | head -1 || echo "")
+              echo "  [$i/30] PostgreSQL: ${PG_STATE}"
+              if echo "${PG_STATE}" | grep -q "^Running"; then
+                echo "PostgreSQL is running."
+                break
+              fi
+              sleep 5
+            done
+          fi
 
-          # Wait for postgres to be ready before forcing api update
-          echo "Waiting for PostgreSQL to start..."
-          for i in $(seq 1 30); do
-            PG_STATE=$(docker service ps "${STACK_NAME}_postgres" --format "{{.CurrentState}}" 2>/dev/null | head -1 || echo "")
-            echo "  [$i/30] PostgreSQL: ${PG_STATE}"
-            if echo "${PG_STATE}" | grep -q "^Running"; then
-              echo "PostgreSQL is running."
-              break
-            fi
-            sleep 5
-          done
-
-          # Force the api service to use the new image (--detach to not block)
-          # The Health Check step handles convergence monitoring
-          echo "Forcing image update on api service..."
+          # Always inject secrets via service update to avoid Compose interpolation issues.
+          # This guarantees the exact password value reaches the container, regardless of
+          # special characters ($, !, etc.)
+          echo "Injecting secrets into API service via service update..."
           docker service update \
             --image "${IMG}" \
+            --env-add "DB_PASSWORD=${DB_PASSWORD}" \
+            --env-add "OPENAI_API_KEY=${OPENAI_API_KEY}" \
+            --env-add "API_KEY=${API_KEY}" \
             --with-registry-auth \
-            --force \
             --detach \
             "${STACK_NAME}_api"
 
-          echo "Service update dispatched. Health Check step will monitor convergence."
+          echo "Service update dispatched."
 
-      - name: Debug - Verify env vars and PG auth
+      - name: Sync PostgreSQL password
         env:
           DB_PASSWORD: ${{ secrets.PE_DB_PASSWORD }}
         run: |
-          echo "=== 1. Service inspect — password comparison ==="
-          SECRET_HASH=$(printf '%s' "$DB_PASSWORD" | md5sum | cut -d' ' -f1)
-          echo "GitHub Secret: len=${#DB_PASSWORD}, md5=${SECRET_HASH}"
+          STACK_NAME="processing-engine"
+          echo "Ensuring PostgreSQL password matches the GitHub Secret..."
 
-          PG_PW=$(docker service inspect processing-engine_postgres \
-            --format '{{range .Spec.TaskTemplate.ContainerSpec.Env}}{{println .}}{{end}}' 2>/dev/null | \
-            grep '^POSTGRES_PASSWORD=' | cut -d'=' -f2-)
-          PG_HASH=$(printf '%s' "$PG_PW" | md5sum | cut -d' ' -f1)
-          echo "PG POSTGRES_PASSWORD: len=${#PG_PW}, md5=${PG_HASH}"
-          [ "$PG_HASH" = "$SECRET_HASH" ] && echo "MATCH" || echo "MISMATCH!"
-
-          echo ""
-          echo "=== 2. Wait for PG container to be healthy ==="
+          # Wait for PG container to be running
+          PG_CONTAINER=""
           for i in $(seq 1 30); do
-            PG_CONTAINER=$(docker ps --filter "name=processing-engine_postgres" --filter "status=running" -q | head -1)
+            PG_CONTAINER=$(docker ps --filter "name=${STACK_NAME}_postgres" --filter "status=running" -q | head -1)
             if [ -n "$PG_CONTAINER" ]; then
-              echo "Found PG container: $PG_CONTAINER (attempt $i)"
+              echo "Found PG container: ${PG_CONTAINER} (attempt $i)"
               break
             fi
             echo "  [$i/30] Waiting for PG container..."
@@ -335,61 +279,31 @@ jobs:
           done
 
           if [ -z "$PG_CONTAINER" ]; then
-            echo "ERROR: PG container not found on this node!"
-            echo "All containers:"
-            docker ps -a --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}" | head -20
-            echo "Services:"
-            docker service ps processing-engine_postgres --no-trunc 2>&1 | head -10
-          else
-            echo ""
-            echo "=== 3. Check POSTGRES_PASSWORD env inside PG container ==="
-            INSIDE_PW=$(docker exec "$PG_CONTAINER" sh -c 'echo $POSTGRES_PASSWORD' 2>&1)
-            INSIDE_HASH=$(printf '%s' "$INSIDE_PW" | md5sum | cut -d' ' -f1)
-            INSIDE_LEN=${#INSIDE_PW}
-            echo "Inside PG container: len=${INSIDE_LEN}, md5=${INSIDE_HASH}"
-            [ "$INSIDE_HASH" = "$SECRET_HASH" ] && echo "MATCH with GitHub Secret" || echo "MISMATCH with GitHub Secret!"
-
-            echo ""
-            echo "=== 4. Test psql auth INSIDE PG container ==="
-            docker exec -e PGPASSWORD="$DB_PASSWORD" "$PG_CONTAINER" \
-              psql -U postgres -d processing_engine -c "SELECT 'auth_ok' as result" \
-              2>&1 || echo "FAILED: psql with GitHub Secret password"
-
-            echo ""
-            echo "=== 5. Test psql with INSIDE password ==="
-            docker exec "$PG_CONTAINER" \
-              psql -U postgres -d processing_engine -c "SELECT 'local_auth_ok' as result" \
-              2>&1 || echo "FAILED: psql without explicit password (local trust)"
-
-            echo ""
-            echo "=== 6. Check pg_hba.conf ==="
-            docker exec "$PG_CONTAINER" cat /var/lib/postgresql/data/pg_hba.conf 2>&1 | tail -10
-
-            echo ""
-            echo "=== 7. PG password hash from pg_authid ==="
-            docker exec "$PG_CONTAINER" \
-              psql -U postgres -c "SELECT rolname, left(rolpassword,25) as pw_hash FROM pg_authid WHERE rolname='postgres'" \
-              2>&1 || echo "Could not query pg_authid"
-
-            echo ""
-            echo "=== 8. Hex dump comparison ==="
-            echo "GitHub Secret hex:"
-            printf '%s' "${DB_PASSWORD}" | xxd | head -3
-            echo "Inside PG env hex:"
-            printf '%s' "${INSIDE_PW}" | xxd | head -3
+            echo "ERROR: PostgreSQL container not found!"
+            docker service ps "${STACK_NAME}_postgres" --no-trunc 2>&1 | head -5
+            exit 1
           fi
 
-          echo ""
-          echo "=== 9. Test via attachable overlay network ==="
-          docker run --rm --network processing-engine_internal \
-            -e PGPASSWORD="${DB_PASSWORD}" \
-            pgvector/pgvector:pg16 \
-            psql -h postgres -U postgres -d processing_engine -c "SELECT 'overlay_ok' as result" \
-            2>&1 || echo "FAILED: overlay network psql test"
-
-          echo ""
-          echo "=== 10. API container logs (last 20 lines) ==="
-          docker service logs processing-engine_api --tail 20 2>&1 || echo "No API logs yet"
+          # Test if auth works with the expected password
+          if docker exec -e PGPASSWORD="${DB_PASSWORD}" "$PG_CONTAINER" \
+            psql -U postgres -d processing_engine -c "SELECT 1" >/dev/null 2>&1; then
+            echo "Password auth OK — no sync needed."
+          else
+            echo "Password mismatch — updating PostgreSQL password via ALTER ROLE..."
+            # Use local trust auth (default in official PG image for unix socket).
+            # Pass password via env var and use double-quoted sh -c so $NEWPW expands.
+            docker exec -e NEWPW="${DB_PASSWORD}" "$PG_CONTAINER" \
+              sh -c "psql -U postgres -c \"ALTER ROLE postgres WITH PASSWORD '\$NEWPW';\"" 2>&1
+            echo "Password updated. Verifying..."
+            if docker exec -e PGPASSWORD="${DB_PASSWORD}" "$PG_CONTAINER" \
+              psql -U postgres -d processing_engine -c "SELECT 'auth_ok'" >/dev/null 2>&1; then
+              echo "Password sync confirmed."
+            else
+              echo "CRITICAL: Password update failed! Check pg_hba.conf."
+              docker exec "$PG_CONTAINER" cat /var/lib/postgresql/data/pg_hba.conf 2>&1 | tail -5
+              exit 1
+            fi
+          fi
 
       - name: Health Check
         env:
