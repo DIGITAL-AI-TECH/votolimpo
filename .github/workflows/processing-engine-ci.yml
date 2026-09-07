@@ -387,17 +387,7 @@ jobs:
                 docker run --rm --network processing-engine_pe-net \
                   -e DB_PASSWORD="${DB_PASSWORD}" \
                   "${IMAGE_NAME}:${TAG}" \
-                  python -c "
-import asyncio, os
-async def test():
-    import asyncpg
-    pw = os.environ['DB_PASSWORD']
-    print(f'asyncpg test: pw_len={len(pw)}')
-    conn = await asyncpg.connect(host='postgres', port=5432, user='postgres', password=pw, database='processing_engine')
-    print('asyncpg: CONNECTED OK')
-    await conn.close()
-asyncio.run(test())
-" 2>&1 || echo "  ASYNCPG OVERLAY AUTH FAILED!"
+                  python -c "import asyncio,os;pw=os.environ['DB_PASSWORD'];print(f'asyncpg test: pw_len={len(pw)}');exec('import asyncpg\nasync def t():\n c=await asyncpg.connect(host=\"postgres\",port=5432,user=\"postgres\",password=pw,database=\"processing_engine\")\n print(\"asyncpg: CONNECTED OK\")\n await c.close()\nasyncio.run(t())')" 2>&1 || echo "  ASYNCPG OVERLAY AUTH FAILED!"
                 echo "=== END Overlay Auth Test ==="
               else
                 echo "WARNING: PG container not found on this node ($(hostname)). Cannot run local auth test."
