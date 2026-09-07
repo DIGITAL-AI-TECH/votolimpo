@@ -3,18 +3,22 @@ FROM python:3.12-slim AS builder
 
 WORKDIR /build
 
+# Extract dependencies from pyproject.toml and install ONLY those.
+# We do NOT install the package itself — avoids hatchling needing source
+# files and eliminates stub packages shadowing real code in site-packages.
 COPY pyproject.toml ./
-# Create stub packages so hatchling can build the wheel metadata.
-# Actual source code is copied in the final stage — here we only need deps.
-RUN mkdir -p app db_models && \
-    touch app/__init__.py db_models/__init__.py && \
-    pip install --no-cache-dir --prefix=/install .
+RUN python -c "\
+import tomllib, pathlib; \
+data = tomllib.load(open('pyproject.toml', 'rb')); \
+deps = data['project']['dependencies']; \
+pathlib.Path('requirements.txt').write_text('\n'.join(deps))" && \
+    pip install --no-cache-dir --prefix=/install -r requirements.txt
 
 FROM python:3.12-slim
 
 WORKDIR /app
 
-# Copy installed deps
+# Copy installed deps (NO stub packages — only third-party libraries)
 COPY --from=builder /install /usr/local
 
 # Copy application code
@@ -33,7 +37,8 @@ ENV PYTHONUNBUFFERED=1 \
 
 EXPOSE 8000
 
-HEALTHCHECK --interval=30s --timeout=5s --retries=3 \
-    CMD python -c "import httpx; r=httpx.get('http://localhost:8000/health'); exit(0 if r.status_code in (200,503) else 1)"
+# No HEALTHCHECK here — the docker-stack.yml defines the production health
+# check with appropriate start_period and retries for Swarm. Having two
+# conflicting health checks causes confusion during debugging.
 
 CMD ["./entrypoint.sh"]

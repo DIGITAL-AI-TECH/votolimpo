@@ -219,6 +219,22 @@ jobs:
 
           echo "Smoke test passed!"
 
+      - name: Validate secrets
+        env:
+          DB_PASSWORD: ${{ secrets.PE_DB_PASSWORD }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          API_KEY: ${{ secrets.PE_API_KEY }}
+        run: |
+          MISSING=""
+          [ -z "${DB_PASSWORD}" ] && MISSING="${MISSING} PE_DB_PASSWORD"
+          [ -z "${API_KEY}" ] && MISSING="${MISSING} PE_API_KEY"
+          if [ -n "${MISSING}" ]; then
+            echo "::error::Missing required GitHub Secrets:${MISSING}"
+            exit 1
+          fi
+          echo "All required secrets present."
+          echo "DB_PASSWORD length: ${#DB_PASSWORD}"
+
       - name: Deploy ou Update no Swarm
         env:
           IMAGE_SHA: ${{ needs.docker.outputs.image_sha }}
@@ -231,48 +247,55 @@ jobs:
           STACK_NAME="processing-engine"
 
           echo "TAG=${TAG}"
-          echo "DB_PASSWORD length: ${#DB_PASSWORD}"
 
-          # Check if stack already exists
-          FRESH_DEPLOY=false
+          # Step 1: Ensure stack exists (API starts with replicas=0, no race condition)
           if docker service inspect "${STACK_NAME}_postgres" >/dev/null 2>&1; then
-            echo "Stack exists — will update API service."
+            echo "Stack exists — will update services."
           else
-            echo "Fresh deploy — creating stack from scratch."
-            FRESH_DEPLOY=true
-
+            echo "Fresh deploy — creating stack (API starts with 0 replicas)."
             docker stack deploy \
               --with-registry-auth \
               --compose-file processing-engine/docker-stack.yml \
               "${STACK_NAME}"
-
-            # Wait for postgres service to be created
-            echo "Waiting for PostgreSQL to start..."
-            for i in $(seq 1 30); do
-              PG_STATE=$(docker service ps "${STACK_NAME}_postgres" --format "{{.CurrentState}}" 2>/dev/null | head -1 || echo "")
-              echo "  [$i/30] PostgreSQL: ${PG_STATE}"
-              if echo "${PG_STATE}" | grep -q "^Running"; then
-                echo "PostgreSQL is running."
-                break
-              fi
-              sleep 5
-            done
           fi
 
-          # Always inject secrets via service update to avoid Compose interpolation issues.
-          # This guarantees the exact password value reaches the container, regardless of
-          # special characters ($, !, etc.)
-          echo "Injecting secrets into API service via service update..."
+          # Step 2: Wait for PostgreSQL to be healthy
+          echo "Waiting for PostgreSQL to be ready..."
+          for i in $(seq 1 60); do
+            PG_STATE=$(docker service ps "${STACK_NAME}_postgres" --format "{{.CurrentState}}" 2>/dev/null | head -1 || echo "")
+            echo "  [$i/60] PostgreSQL: ${PG_STATE}"
+            if echo "${PG_STATE}" | grep -q "^Running"; then
+              echo "PostgreSQL is running."
+              break
+            fi
+            if [ "$i" -eq 60 ]; then
+              echo "::error::PostgreSQL failed to start within 300s"
+              docker service logs "${STACK_NAME}_postgres" --tail 30 2>&1 || true
+              exit 1
+            fi
+            sleep 5
+          done
+
+          # Step 3: Set PG password via service update (handles first deploy + rotation)
+          echo "Injecting POSTGRES_PASSWORD into postgres service..."
+          docker service update \
+            --env-add "POSTGRES_PASSWORD=${DB_PASSWORD}" \
+            --detach \
+            "${STACK_NAME}_postgres"
+
+          # Step 4: Inject secrets + image into API and scale to 1 replica (atomic)
+          echo "Injecting secrets into API service and scaling to 1 replica..."
           docker service update \
             --image "${IMG}" \
             --env-add "DB_PASSWORD=${DB_PASSWORD}" \
             --env-add "OPENAI_API_KEY=${OPENAI_API_KEY}" \
             --env-add "API_KEY=${API_KEY}" \
+            --replicas 1 \
             --with-registry-auth \
             --detach \
             "${STACK_NAME}_api"
 
-          echo "Service update dispatched."
+          echo "Service update dispatched — API will start with correct secrets."
 
       - name: Sync PostgreSQL password
         env:
@@ -283,41 +306,60 @@ jobs:
           PG_HOST="postgres"
           PG_IMAGE="pgvector/pgvector:pg16"
           echo "Ensuring PostgreSQL password matches the GitHub Secret..."
-          echo "Using overlay network '${NETWORK}' to reach PG on any Swarm node."
 
-          # Wait for PG service to be healthy
-          for i in $(seq 1 30); do
-            PG_STATE=$(docker service ps "${STACK_NAME}_postgres" --format "{{.CurrentState}}" 2>/dev/null | head -1)
-            if echo "${PG_STATE}" | grep -q "^Running"; then
-              echo "PG service running (attempt $i): ${PG_STATE}"
+          # Wait for PG service to be healthy and accepting connections
+          echo "Waiting for PostgreSQL to accept connections..."
+          PG_READY=false
+          for i in $(seq 1 60); do
+            if docker run --rm --network "${NETWORK}" "${PG_IMAGE}" \
+              pg_isready -h "${PG_HOST}" -U postgres -d processing_engine >/dev/null 2>&1; then
+              echo "PostgreSQL accepting connections (attempt $i)."
+              PG_READY=true
               break
             fi
-            echo "  [$i/30] PG state: ${PG_STATE}"
-            sleep 3
+            echo "  [$i/60] PG not ready yet..."
+            sleep 5
           done
 
-          # Test auth via temporary container on the overlay network
+          if [ "${PG_READY}" = "false" ]; then
+            echo "::error::PostgreSQL never became ready for connections"
+            exit 1
+          fi
+
+          # Test auth with the expected password
           if docker run --rm --network "${NETWORK}" \
             -e PGPASSWORD="${DB_PASSWORD}" "${PG_IMAGE}" \
             psql -h "${PG_HOST}" -U postgres -d processing_engine -c "SELECT 1" >/dev/null 2>&1; then
             echo "Password auth OK — no sync needed."
           else
-            echo "Password mismatch — updating via ALTER ROLE (trust auth on overlay)..."
-            # First try connecting without password (trust/peer may work on fresh volume)
-            docker run --rm --network "${NETWORK}" \
-              -e NEWPW="${DB_PASSWORD}" "${PG_IMAGE}" \
-              sh -c "PGPASSWORD=changeme psql -h ${PG_HOST} -U postgres -c \"ALTER ROLE postgres WITH PASSWORD '\${NEWPW}';\"" 2>&1 || \
-            docker run --rm --network "${NETWORK}" \
-              -e NEWPW="${DB_PASSWORD}" "${PG_IMAGE}" \
-              sh -c "psql -h ${PG_HOST} -U postgres -c \"ALTER ROLE postgres WITH PASSWORD '\${NEWPW}';\"" 2>&1 || true
+            echo "Password mismatch — syncing via ALTER ROLE..."
+            # Try with 'changeme' (default from first deploy without POSTGRES_PASSWORD)
+            SYNC_OK=false
+            for OLD_PW in "changeme" "" "postgres"; do
+              echo "  Trying old password (length ${#OLD_PW})..."
+              if docker run --rm --network "${NETWORK}" \
+                -e PGPASSWORD="${OLD_PW}" -e NEWPW="${DB_PASSWORD}" "${PG_IMAGE}" \
+                sh -c 'psql -h '"${PG_HOST}"' -U postgres -c "ALTER ROLE postgres WITH PASSWORD '\''${NEWPW}'\''"' 2>&1; then
+                SYNC_OK=true
+                echo "  ALTER ROLE succeeded with old password."
+                break
+              fi
+            done
 
+            if [ "${SYNC_OK}" = "false" ]; then
+              echo "::error::Failed to sync PostgreSQL password — could not authenticate with any known old password"
+              exit 1
+            fi
+
+            # Verify the new password works
             echo "Verifying password sync..."
             if docker run --rm --network "${NETWORK}" \
               -e PGPASSWORD="${DB_PASSWORD}" "${PG_IMAGE}" \
               psql -h "${PG_HOST}" -U postgres -d processing_engine -c "SELECT 'auth_ok'" 2>&1; then
               echo "Password sync confirmed."
             else
-              echo "WARNING: Password sync may have failed. Health check will validate."
+              echo "::error::Password sync verification failed — ALTER ROLE succeeded but auth still fails"
+              exit 1
             fi
           fi
 
@@ -353,9 +395,9 @@ jobs:
               exit 0
             fi
 
-            # Check for repeated failures — if 3+ failed tasks, run diagnostic
+            # Check for repeated failures — if 3+ failed tasks, run diagnostic (once)
             FAILED_COUNT=$(docker service ps "${SERVICE_NAME}" --format "{{.CurrentState}}" 2>/dev/null | grep -c "^Failed" || echo "0")
-            if [ "${FAILED_COUNT}" -ge 3 ] && [ "$i" -eq 6 ]; then
+            if [ "${FAILED_COUNT}" -ge 3 ] && [ "$i" -ge 6 ] && [ "$((i % 12))" -eq 0 ]; then
               echo "=== DIAGNOSTIC: ${FAILED_COUNT} failed tasks detected ==="
               echo "=== All tasks (including failed) ==="
               docker service ps "${SERVICE_NAME}" --no-trunc --format "table {{.Name}}\t{{.CurrentState}}\t{{.Error}}" 2>&1 || true

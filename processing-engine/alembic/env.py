@@ -37,7 +37,7 @@ def _resolve_database_url() -> str | None:
         return url
 
     db_password = os.environ.get("DB_PASSWORD")
-    if db_password:
+    if db_password is not None and db_password != "":
         encoded_pw = urllib.parse.quote(db_password, safe="")
         db_user = os.environ.get("DB_USER", "postgres")
         db_host = os.environ.get("DB_HOST", "localhost")

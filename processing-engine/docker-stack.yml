@@ -8,13 +8,11 @@ services:
       - DB_PORT=5432
       - DB_NAME=processing_engine
       - DB_USER=postgres
-      # DB_PASSWORD, OPENAI_API_KEY, API_KEY are injected via
-      # `docker service update --env-add` in the CI/CD pipeline.
-      # This avoids shell/Compose variable interpolation issues with
-      # special characters ($, !, etc.) in secrets.
-      - DB_PASSWORD=${DB_PASSWORD:-changeme}
-      - OPENAI_API_KEY=${OPENAI_API_KEY:-placeholder}
-      - API_KEY=${API_KEY:-placeholder}
+      # DB_PASSWORD, OPENAI_API_KEY, API_KEY are NEVER set here.
+      # They are injected ONLY via `docker service update --env-add`
+      # in the CI/CD pipeline after PG is healthy. This eliminates:
+      # 1. Shell/Compose variable interpolation issues with special chars
+      # 2. Race condition where API starts with wrong password before update
       - ENGINE_ROLE=both
       - WORKER_POLL_INTERVAL_SECONDS=1.0
       - LOG_LEVEL=INFO
@@ -25,7 +23,10 @@ services:
       - traefik_public
       - pe-net
     deploy:
-      replicas: 1
+      # Start with 0 replicas — CI/CD pipeline scales up AFTER injecting
+      # secrets via `docker service update`. This prevents the race condition
+      # where the API starts before secrets are available.
+      replicas: 0
       resources:
         limits:
           cpus: "1.0"
@@ -57,15 +58,17 @@ services:
       interval: 15s
       timeout: 10s
       retries: 5
-      start_period: 60s
+      start_period: 120s
 
   postgres:
     image: pgvector/pgvector:pg16
     environment:
       - POSTGRES_DB=processing_engine
       - POSTGRES_USER=postgres
-      # Password set via initial deploy env or synced via ALTER ROLE in CI/CD.
-      - POSTGRES_PASSWORD=${DB_PASSWORD:-changeme}
+      # POSTGRES_PASSWORD is injected via `docker service update --env-add`
+      # in CI/CD. On very first deploy (empty volume), PG starts with trust
+      # auth until the password is set. The CI pipeline always syncs via
+      # ALTER ROLE after the service is up.
     volumes:
       - type: volume
         source: pgdata
