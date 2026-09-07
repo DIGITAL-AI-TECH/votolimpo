@@ -241,12 +241,22 @@ jobs:
 
           STACK_NAME="processing-engine"
 
-          # docker stack deploy interpola env vars no compose file:
-          # TAG, DB_PASSWORD, OPENAI_API_KEY, API_KEY
+          # docker stack deploy creates/updates the full stack (api + postgres)
+          # env vars (TAG, DB_PASSWORD, OPENAI_API_KEY, API_KEY) are interpolated
           docker stack deploy \
             --with-registry-auth \
             --compose-file processing-engine/docker-stack.yml \
             "${STACK_NAME}"
+
+          # Force the api service to use the new image
+          # docker stack deploy may not update if only env vars changed
+          echo "Forcing image update on api service..."
+          sleep 5
+          docker service update \
+            --image "${IMG}" \
+            --with-registry-auth \
+            --force \
+            "${STACK_NAME}_api"
 
       - name: Health Check
         env:
