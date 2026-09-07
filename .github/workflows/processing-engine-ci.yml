@@ -272,10 +272,16 @@ jobs:
 
           STACK_NAME="processing-engine"
 
-          # Generate compose file with env vars substituted to avoid
-          # Docker Compose $-interpolation issues with special chars in passwords.
-          # envsubst replaces ${VAR} with actual values before Compose sees the file.
-          envsubst < processing-engine/docker-stack.yml > /tmp/docker-stack-resolved.yml
+          # Step 1: envsubst resolves ${VAR} patterns with actual values
+          envsubst < processing-engine/docker-stack.yml > /tmp/docker-stack-envsubst.yml
+
+          # Step 2: Escape any remaining $ in resolved values so Docker Compose
+          # does NOT re-interpolate them. Passwords with $ (e.g. "abc$def") would
+          # otherwise be mangled by Compose's own variable expansion.
+          # We escape ALL $ as $$ EXCEPT for ${ which would be a Compose variable.
+          # Since envsubst already resolved all ${VAR}, any remaining $ is literal.
+          sed 's/\$/\$\$/g' /tmp/docker-stack-envsubst.yml > /tmp/docker-stack-resolved.yml
+
           echo "=== Resolved compose file (sanitized) ==="
           sed -E 's/(PASSWORD|KEY|URL)=(.{3}).*(..)/\1=\2***\3/' /tmp/docker-stack-resolved.yml || true
 
@@ -310,26 +316,25 @@ jobs:
 
       - name: Debug - Verify env vars in services
         run: |
-          echo "=== API service env vars (sanitized) ==="
-          docker service inspect processing-engine_api --format '{{range .Spec.TaskTemplate.ContainerSpec.Env}}{{println .}}{{end}}' 2>/dev/null | \
-            sed -E 's/(PASSWORD|KEY)=(.)(.*)(.)$/\1=\2***\4/' || echo "Could not inspect api service"
-          echo ""
-          echo "=== PostgreSQL service env vars (sanitized) ==="
-          docker service inspect processing-engine_postgres --format '{{range .Spec.TaskTemplate.ContainerSpec.Env}}{{println .}}{{end}}' 2>/dev/null | \
-            sed -E 's/(PASSWORD|KEY)=(.)(.*)(.)$/\1=\2***\4/' || echo "Could not inspect postgres service"
-          echo ""
-          echo "=== Checking if DB_PASSWORD in API matches PostgreSQL ==="
-          API_PW=$(docker service inspect processing-engine_api --format '{{range .Spec.TaskTemplate.ContainerSpec.Env}}{{println .}}{{end}}' 2>/dev/null | grep 'DB_PASSWORD\|postgresql://' | head -1)
-          PG_PW=$(docker service inspect processing-engine_postgres --format '{{range .Spec.TaskTemplate.ContainerSpec.Env}}{{println .}}{{end}}' 2>/dev/null | grep 'POSTGRES_PASSWORD' | head -1)
-          # Extract just the password values for comparison (md5 hash)
-          API_HASH=$(echo "$API_PW" | grep -oP '(?<=:)[^@]+(?=@)' | md5sum | cut -d' ' -f1 || echo "n/a")
-          PG_HASH=$(echo "$PG_PW" | cut -d'=' -f2 | md5sum | cut -d' ' -f1 || echo "n/a")
-          echo "API DB password hash: ${API_HASH}"
-          echo "PG POSTGRES_PASSWORD hash: ${PG_HASH}"
+          echo "=== Checking if DB_PASSWORD in API matches POSTGRES_PASSWORD ==="
+          # Extract raw password values from service inspect and hash them
+          API_PW=$(docker service inspect processing-engine_api \
+            --format '{{range .Spec.TaskTemplate.ContainerSpec.Env}}{{println .}}{{end}}' 2>/dev/null | \
+            grep '^DB_PASSWORD=' | cut -d'=' -f2-)
+          PG_PW=$(docker service inspect processing-engine_postgres \
+            --format '{{range .Spec.TaskTemplate.ContainerSpec.Env}}{{println .}}{{end}}' 2>/dev/null | \
+            grep '^POSTGRES_PASSWORD=' | cut -d'=' -f2-)
+          # Compare via md5 hash (never log the password itself)
+          API_HASH=$(printf '%s' "$API_PW" | md5sum | cut -d' ' -f1)
+          PG_HASH=$(printf '%s' "$PG_PW" | md5sum | cut -d' ' -f1)
+          echo "API DB_PASSWORD:      len=${#API_PW}, md5=${API_HASH}"
+          echo "PG POSTGRES_PASSWORD: len=${#PG_PW}, md5=${PG_HASH}"
           if [ "$API_HASH" = "$PG_HASH" ]; then
             echo "MATCH: Passwords are identical."
           else
             echo "MISMATCH: API and PostgreSQL have DIFFERENT passwords!"
+            echo "API first/last char: ${API_PW:0:1}...${API_PW: -1}"
+            echo "PG  first/last char: ${PG_PW:0:1}...${PG_PW: -1}"
           fi
 
       - name: Health Check
