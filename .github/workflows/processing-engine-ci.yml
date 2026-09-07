@@ -8,7 +8,13 @@ on:
     branches: [main]
     paths: ["processing-engine/**"]
 
+# Cancel older runs on the same branch — only latest commit deploys
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 env:
+  REGISTRY: registry.digital-ai.tech
   N8N_NOTIFY_URL: https://webhook.digital-ai.tech/webhook/1c708636-864f-469d-8540-0dab5c145c7c
   IMAGE_NAME: registry.digital-ai.tech/processing-engine
 
@@ -104,7 +110,7 @@ jobs:
       - name: Login to Private Registry
         uses: docker/login-action@v3
         with:
-          registry: registry.digital-ai.tech
+          registry: ${{ env.REGISTRY }}
           username: ${{ secrets.REGISTRY_USER }}
           password: ${{ secrets.REGISTRY_PASSWORD }}
 
@@ -159,14 +165,16 @@ jobs:
             }))")" || true
 
   # ──────────────────────────────────────────────
-  # Job 4: Deploy to Docker Swarm (depends on docker)
+  # Job 4: Deploy to Docker Swarm (self-hosted runner on Swarm node)
   # ──────────────────────────────────────────────
   deploy:
-    runs-on: ubuntu-latest
+    name: Deploy — Swarm
+    runs-on: [self-hosted, swarm]
     needs: docker
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
-    environment: production
     steps:
+      - uses: actions/checkout@v4
+
       - name: Notify - Deploy em Andamento
         env:
           COMMIT_MSG: ${{ github.event.head_commit.message }}
@@ -185,36 +193,60 @@ jobs:
               'stage':'Deploy Swarm','message':'Atualizando servico no Docker Swarm...'
             }))")" || true
 
-      - name: Deploy via SSH
-        uses: appleboy/ssh-action@v1
-        with:
-          host: ${{ secrets.SWARM_HOST }}
-          username: ${{ secrets.SWARM_USER }}
-          key: ${{ secrets.SWARM_SSH_KEY }}
-          script: |
-            # Login no registry privado
-            echo "${{ secrets.REGISTRY_PASSWORD }}" | docker login registry.digital-ai.tech -u "${{ secrets.REGISTRY_USER }}" --password-stdin
+      - name: Login no Registry
+        run: echo "${{ secrets.REGISTRY_PASSWORD }}" | docker login ${{ env.REGISTRY }} -u "${{ secrets.REGISTRY_USER }}" --password-stdin
 
-            # Pull da nova imagem
-            docker pull ${{ env.IMAGE_NAME }}:${{ needs.docker.outputs.image_sha }}
+      - name: Deploy ou Update no Swarm
+        env:
+          IMAGE_SHA: ${{ needs.docker.outputs.image_sha }}
+        run: |
+          IMG="${IMAGE_NAME}:${IMAGE_SHA}"
 
-            # Update do servico com a nova imagem
+          # Pull da nova imagem no manager para que o Swarm nao re-baixe durante deploy
+          echo "Pulling ${IMG}..."
+          timeout 300 docker pull "${IMG}" || echo "WARNING: pull timed out — Swarm will pull via --with-registry-auth"
+
+          STACK_NAME="processing-engine"
+          SERVICE_NAME="${STACK_NAME}_api"
+
+          if docker stack ls | grep -q "^${STACK_NAME} "; then
+            echo "Stack existe — fazendo service update..."
             docker service update \
-              --image ${{ env.IMAGE_NAME }}:${{ needs.docker.outputs.image_sha }} \
+              --image "${IMG}" \
               --with-registry-auth \
-              processing-engine_api || true
+              "${SERVICE_NAME}"
+          else
+            echo "Stack nao existe — fazendo primeiro deploy..."
+            docker stack deploy \
+              --with-registry-auth \
+              --compose-file processing-engine/docker-stack.yml \
+              "${STACK_NAME}"
+          fi
 
-            # Verificar convergencia (max 60s)
-            for i in $(seq 1 12); do
-              STATUS=$(docker service ps processing-engine_api --format '{{.CurrentState}}' | head -1)
-              if echo "$STATUS" | grep -q "Running"; then
-                echo "Service converged: $STATUS"
-                exit 0
-              fi
-              echo "Waiting for convergence... ($i/12) - $STATUS"
-              sleep 5
-            done
-            echo "WARNING: Service may not have converged within 60s"
+      - name: Health Check
+        env:
+          IMAGE_SHA: ${{ needs.docker.outputs.image_sha }}
+        run: |
+          SERVICE_NAME="processing-engine_api"
+          echo "Aguardando convergencia do servico..."
+          for i in $(seq 1 24); do
+            sleep 5
+            STATUS=$(docker service ps "${SERVICE_NAME}" --format "{{.CurrentState}}" 2>/dev/null | head -1)
+            echo "[$i/24] ${STATUS}"
+            if echo "${STATUS}" | grep -q "^Running"; then
+              echo "Servico saudavel!"
+              exit 0
+            fi
+            if echo "${STATUS}" | grep -qE "^(Failed|Rejected|Shutdown)"; then
+              echo "Servico falhou: ${STATUS}"
+              echo "Logs:"
+              docker service logs "${SERVICE_NAME}" --tail 30 2>&1 || true
+              exit 1
+            fi
+          done
+          echo "Timeout esperando convergencia — verificar manualmente"
+          docker service ps "${SERVICE_NAME}" --no-trunc 2>&1 || true
+          exit 1
 
       - name: Notify - Deploy Concluido
         if: success()
