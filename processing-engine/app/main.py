@@ -45,7 +45,16 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 
     # --- Startup ---
     logger.info("Starting Processing Engine (role=%s)", settings.ENGINE_ROLE)
-    db_pool = await create_pool(settings.DATABASE_URL)
+    if settings.DATABASE_URL:
+        db_pool = await create_pool(dsn=settings.DATABASE_URL)
+    else:
+        db_pool = await create_pool(
+            host=settings.DB_HOST,
+            port=settings.DB_PORT,
+            user=settings.DB_USER,
+            password=settings.DB_PASSWORD,
+            database=settings.DB_NAME,
+        )
 
     if settings.ENGINE_ROLE in ("worker", "both"):
         _worker_task = asyncio.create_task(_run_worker(), name="processing-worker")

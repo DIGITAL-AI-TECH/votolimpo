@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import os
+import urllib.parse
 from logging.config import fileConfig
 
 from sqlalchemy import pool
@@ -24,9 +25,32 @@ from db_models.base import Base
 # Alembic Config object — provides access to values in alembic.ini
 config = context.config
 
-# Override sqlalchemy.url from DATABASE_URL env var if set
-if os.environ.get("DATABASE_URL"):
-    config.set_main_option("sqlalchemy.url", os.environ["DATABASE_URL"])
+
+def _resolve_database_url() -> str | None:
+    """Build DATABASE_URL from env vars.
+
+    Priority: DATABASE_URL (explicit) > individual DB_* params > alembic.ini.
+    Individual params are URL-encoded to handle special chars in passwords.
+    """
+    url = os.environ.get("DATABASE_URL")
+    if url:
+        return url
+
+    db_password = os.environ.get("DB_PASSWORD")
+    if db_password:
+        encoded_pw = urllib.parse.quote(db_password, safe="")
+        db_user = os.environ.get("DB_USER", "postgres")
+        db_host = os.environ.get("DB_HOST", "localhost")
+        db_port = os.environ.get("DB_PORT", "5432")
+        db_name = os.environ.get("DB_NAME", "processing_engine")
+        return f"postgresql://{db_user}:{encoded_pw}@{db_host}:{db_port}/{db_name}"
+
+    return None
+
+
+_db_url = _resolve_database_url()
+if _db_url:
+    config.set_main_option("sqlalchemy.url", _db_url)
 
 # Interpret the config file for Python logging
 if config.config_file_name is not None:

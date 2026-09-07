@@ -13,7 +13,16 @@ class Settings(BaseSettings):
         extra="ignore",
     )
 
-    DATABASE_URL: str
+    # Database — individual params (preferred for passwords with special chars)
+    DB_HOST: str = "localhost"
+    DB_PORT: int = 5432
+    DB_NAME: str = "processing_engine"
+    DB_USER: str = "postgres"
+    DB_PASSWORD: str = ""
+
+    # Legacy: if DATABASE_URL is set explicitly, it takes precedence
+    DATABASE_URL: str = ""
+
     OPENAI_API_KEY: str = ""
     API_KEY: str = "dev-key"
     ENGINE_ROLE: Literal["api", "worker", "both"] = "both"

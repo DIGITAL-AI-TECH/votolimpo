@@ -17,11 +17,21 @@ async def _init_pool_with_extensions(conn: asyncpg.Connection) -> None:
     await conn.execute("CREATE EXTENSION IF NOT EXISTS vector")
 
 
-async def create_pool(dsn: str) -> asyncpg.Pool:
+async def create_pool(
+    *,
+    dsn: str | None = None,
+    host: str | None = None,
+    port: int | None = None,
+    user: str | None = None,
+    password: str | None = None,
+    database: str | None = None,
+) -> asyncpg.Pool:
     """Create and store the global asyncpg connection pool.
 
-    Args:
-        dsn: PostgreSQL DSN string.
+    Accepts EITHER a ``dsn`` string OR individual connection parameters.
+    Individual parameters are preferred because they avoid URL-encoding
+    issues when the password contains special characters (``$``, ``@``,
+    ``:``, etc.).
 
     Returns:
         The newly created pool.
@@ -29,12 +39,24 @@ async def create_pool(dsn: str) -> asyncpg.Pool:
     global _pool
 
     logger.info("Creating asyncpg connection pool")
-    _pool = await asyncpg.create_pool(
-        dsn=dsn,
-        min_size=2,
-        max_size=10,
-        init=_init_pool_with_extensions,
-    )
+    if dsn:
+        _pool = await asyncpg.create_pool(
+            dsn=dsn,
+            min_size=2,
+            max_size=10,
+            init=_init_pool_with_extensions,
+        )
+    else:
+        _pool = await asyncpg.create_pool(
+            host=host,
+            port=port,
+            user=user,
+            password=password,
+            database=database,
+            min_size=2,
+            max_size=10,
+            init=_init_pool_with_extensions,
+        )
     logger.info("Connection pool created successfully")
     return _pool
 
