@@ -3,10 +3,10 @@ name: Processing Engine CI/CD
 on:
   push:
     branches: [main]
-    paths: ["processing-engine/**"]
+    paths: ["processing-engine/**", ".github/workflows/processing-engine-ci.yml"]
   pull_request:
     branches: [main]
-    paths: ["processing-engine/**"]
+    paths: ["processing-engine/**", ".github/workflows/processing-engine-ci.yml"]
 
 # Cancel older runs on the same branch — only latest commit deploys
 concurrency:
