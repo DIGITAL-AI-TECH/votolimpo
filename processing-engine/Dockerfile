@@ -4,7 +4,11 @@ FROM python:3.12-slim AS builder
 WORKDIR /build
 
 COPY pyproject.toml ./
-RUN pip install --no-cache-dir --prefix=/install .
+# Create stub packages so hatchling can build the wheel metadata.
+# Actual source code is copied in the final stage — here we only need deps.
+RUN mkdir -p app db_models && \
+    touch app/__init__.py db_models/__init__.py && \
+    pip install --no-cache-dir --prefix=/install .
 
 FROM python:3.12-slim
 

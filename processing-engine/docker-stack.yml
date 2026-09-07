@@ -22,8 +22,8 @@ services:
       - BATCHER_POLL_INTERVAL_SECONDS=5
       - BATCHER_DEFAULT_BATCH_SIZE=50
     networks:
-      - oraculusnet
-      - internal
+      - traefik_public
+      - pe-net
     deploy:
       replicas: 1
       resources:
@@ -71,7 +71,7 @@ services:
         source: pgdata
         target: /var/lib/postgresql/data
     networks:
-      - internal
+      - pe-net
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U postgres -d processing_engine"]
       interval: 10s
@@ -88,9 +88,9 @@ services:
           memory: 1G
 
 networks:
-  oraculusnet:
+  traefik_public:
     external: true
-  internal:
+  pe-net:
     driver: overlay
     attachable: true
 

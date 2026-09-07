@@ -279,7 +279,7 @@ jobs:
           DB_PASSWORD: ${{ secrets.PE_DB_PASSWORD }}
         run: |
           STACK_NAME="processing-engine"
-          NETWORK="${STACK_NAME}_internal"
+          NETWORK="${STACK_NAME}_pe-net"
           PG_HOST="postgres"
           PG_IMAGE="pgvector/pgvector:pg16"
           echo "Ensuring PostgreSQL password matches the GitHub Secret..."
@@ -363,7 +363,7 @@ jobs:
               docker service logs "${SERVICE_NAME}" --tail 50 2>&1 || true
               echo "=== Trying direct docker run to capture crash ==="
               timeout 30 docker run --rm \
-                --network "${STACK_NAME}_internal" \
+                --network "${STACK_NAME}_pe-net" \
                 -e DB_HOST=postgres \
                 -e DB_PORT=5432 \
                 -e DB_NAME=processing_engine \
