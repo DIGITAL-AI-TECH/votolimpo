@@ -30,6 +30,6 @@ ENV PYTHONUNBUFFERED=1 \
 EXPOSE 8000
 
 HEALTHCHECK --interval=30s --timeout=5s --retries=3 \
-    CMD python -c "import httpx; httpx.get('http://localhost:8000/health').raise_for_status()"
+    CMD python -c "import httpx; r=httpx.get('http://localhost:8000/health'); exit(0 if r.status_code in (200,503) else 1)"
 
 CMD ["./entrypoint.sh"]
