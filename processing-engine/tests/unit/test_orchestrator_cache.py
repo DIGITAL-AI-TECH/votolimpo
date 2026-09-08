@@ -257,14 +257,15 @@ class TestLoggingSkippedSteps:
             )
 
         # Check that a "dedup" / "skipped" log was inserted
+        # _log signature: (sql, item_id, job_id, pipeline_id, step, status, duration_ms, error, meta)
         log_calls = [
             c
             for c in mock_conn.execute.call_args_list
-            if len(c.args) >= 3 and c.args[1] == item_id and c.args[2] == "dedup"
+            if len(c.args) >= 5 and c.args[1] == item_id and c.args[4] == "dedup"
         ]
         assert len(log_calls) >= 1
         # The status should be "skipped"
-        assert log_calls[0].args[3] == "skipped"
+        assert log_calls[0].args[5] == "skipped"
 
     @pytest.mark.asyncio
     async def test_skip_cache_logs_skipped(self, mock_conn, sample_pipeline):
@@ -298,13 +299,14 @@ class TestLoggingSkippedSteps:
             )
 
         # Check that a "cache" / "skipped" log was inserted
+        # _log signature: (sql, item_id, job_id, pipeline_id, step, status, duration_ms, error, meta)
         log_calls = [
             c
             for c in mock_conn.execute.call_args_list
-            if len(c.args) >= 3 and c.args[1] == item_id and c.args[2] == "cache"
+            if len(c.args) >= 5 and c.args[1] == item_id and c.args[4] == "cache"
         ]
         assert len(log_calls) >= 1
-        assert log_calls[0].args[3] == "skipped"
+        assert log_calls[0].args[5] == "skipped"
 
     @pytest.mark.asyncio
     async def test_cache_miss_logs_miss(self, mock_conn, sample_pipeline):
@@ -337,10 +339,11 @@ class TestLoggingSkippedSteps:
             )
 
         # Check that a "cache" / "miss" log was inserted
+        # _log signature: (sql, item_id, job_id, pipeline_id, step, status, duration_ms, error, meta)
         log_calls = [
             c
             for c in mock_conn.execute.call_args_list
-            if len(c.args) >= 3 and c.args[1] == item_id and c.args[2] == "cache"
+            if len(c.args) >= 5 and c.args[1] == item_id and c.args[4] == "cache"
         ]
         assert len(log_calls) >= 1
-        assert log_calls[0].args[3] == "miss"
+        assert log_calls[0].args[5] == "miss"
