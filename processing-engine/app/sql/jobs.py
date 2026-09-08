@@ -21,7 +21,7 @@ SELECT * FROM processing_engine.jobs WHERE id = $1
 SELECT_JOBS = """
 SELECT * FROM processing_engine.jobs
 WHERE ($1::uuid IS NULL OR pipeline_id = $1)
-  AND ($2::text IS NULL OR status = $2)
+  AND ($2::text IS NULL OR status::text = $2)
 ORDER BY priority DESC, created_at ASC
 LIMIT $3 OFFSET $4
 """
@@ -29,7 +29,7 @@ LIMIT $3 OFFSET $4
 COUNT_JOBS = """
 SELECT COUNT(*) FROM processing_engine.jobs
 WHERE ($1::uuid IS NULL OR pipeline_id = $1)
-  AND ($2::text IS NULL OR status = $2)
+  AND ($2::text IS NULL OR status::text = $2)
 """
 
 CLAIM_JOB = """
