@@ -224,74 +224,12 @@ jobs:
           fi
           echo "All secrets present (DB_PASSWORD length: ${#DB_PASSWORD})"
 
-      - name: Reset stack & PG volume (clean password state)
-        timeout-minutes: 3
+      - name: Cleanup orphan services
         run: |
-          STACK_NAME="processing-engine"
-
-          # Clean up any leftover temp services from previous failed runs
+          # Clean up any leftover temp services from previous failed CI runs
           docker service rm pe-pw-sync 2>/dev/null || true
 
-          # Show existing volumes before cleanup
-          echo "=== Volumes before cleanup ==="
-          docker volume ls --filter "name=processing" 2>/dev/null || true
-
-          # Remove existing stack so PG volume can be reset
-          # (POSTGRES_PASSWORD env var only applies on first initdb — if the
-          # volume already has an old password, the DB ignores the env var)
-          if docker stack ls --format "{{.Name}}" | grep -q "^${STACK_NAME}$"; then
-            echo "Removing existing stack..."
-            docker stack rm "${STACK_NAME}"
-            # Wait for ALL containers (not just services) to be fully gone
-            for i in $(seq 1 30); do
-              SERVICES=$(docker service ls --filter "name=${STACK_NAME}" -q 2>/dev/null | wc -l)
-              CONTAINERS=$(docker ps -q --filter "name=${STACK_NAME}" 2>/dev/null | wc -l)
-              if [ "$SERVICES" -eq 0 ] && [ "$CONTAINERS" -eq 0 ]; then
-                echo "Stack fully removed (${i}×3s). Services=0, Containers=0."
-                break
-              fi
-              echo "  [$i/30] Waiting... (services=$SERVICES, containers=$CONTAINERS)"
-              sleep 3
-            done
-            # Extra grace period for Docker to release volume references
-            echo "Grace period for volume release..."
-            sleep 5
-          fi
-
-          # Show volumes after stack removal
-          echo "=== Volumes after stack removal ==="
-          docker volume ls --filter "name=processing" 2>/dev/null || true
-
-          # Remove PG data volume with retry (container may still be releasing it)
-          VOLUME_NAME="${STACK_NAME}_pgdata"
-          VOLUME_REMOVED=false
-          for attempt in $(seq 1 5); do
-            if docker volume rm "${VOLUME_NAME}" 2>&1; then
-              echo "PG volume '${VOLUME_NAME}' removed on attempt ${attempt}."
-              VOLUME_REMOVED=true
-              break
-            else
-              echo "  Volume rm attempt ${attempt}/5 failed (may still be in use). Waiting 5s..."
-              sleep 5
-            fi
-          done
-
-          if [ "$VOLUME_REMOVED" = "false" ]; then
-            echo "WARNING: Could not remove volume '${VOLUME_NAME}'. Checking if it exists..."
-            if docker volume inspect "${VOLUME_NAME}" >/dev/null 2>&1; then
-              echo "::error::Volume ${VOLUME_NAME} EXISTS but cannot be removed — PG will reuse old data/password!"
-              docker volume inspect "${VOLUME_NAME}" 2>&1 || true
-              exit 1
-            else
-              echo "Volume does not exist — PG will do fresh initdb. OK."
-            fi
-          fi
-
-          echo "=== Volumes after cleanup ==="
-          docker volume ls --filter "name=processing" 2>/dev/null || true
-          echo "Ready for fresh deploy."
-
-      - name: Deploy stack
+      - name: Deploy stack (preserves PG volume)
         env:
           TAG: ${{ needs.docker.outputs.image_sha }}
           DB_PASSWORD: ${{ secrets.PE_DB_PASSWORD }}
@@ -301,13 +239,17 @@ jobs:
           export TAG DB_PASSWORD OPENAI_API_KEY API_KEY
           STACK_NAME="processing-engine"
 
+          # Deploy/update the stack — docker stack deploy is idempotent:
+          # - First run: creates all services + volumes
+          # - Subsequent runs: updates services with new image, PRESERVES volumes
+          # NEVER use docker stack rm + docker volume rm — that destroys the database!
           for attempt in 1 2 3; do
             echo "Deploy attempt ${attempt}/3..."
             if docker stack deploy \
               --compose-file processing-engine/docker-stack.yml \
               --with-registry-auth \
               "${STACK_NAME}"; then
-              echo "Stack deployed."
+              echo "Stack deployed/updated (volumes preserved)."
               break
             fi
             if [ $attempt -lt 3 ]; then
@@ -320,156 +262,65 @@ jobs:
           done
 
       - name: Health Check
-        env:
-          TAG: ${{ needs.docker.outputs.image_sha }}
-          DB_PASSWORD: ${{ secrets.PE_DB_PASSWORD }}
+        timeout-minutes: 5
         run: |
           SERVICE_NAME="processing-engine_api"
-          echo "Aguardando convergencia do servico (max 5 min)..."
+          echo "Aguardando convergencia dos servicos..."
 
-          # Debug: show password hash for both services (never plaintext!)
-          echo "=== Password Debug ==="
-          PW_LEN=${#DB_PASSWORD}
-          PW_MD5=$(echo -n "${DB_PASSWORD}" | md5sum | cut -d' ' -f1)
-          echo "GitHub Secret PE_DB_PASSWORD: len=${PW_LEN}, md5=${PW_MD5}"
-
-          # Show env vars and verify password hash matches between services
-          echo "--- API service DB_PASSWORD (md5 + length) ---"
-          API_PW=$(docker service inspect processing-engine_api --format '{{range .Spec.TaskTemplate.ContainerSpec.Env}}{{println .}}{{end}}' 2>/dev/null | grep "^DB_PASSWORD=" | cut -d= -f2-)
-          echo "  len=${#API_PW}, md5=$(echo -n "${API_PW}" | md5sum | cut -d' ' -f1)"
-          echo "--- PG service POSTGRES_PASSWORD (md5 + length) ---"
-          PG_PW=$(docker service inspect processing-engine_postgres --format '{{range .Spec.TaskTemplate.ContainerSpec.Env}}{{println .}}{{end}}' 2>/dev/null | grep "^POSTGRES_PASSWORD=" | cut -d= -f2-)
-          echo "  len=${#PG_PW}, md5=$(echo -n "${PG_PW}" | md5sum | cut -d' ' -f1)"
-          echo "--- Expected (from deploy env) ---"
-          echo "  len=${#DB_PASSWORD}, md5=$(echo -n "${DB_PASSWORD}" | md5sum | cut -d' ' -f1)"
-          if [ "$(echo -n "${API_PW}" | md5sum)" != "$(echo -n "${DB_PASSWORD}" | md5sum)" ]; then
-            echo "::warning::API DB_PASSWORD does NOT match deploy env! First char: '${API_PW:0:1}', Last char: '${API_PW: -1}'"
-          fi
-
-          # Wait for PostgreSQL service to report Running via Swarm API
+          # Wait for PostgreSQL to be running
           echo "--- Waiting for PostgreSQL ---"
           for i in $(seq 1 60); do
             PG_STATE=$(docker service ps processing-engine_postgres \
               --filter "desired-state=running" \
               --format "{{.CurrentState}}" 2>/dev/null | head -1 || echo "")
-            echo "  [$i/60] PostgreSQL: ${PG_STATE}"
             if echo "${PG_STATE}" | grep -q "^Running"; then
-              echo "PostgreSQL service is running."
-              sleep 5  # give PG a moment to finish init
-              echo "--- PostgreSQL Logs (initdb check) ---"
-              docker service logs processing-engine_postgres --tail 30 --raw 2>&1 | head -40 || true
-
-              # === CRITICAL DIAGNOSTIC: Test PG auth from inside the container ===
-              PG_CONTAINER=$(docker ps -q --filter "name=processing-engine_postgres" | head -1)
-              if [ -n "$PG_CONTAINER" ]; then
-                echo "=== PG Container Auth Test (container: ${PG_CONTAINER}) ==="
-                echo "--- MD5 of POSTGRES_PASSWORD inside PG container ---"
-                docker exec "$PG_CONTAINER" sh -c 'echo -n "$POSTGRES_PASSWORD" | md5sum' 2>&1 || echo "  (failed to get md5)"
-                echo "--- MD5 of DB_PASSWORD from GitHub Secret ---"
-                echo -n "${DB_PASSWORD}" | md5sum
-                echo "--- Local socket auth (should always work) ---"
-                docker exec "$PG_CONTAINER" psql -U postgres -c "SELECT 1 AS socket_auth_ok;" 2>&1 || echo "  SOCKET AUTH FAILED!"
-                echo "--- TCP auth with POSTGRES_PASSWORD via container IP (scram-sha-256) ---"
-                docker exec "$PG_CONTAINER" sh -c 'MY_IP=$(hostname -i | awk "{print \$1}"); echo "Testing auth via $MY_IP"; PGPASSWORD=$POSTGRES_PASSWORD psql -h $MY_IP -U postgres -c "SELECT 1 AS real_scram_auth_ok;"' 2>&1 || echo "  SCRAM AUTH FAILED!"
-                echo "--- pg_hba.conf ---"
-                docker exec "$PG_CONTAINER" cat /var/lib/postgresql/data/pg_hba.conf 2>&1 | grep -v "^#" | grep -v "^$" || true
-                echo "--- Check password in pg_authid ---"
-                docker exec "$PG_CONTAINER" psql -U postgres -c "SELECT rolname, rolpassword IS NOT NULL AS has_password, length(rolpassword) AS pw_hash_len FROM pg_authid WHERE rolname='postgres';" 2>&1 || true
-                echo "=== END PG Auth Test ==="
-
-                # DNS diagnostic: check if 'postgres' and 'pe-postgres' resolve to same IP
-                echo "=== DNS Resolution Diagnostic ==="
-                docker run --rm --network processing-engine_pe-net alpine sh -c '
-                  apk add --no-cache bind-tools >/dev/null 2>&1
-                  echo "postgres resolves to: $(dig +short postgres 2>/dev/null || getent hosts postgres 2>/dev/null || echo UNRESOLVABLE)"
-                  echo "pe-postgres resolves to: $(dig +short pe-postgres 2>/dev/null || getent hosts pe-postgres 2>/dev/null || echo UNRESOLVABLE)"
-                ' 2>&1 || echo "  DNS diagnostic failed (non-fatal)"
-
-                # Also test DNS from a container on BOTH networks (like the API)
-                docker run --rm --network processing-engine_pe-net --network oraculusnet_v2 alpine sh -c '
-                  apk add --no-cache bind-tools >/dev/null 2>&1
-                  echo "[dual-network] postgres resolves to: $(dig +short postgres 2>/dev/null || getent hosts postgres 2>/dev/null || echo UNRESOLVABLE)"
-                  echo "[dual-network] pe-postgres resolves to: $(dig +short pe-postgres 2>/dev/null || getent hosts pe-postgres 2>/dev/null || echo UNRESOLVABLE)"
-                ' 2>&1 || echo "  Dual-network DNS diagnostic failed (non-fatal)"
-                echo "=== END DNS Diagnostic ==="
-
-                # Test from ANOTHER container via overlay network
-                echo "=== Overlay Network Auth Test (cross-container) ==="
-                docker run --rm --network processing-engine_pe-net \
-                  -e PGPASSWORD="${DB_PASSWORD}" \
-                  pgvector/pgvector:pg16 \
-                  psql -h pe-postgres -U postgres -d processing_engine \
-                  -c "SELECT 1 AS overlay_psql_auth_ok;" 2>&1 || echo "  OVERLAY PSQL AUTH FAILED!"
-
-                # Test with asyncpg specifically (same image as API)
-                echo "--- Overlay asyncpg test ---"
-                docker run --rm --network processing-engine_pe-net \
-                  -e DB_PASSWORD="${DB_PASSWORD}" \
-                  "${IMAGE_NAME}:${TAG}" \
-                  python -c "import asyncio,os;pw=os.environ['DB_PASSWORD'];print(f'asyncpg test: pw_len={len(pw)}');exec('import asyncpg\nasync def t():\n c=await asyncpg.connect(host=\"pe-postgres\",port=5432,user=\"postgres\",password=pw,database=\"processing_engine\")\n print(\"asyncpg: CONNECTED OK\")\n await c.close()\nasyncio.run(t())')" 2>&1 || echo "  ASYNCPG OVERLAY AUTH FAILED!"
-                echo "=== END Overlay Auth Test ==="
-              else
-                echo "WARNING: PG container not found on this node ($(hostname)). Cannot run local auth test."
-              fi
+              echo "PostgreSQL running. (${i}×5s)"
               break
             fi
             if [ "$i" -eq 60 ]; then
               echo "::error::PostgreSQL failed to converge within 300s"
-              docker service ps processing-engine_postgres --no-trunc 2>&1 || true
-              docker service logs processing-engine_postgres --tail 50 --raw 2>&1 || true
+              docker service ps processing-engine_postgres --no-trunc 2>&1 | head -10 || true
+              docker service logs processing-engine_postgres --tail 30 --raw 2>&1 || true
               exit 1
             fi
+            echo "  [$i/60] PostgreSQL: ${PG_STATE}"
             sleep 5
           done
 
           # Wait for API service to converge
-          echo "--- Waiting for API (start_period=120s, timeout=300s) ---"
-
-          # Show where services are running (which node)
-          echo "=== Service placement ==="
+          echo "--- Waiting for API ---"
+          echo "Service placement:"
           docker service ps "${SERVICE_NAME}" --format "{{.Node}} {{.CurrentState}}" 2>/dev/null | head -3 || true
-          docker service ps processing-engine_postgres --format "{{.Node}} {{.CurrentState}}" 2>/dev/null | head -1 || true
-          echo "Runner hostname: $(hostname)"
 
           for i in $(seq 1 60); do
-            TASK_INFO=$(docker service ps "${SERVICE_NAME}" \
+            STATE=$(docker service ps "${SERVICE_NAME}" \
               --filter "desired-state=running" \
-              --format "{{.CurrentState}} | {{.Image}}" --no-trunc 2>/dev/null | head -1)
-            echo "  [$i/60] API: ${TASK_INFO}"
-
-            STATE=$(echo "${TASK_INFO}" | cut -d'|' -f1 | xargs)
+              --format "{{.CurrentState}}" 2>/dev/null | head -1 || echo "")
 
             if echo "${STATE}" | grep -q "^Running"; then
-              echo "API service convergiu!"
-              docker service logs "${SERVICE_NAME}" --tail 20 --raw 2>&1 || true
+              echo "API service running! (${i}×5s)"
+              sleep 5
+              docker service logs "${SERVICE_NAME}" --tail 10 --raw 2>&1 || true
               exit 0
             fi
 
-            # Dump detailed diagnostics at key iterations
-            if [ "$i" -eq 6 ] || [ "$i" -eq 18 ] || [ "$i" -eq 30 ] || [ "$i" -eq 50 ]; then
+            # Diagnostics at key iterations
+            if [ "$i" -eq 12 ] || [ "$i" -eq 30 ] || [ "$i" -eq 50 ]; then
               echo "=== DIAGNOSTIC (iteration $i) ==="
-              echo "--- Task States ---"
               docker service ps "${SERVICE_NAME}" --no-trunc \
-                --format "table {{.Name}}\t{{.Node}}\t{{.CurrentState}}\t{{.Error}}" 2>&1 | head -15 || true
-              echo "--- Container Logs (service logs --raw) ---"
-              docker service logs "${SERVICE_NAME}" --tail 200 --raw 2>&1 || true
-              echo "--- Service Inspect (update status) ---"
-              docker service inspect "${SERVICE_NAME}" --format '{{json .UpdateStatus}}' 2>/dev/null || true
-              echo ""
+                --format "table {{.Name}}\t{{.Node}}\t{{.CurrentState}}\t{{.Error}}" 2>&1 | head -10 || true
+              docker service logs "${SERVICE_NAME}" --tail 30 --raw 2>&1 || true
               echo "=== END DIAGNOSTIC ==="
             fi
 
+            echo "  [$i/60] API: ${STATE}"
             sleep 5
           done
 
           echo "::error::API service failed to converge within 300s"
-          echo "=== FINAL DIAGNOSTIC ==="
           docker service ps "${SERVICE_NAME}" --no-trunc \
-            --format "table {{.Name}}\t{{.Node}}\t{{.CurrentState}}\t{{.Error}}" 2>&1 | head -20 || true
-          echo "--- Final Container Logs ---"
-          docker service logs "${SERVICE_NAME}" --tail 100 --raw 2>&1 || true
-          echo "--- Update Status ---"
-          docker service inspect "${SERVICE_NAME}" --format '{{json .UpdateStatus}}' 2>/dev/null || true
+            --format "table {{.Name}}\t{{.Node}}\t{{.CurrentState}}\t{{.Error}}" 2>&1 | head -15 || true
+          docker service logs "${SERVICE_NAME}" --tail 50 --raw 2>&1 || true
           exit 1
 
       - name: Notify - Deploy Concluido
