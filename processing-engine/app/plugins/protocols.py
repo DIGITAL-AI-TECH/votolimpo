@@ -43,6 +43,7 @@ class DedupStrategy(Protocol):
         url: str | None,
         pipeline_id: str,
         conn: Any,
+        current_item_id: str | None = None,
     ) -> DedupResult: ...
 
 

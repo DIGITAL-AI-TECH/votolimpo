@@ -30,11 +30,13 @@ class SemanticDedupStrategy:
         url: str | None,
         pipeline_id: str,
         conn: Any,
+        current_item_id: str | None = None,
     ) -> DedupResult:
         vector = await self.llm.embed(content)
 
         # pgvector: operador <=> calcula distância de cosseno (0 = idêntico, 2 = oposto)
         # logo, similaridade = 1 - distância
+        # Exclude current_item_id to prevent self-match
         row = await conn.fetchrow(
             """
             SELECT id, 1 - (embedding <=> $2::vector) AS similarity
@@ -42,6 +44,7 @@ class SemanticDedupStrategy:
             WHERE pipeline_id = $1
               AND embedding IS NOT NULL
               AND status != 'failed'
+              AND ($4::uuid IS NULL OR id != $4::uuid)
               AND 1 - (embedding <=> $2::vector) >= $3
             ORDER BY embedding <=> $2::vector ASC
             LIMIT 1
@@ -49,6 +52,7 @@ class SemanticDedupStrategy:
             pipeline_id,
             vector,
             self.threshold,
+            current_item_id,
         )
 
         if row:

@@ -72,7 +72,7 @@ class Orchestrator:
         if not skip_dedup:
             await conn.execute(_UPDATE_ITEM_STATUS, item_id, "deduplicating")
             dedup_result: DedupResult = await self._run_step(
-                conn, item_id, "dedup", self._dedup, ingested, source_url, pipeline, conn
+                conn, item_id, "dedup", self._dedup, ingested, source_url, pipeline, conn, str(item_id)
             )
             if dedup_result.is_duplicate:
                 result["dedup_result"] = "duplicate"
@@ -190,10 +190,11 @@ class Orchestrator:
         return await ingestor.ingest(raw, content_type, pipeline.get("max_content_chars", 100000))
 
     async def _dedup(
-        self, content: str, url: str | None, pipeline: dict, conn: asyncpg.Connection
+        self, content: str, url: str | None, pipeline: dict, conn: asyncpg.Connection,
+        current_item_id: str | None = None,
     ) -> DedupResult:
         strategy = get_instance("dedup", pipeline.get("dedup_strategy", "hash"))
-        return await strategy.check(content, url, str(pipeline["id"]), conn)
+        return await strategy.check(content, url, str(pipeline["id"]), conn, current_item_id)
 
     async def _process_llm(
         self, content: str, pipeline: dict, override_model: str | None
