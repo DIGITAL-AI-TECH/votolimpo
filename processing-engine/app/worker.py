@@ -122,6 +122,12 @@ class Worker:
                 raise ValueError(f"Pipeline {job['pipeline_id']} not found")
             pipeline = dict(pipeline_record)
 
+            # asyncpg returns JSONB columns as strings — parse them
+            for jsonb_field in ("output_schema", "sink_config", "validators", "metadata"):
+                val = pipeline.get(jsonb_field)
+                if isinstance(val, str):
+                    pipeline[jsonb_field] = json.loads(val)
+
             items = await conn.fetch(_SELECT_PENDING_ITEMS, job["id"])
 
         if not items:
