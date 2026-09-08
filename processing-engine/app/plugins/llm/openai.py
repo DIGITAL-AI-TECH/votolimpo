@@ -54,6 +54,10 @@ class OpenAIProvider:
         if isinstance(schema, str):
             schema = json.loads(schema)
 
+        # OpenAI Structured Output requires additionalProperties: false
+        if schema.get("type") == "object" and "additionalProperties" not in schema:
+            schema["additionalProperties"] = False
+
         # Build response_format for structured output
         response_format: dict[str, Any] = {
             "type": "json_schema",
