@@ -28,7 +28,10 @@ class PostgreSQLSink:
         config: dict,
         conn: Any,
     ) -> None:
-        table = config["table"]
+        table = config.get("table")
+        if not table:
+            # No target table configured — output is already stored in the items table
+            return
         conflict_column = config.get("conflict_column", "item_id")
 
         # Validate table name to avoid SQL injection (only allow schema.table format)
