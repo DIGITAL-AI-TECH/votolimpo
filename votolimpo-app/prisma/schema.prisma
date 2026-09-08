@@ -1,0 +1,206 @@
+// Voto Limpo — Prisma Schema
+// Based on data-schema.md
+// Usage: npx prisma generate
+
+generator client {
+  provider        = "prisma-client-js"
+  previewFeatures = ["multiSchema"]
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+  schemas  = ["voto_limpo"]
+}
+
+// ─── Enums ───────────────────────────────────────────────────────────────────
+
+enum Severity {
+  critical
+  high
+  medium
+  low
+  info
+
+  @@schema("voto_limpo")
+}
+
+enum MilestoneType {
+  indictment
+  conviction
+  acquittal
+  investigation
+  appeal
+  settlement
+  impeachment
+  election
+
+  @@schema("voto_limpo")
+}
+
+enum RelationshipType {
+  donation
+  contract
+  board_member
+  investigation
+  business_partner
+  family
+
+  @@schema("voto_limpo")
+}
+
+enum EntityType {
+  company
+  organization
+  government
+  ngo
+  media
+
+  @@schema("voto_limpo")
+}
+
+// ─── Models ──────────────────────────────────────────────────────────────────
+
+model Politician {
+  id             String   @id @default(cuid())
+  slug           String   @unique
+  name           String
+  party          String
+  partyColor     String   @map("party_color")
+  uf             String   @db.VarChar(2)
+  role           String
+  bio            String?  @db.Text
+  photoUrl       String?  @map("photo_url")
+  score          Int      @default(50) // 0-100 transparency score
+  articleCount   Int      @default(0) @map("article_count")
+  maxSeverity    Severity @default(info) @map("max_severity")
+  milestoneCount Int      @default(0) @map("milestone_count")
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  articles      ArticlePolitician[]
+  milestones    LegalMilestone[]
+  relationships Relationship[]
+
+  @@index([slug])
+  @@index([party])
+  @@index([uf])
+  @@index([score])
+  @@map("politicians")
+  @@schema("voto_limpo")
+}
+
+model NewsSource {
+  id          String  @id @default(cuid())
+  name        String  @unique
+  url         String
+  logoUrl     String? @map("logo_url")
+  reliability Float   @default(0.8) // 0-1
+
+  articles Article[]
+
+  @@map("news_sources")
+  @@schema("voto_limpo")
+}
+
+model Article {
+  id          String   @id @default(cuid())
+  title       String
+  summary     String   @db.Text
+  url         String   @unique
+  sourceId    String   @map("source_id")
+  publishedAt DateTime @map("published_at")
+  severity    Severity @default(info)
+  truthScore  Float    @default(0.8) @map("truth_score") // 0-1
+  tags        String[] @default([])
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  source     NewsSource          @relation(fields: [sourceId], references: [id])
+  politicians ArticlePolitician[]
+
+  @@index([publishedAt])
+  @@index([severity])
+  @@index([sourceId])
+  @@map("articles")
+  @@schema("voto_limpo")
+}
+
+// Many-to-many: Article <-> Politician
+model ArticlePolitician {
+  articleId    String @map("article_id")
+  politicianId String @map("politician_id")
+
+  article    Article    @relation(fields: [articleId], references: [id], onDelete: Cascade)
+  politician Politician @relation(fields: [politicianId], references: [id], onDelete: Cascade)
+
+  @@id([articleId, politicianId])
+  @@map("article_politicians")
+  @@schema("voto_limpo")
+}
+
+model Entity {
+  id          String     @id @default(cuid())
+  slug        String     @unique
+  name        String
+  type        EntityType @default(company)
+  description String?    @db.Text
+  cnpj        String?    @unique
+  createdAt   DateTime   @default(now()) @map("created_at")
+  updatedAt   DateTime   @updatedAt @map("updated_at")
+
+  relationships Relationship[]
+
+  @@index([slug])
+  @@index([type])
+  @@map("entities")
+  @@schema("voto_limpo")
+}
+
+model Relationship {
+  id           String           @id @default(cuid())
+  politicianId String           @map("politician_id")
+  entityId     String           @map("entity_id")
+  type         RelationshipType
+  description  String           @db.Text
+  value        Decimal?         @db.Decimal(18, 2) // BRL
+  startDate    DateTime?        @map("start_date")
+  endDate      DateTime?        @map("end_date")
+  sources      String[]         @default([])
+  createdAt    DateTime         @default(now()) @map("created_at")
+  updatedAt    DateTime         @updatedAt @map("updated_at")
+
+  politician Politician @relation(fields: [politicianId], references: [id], onDelete: Cascade)
+  entity     Entity     @relation(fields: [entityId], references: [id], onDelete: Cascade)
+
+  @@index([politicianId])
+  @@index([entityId])
+  @@index([type])
+  @@map("relationships")
+  @@schema("voto_limpo")
+}
+
+model LegalMilestone {
+  id            String        @id @default(cuid())
+  politicianId  String        @map("politician_id")
+  title         String
+  description   String        @db.Text
+  type          MilestoneType @default(investigation)
+  date          DateTime
+  court         String?
+  processNumber String?       @map("process_number")
+  severity      Severity      @default(medium)
+  createdAt     DateTime      @default(now()) @map("created_at")
+  updatedAt     DateTime      @updatedAt @map("updated_at")
+
+  politician Politician @relation(fields: [politicianId], references: [id], onDelete: Cascade)
+
+  @@index([politicianId])
+  @@index([date])
+  @@index([type])
+  @@index([severity])
+  @@map("legal_milestones")
+  @@schema("voto_limpo")
+}
