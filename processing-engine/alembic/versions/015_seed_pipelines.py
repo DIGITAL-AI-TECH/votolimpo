@@ -13,6 +13,7 @@ Create Date: 2026-09-08
 """
 import json
 from alembic import op
+from sqlalchemy import text
 
 revision = "015"
 down_revision = "014"
@@ -99,7 +100,7 @@ Responda em JSON."""
 HELPCORE_REWRITE_PROMPT = """Você é um redator técnico especializado em bases de conhecimento corporativo.
 Reescreva o artigo fornecido seguindo estas regras: linguagem clara e direta, tom profissional sem jargão
 desnecessário, formato de passo-a-passo quando aplicável, seções obrigatórias (Contexto, Procedimento,
-Observações, Links Relacionados), título padronizado. Mantenha 100%% do conteúdo — não resuma, não omita.
+Observações, Links Relacionados), título padronizado. Mantenha 100% do conteúdo — não resuma, não omita.
 Retorne o artigo reescrito + diff de mudanças + score de aderência ao padrão. Responda em JSON."""
 
 HELPCORE_QUALITY_PROMPT = """Você é um auditor de qualidade de base de conhecimento. Avalie o artigo nos
@@ -108,8 +109,8 @@ de revisão), acessibilidade (links válidos, imagens legíveis). Calcule score 
 para: conteúdo expirado, links quebrados, score abaixo de 60, informações potencialmente desatualizadas.
 Responda em JSON."""
 
-# --- INSERT SQL (23 positional params matching pipelines.py INSERT_PIPELINE) ---
-INSERT = """
+# --- INSERT SQL (SQLAlchemy text() with named params) ---
+INSERT = text("""
 INSERT INTO processing_engine.pipelines (
     name, description, ingestor_type, max_content_chars,
     dedup_strategy, dedup_threshold,
@@ -118,15 +119,27 @@ INSERT INTO processing_engine.pipelines (
     max_concurrent, rate_limit_rpm, budget_limit_usd, budget_period,
     max_retries, retry_backoff_base, cache_ttl_hours
 ) VALUES (
-    $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11,
-    $12, $13::jsonb, $14, $15, $16::jsonb,
-    $17, $18, $19, $20, $21, $22, $23
+    :name, :description, :ingestor_type, :max_content_chars,
+    :dedup_strategy, :dedup_threshold,
+    :llm_provider, :llm_model, :llm_temperature, :llm_seed, :llm_max_tokens,
+    :system_prompt, :output_schema::jsonb, cast(:validators as text[]), :sink_type, :sink_config::jsonb,
+    :max_concurrent, :rate_limit_rpm, :budget_limit_usd, :budget_period,
+    :max_retries, :retry_backoff_base, :cache_ttl_hours
 )
-"""
+""")
 
 
 def upgrade():
     conn = op.get_bind()
+
+    _KEYS = [
+        "name", "description", "ingestor_type", "max_content_chars",
+        "dedup_strategy", "dedup_threshold",
+        "llm_provider", "llm_model", "llm_temperature", "llm_seed", "llm_max_tokens",
+        "system_prompt", "output_schema", "validators", "sink_type", "sink_config",
+        "max_concurrent", "rate_limit_rpm", "budget_limit_usd", "budget_period",
+        "max_retries", "retry_backoff_base", "cache_ttl_hours",
+    ]
 
     pipelines = [
         # 1. Voto Limpo — News Analysis
@@ -138,7 +151,7 @@ def upgrade():
             "openai", "gpt-4.1-mini", 0.0, 42, 16384,
             VOTO_LIMPO_SYSTEM_PROMPT,
             json.dumps(VOTO_LIMPO_OUTPUT_SCHEMA),
-            ["schema"],
+            "{schema}",
             "postgresql",
             json.dumps({"table": "voto_limpo.articles", "conflict_column": "pe_item_id"}),
             5, 60, 50.0, "monthly",
@@ -153,7 +166,7 @@ def upgrade():
             "openai", "gpt-4.1-mini", 0.0, 42, 8192,
             HELPCORE_INVENTORY_PROMPT,
             json.dumps({}),
-            ["schema"],
+            "{schema}",
             "postgresql",
             json.dumps({"table": "help_core.inventory", "conflict_column": "pe_item_id"}),
             5, 60, 30.0, "monthly",
@@ -168,7 +181,7 @@ def upgrade():
             "openai", "gpt-4.1-mini", 0.0, 42, 8192,
             HELPCORE_DEDUP_PROMPT,
             json.dumps({}),
-            ["schema"],
+            "{schema}",
             "postgresql",
             json.dumps({"table": "help_core.dedup_proposals", "conflict_column": "pe_item_id"}),
             3, 30, 20.0, "monthly",
@@ -183,7 +196,7 @@ def upgrade():
             "openai", "gpt-4.1-mini", 0.0, 42, 16384,
             HELPCORE_REWRITE_PROMPT,
             json.dumps({}),
-            ["schema"],
+            "{schema}",
             "postgresql",
             json.dumps({"table": "help_core.rewrites", "conflict_column": "pe_item_id"}),
             3, 30, 30.0, "monthly",
@@ -198,7 +211,7 @@ def upgrade():
             "openai", "gpt-4.1-mini", 0.0, 42, 8192,
             HELPCORE_QUALITY_PROMPT,
             json.dumps({}),
-            ["schema"],
+            "{schema}",
             "postgresql",
             json.dumps({"table": "help_core.quality_scores", "conflict_column": "pe_item_id"}),
             5, 60, 20.0, "monthly",
@@ -207,15 +220,12 @@ def upgrade():
     ]
 
     for p in pipelines:
-        conn.execute(
-            INSERT,
-            *p,
-        )
+        conn.execute(INSERT, dict(zip(_KEYS, p)))
 
 
 def downgrade():
     conn = op.get_bind()
-    conn.execute("""
+    conn.execute(text("""
         DELETE FROM processing_engine.pipelines
         WHERE name IN (
             'voto-limpo-news-analysis',
@@ -224,4 +234,4 @@ def downgrade():
             'helpcore-rewrite',
             'helpcore-quality-score'
         )
-    """)
+    """))
