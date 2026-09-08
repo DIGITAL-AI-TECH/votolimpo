@@ -20,8 +20,8 @@ logger = logging.getLogger(__name__)
 # Inline SQL to avoid circular dependency with parallel agent
 _UPDATE_ITEM_STATUS = "UPDATE processing_engine.items SET status = $2 WHERE id = $1"
 _INSERT_LOG = """
-INSERT INTO processing_engine.processing_logs (item_id, step, status, duration_ms, error_message, metadata)
-VALUES ($1, $2, $3, $4, $5, $6::jsonb)
+INSERT INTO processing_engine.processing_logs (item_id, job_id, pipeline_id, step, status, duration_ms, error_message, metadata)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8::jsonb)
 """
 
 
@@ -46,6 +46,10 @@ class Orchestrator:
 
         Returns dict with keys: output, dedup_result, cached, usage, duration_ms
         """
+        # Store context for _log calls
+        self._current_job_id = job_id
+        self._current_pipeline_id = pipeline.get("id")
+
         total_start = time.monotonic()
         result: dict[str, Any] = {
             "output": None,
@@ -278,6 +282,8 @@ class Orchestrator:
         await conn.execute(
             _INSERT_LOG,
             item_id,
+            self._current_job_id,
+            self._current_pipeline_id,
             step,
             status,
             duration_ms,
