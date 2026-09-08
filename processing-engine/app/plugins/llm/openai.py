@@ -49,13 +49,18 @@ class OpenAIProvider:
         seed = config.get("seed", 42)
         max_tokens = config.get("max_tokens", 4096)
 
+        # Ensure output_schema is a dict (asyncpg returns JSONB as string)
+        schema = output_schema
+        if isinstance(schema, str):
+            schema = json.loads(schema)
+
         # Build response_format for structured output
         response_format: dict[str, Any] = {
             "type": "json_schema",
             "json_schema": {
                 "name": "output",
                 "strict": True,
-                "schema": output_schema,
+                "schema": schema,
             },
         }
 

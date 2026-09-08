@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import json
+
 import jsonschema
 
 from app.plugins.protocols import ValidationResult
@@ -19,6 +21,10 @@ class SchemaValidator:
         source_text: str,
         schema: dict,
     ) -> ValidationResult:
+        # Ensure schema is a dict (asyncpg returns JSONB as string)
+        if isinstance(schema, str):
+            schema = json.loads(schema)
+
         errors: list[str] = []
 
         try:
