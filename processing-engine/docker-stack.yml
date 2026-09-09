@@ -21,7 +21,7 @@ services:
         - "traefik.docker.network=oraculusnet"
         - "traefik.http.routers.votolimpo-pe.rule=Host(`pe.votolimpo.digital-ai.tech`)"
         - "traefik.http.routers.votolimpo-pe.entrypoints=websecure"
-        - "traefik.http.routers.votolimpo-pe.tls.certresolver=letsencrypt"
+        - "traefik.http.routers.votolimpo-pe.tls.certresolver=letsencryptresolver"
         - "traefik.http.routers.votolimpo-pe-http.rule=Host(`pe.votolimpo.digital-ai.tech`)"
         - "traefik.http.routers.votolimpo-pe-http.entrypoints=web"
         - "traefik.http.routers.votolimpo-pe-http.middlewares=redirect-to-https"

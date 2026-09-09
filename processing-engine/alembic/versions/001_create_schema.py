@@ -15,7 +15,7 @@ depends_on = None
 
 def upgrade() -> None:
     op.execute("CREATE SCHEMA IF NOT EXISTS processing_engine")
-    op.execute("CREATE EXTENSION IF NOT EXISTS vector")
+    op.execute("CREATE EXTENSION IF NOT EXISTS vector SCHEMA public")
 
 
 def downgrade() -> None:
