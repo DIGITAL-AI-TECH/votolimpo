@@ -11,11 +11,11 @@ class Settings(BaseSettings):
     host: str = "0.0.0.0"
     port: int = 8000
 
-    # Database (engine internal schema)
-    database_url: str = "postgresql+asyncpg://postgres:postgres@localhost:5432/votolimpo"
+    # Database (engine internal schema) — PE_DATABASE_URL env var required
+    database_url: str
 
-    # VotoLimpo target database (sink writes here)
-    votolimpo_database_url: str = "postgresql+asyncpg://postgres:postgres@localhost:5432/votolimpo"
+    # VotoLimpo target database (sink writes here) — PE_VOTOLIMPO_DATABASE_URL env var required
+    votolimpo_database_url: str
 
     # OpenAI
     openai_api_key: str = ""

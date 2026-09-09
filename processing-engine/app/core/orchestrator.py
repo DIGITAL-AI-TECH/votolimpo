@@ -403,9 +403,22 @@ async def _send_callback(url: str, job_id: str, status: str):
     if not _validate_callback_url(url):
         logger.warning("Callback URL blocked (SSRF protection): %s", url)
         return
+    import socket
     import httpx
+    # DNS rebinding protection: resolve hostname and validate IP
     try:
-        async with httpx.AsyncClient(timeout=10) as client:
+        parsed_host = urlparse(url).hostname
+        addrs = socket.getaddrinfo(parsed_host, None)
+        for _, _, _, _, sockaddr in addrs:
+            addr = ip_address(sockaddr[0])
+            if not addr.is_global:
+                logger.warning("Callback blocked (resolved to non-global IP %s): %s", addr, url)
+                return
+    except Exception as e:
+        logger.warning("Callback DNS resolution failed for %s: %s", url, e)
+        return
+    try:
+        async with httpx.AsyncClient(timeout=10, follow_redirects=False) as client:
             await client.post(url, json={"job_id": job_id, "status": status})
         logger.info("Callback sent: %s → %s", job_id, url)
     except Exception as e:
