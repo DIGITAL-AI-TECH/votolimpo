@@ -6,6 +6,8 @@ import json
 import logging
 import time
 from datetime import datetime, timedelta, timezone
+from ipaddress import ip_address
+from urllib.parse import urlparse
 
 from ..config import settings
 from ..storage.database import get_pool
@@ -147,18 +149,18 @@ async def _process_job_items(job_id: str, pipeline: PipelineConfig):
     sem = asyncio.Semaphore(settings.worker_concurrency)
 
     async def _process_one(item):
-        nonlocal completed, failed, total_cost, total_duration
         async with sem:
-            result = await _process_single_item(
+            return await _process_single_item(
                 item, job_id, pipeline, ingestor, dedup, llm,
                 validators, sink, system_prompt, output_schema, pool,
             )
-            completed += result["completed"]
-            failed += result["failed"]
-            total_cost += result["cost"]
-            total_duration += result["duration"]
 
-    await asyncio.gather(*[_process_one(item) for item in items])
+    results = await asyncio.gather(*[_process_one(item) for item in items])
+    for r in results:
+        completed += r["completed"]
+        failed += r["failed"]
+        total_cost += r["cost"]
+        total_duration += r["duration"]
 
     # Finalize job
     status = "completed" if failed == 0 else ("partial" if completed > 0 else "failed")
@@ -376,8 +378,31 @@ async def _log_step(
         duration_ms, error_message, json.dumps(metadata or {}))
 
 
+def _validate_callback_url(url: str) -> bool:
+    """Validate callback URL is safe (no SSRF to internal networks)."""
+    try:
+        parsed = urlparse(url)
+        if parsed.scheme not in ("http", "https"):
+            return False
+        host = parsed.hostname
+        if not host:
+            return False
+        try:
+            addr = ip_address(host)
+            return addr.is_global
+        except ValueError:
+            # It's a hostname, block obvious internal patterns
+            blocked = ("localhost", "127.0.0.1", "0.0.0.0", "169.254.169.254", "[::1]")
+            return host.lower() not in blocked
+    except Exception:
+        return False
+
+
 async def _send_callback(url: str, job_id: str, status: str):
     """Send callback webhook when job completes."""
+    if not _validate_callback_url(url):
+        logger.warning("Callback URL blocked (SSRF protection): %s", url)
+        return
     import httpx
     try:
         async with httpx.AsyncClient(timeout=10) as client:

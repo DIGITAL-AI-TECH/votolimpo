@@ -5,7 +5,7 @@ import json
 import logging
 import re
 import unicodedata
-from math import exp, log2
+from math import exp, log2  # noqa: F401 — used in scoring helpers
 from datetime import datetime, timezone
 from typing import Any, Protocol
 
@@ -35,13 +35,16 @@ class PostgreSQLSink:
         mappings = config.get("mappings", [])
         result = {"tables_written": [], "article_id": None}
 
-        # C4 fix: allow separate target DB
+        # C4 fix: allow separate target DB (whitelist of allowed env vars)
+        ALLOWED_DB_ENVS = {"PE_VOTOLIMPO_DATABASE_URL", "PE_DATABASE_URL"}
         db_env = config.get("database_url_env")
         own_conn = None
         if db_env:
+            if db_env not in ALLOWED_DB_ENVS:
+                raise ValueError(f"database_url_env '{db_env}' not in whitelist: {ALLOWED_DB_ENVS}")
             target_url = os.environ.get(db_env)
             if target_url:
-                own_conn = await asyncpg.connect(target_url)
+                own_conn = await asyncpg.connect(target_url, timeout=10)
                 conn = own_conn
 
         try:

@@ -17,6 +17,10 @@ COPY pipelines/ pipelines/
 COPY prompts/ prompts/
 COPY schemas/ schemas/
 
+# Non-root user
+RUN adduser --disabled-password --no-create-home appuser
+USER appuser
+
 ENV PE_PIPELINES_DIR=/app/pipelines \
     PE_PROMPTS_DIR=/app/prompts \
     PE_SCHEMAS_DIR=/app/schemas \

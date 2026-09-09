@@ -2,8 +2,9 @@ version: "3.8"
 
 services:
   processing-engine:
-    image: registry.digital-ai.tech/votolimpo-processing-engine:latest
+    image: registry.digital-ai.tech/votolimpo-processing-engine:${IMAGE_TAG:-latest}
     environment:
+      PE_API_KEY: "${PE_API_KEY}"
       PE_DATABASE_URL: "${PE_DATABASE_URL}"
       PE_VOTOLIMPO_DATABASE_URL: "${PE_VOTOLIMPO_DATABASE_URL}"
       PE_OPENAI_API_KEY: "${PE_OPENAI_API_KEY}"
@@ -21,6 +22,9 @@ services:
         - "traefik.http.routers.votolimpo-pe.rule=Host(`pe.votolimpo.digital-ai.tech`)"
         - "traefik.http.routers.votolimpo-pe.entrypoints=websecure"
         - "traefik.http.routers.votolimpo-pe.tls.certresolver=letsencrypt"
+        - "traefik.http.routers.votolimpo-pe-http.rule=Host(`pe.votolimpo.digital-ai.tech`)"
+        - "traefik.http.routers.votolimpo-pe-http.entrypoints=web"
+        - "traefik.http.routers.votolimpo-pe-http.middlewares=redirect-to-https"
         - "traefik.http.services.votolimpo-pe.loadbalancer.server.port=8000"
       resources:
         limits:

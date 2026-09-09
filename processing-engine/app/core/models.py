@@ -35,7 +35,7 @@ class ProcessingJob(BaseModel):
     """A batch job submitted for processing."""
     job_id: str = Field(default_factory=lambda: str(uuid.uuid4()))
     pipeline_id: str
-    items: list[ProcessingItem]
+    items: list[ProcessingItem] = Field(min_length=1)
     priority: JobPriority = JobPriority.normal
     callback_url: str | None = None
     idempotency_key: str | None = None

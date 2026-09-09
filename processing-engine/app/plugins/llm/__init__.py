@@ -123,17 +123,22 @@ def get_llm_provider(provider: str) -> LLMProvider:
     return cls()
 
 
+def _safe_resolve(file_path: str, base_dir: str) -> Path:
+    """Resolve file path safely within base_dir (prevent path traversal)."""
+    base = Path(base_dir).resolve()
+    p = (base / Path(file_path).name).resolve()
+    if not str(p).startswith(str(base)):
+        raise ValueError(f"Path traversal blocked: {file_path}")
+    return p
+
+
 def load_system_prompt(file_path: str) -> str:
     """Load system prompt from file, resolving relative to prompts_dir."""
-    p = Path(file_path)
-    if not p.is_absolute():
-        p = Path(settings.prompts_dir) / p.name
+    p = _safe_resolve(file_path, settings.prompts_dir)
     return p.read_text()
 
 
 def load_output_schema(file_path: str) -> dict:
     """Load JSON schema from file, resolving relative to schemas_dir."""
-    p = Path(file_path)
-    if not p.is_absolute():
-        p = Path(settings.schemas_dir) / p.name
+    p = _safe_resolve(file_path, settings.schemas_dir)
     return json.loads(p.read_text())
