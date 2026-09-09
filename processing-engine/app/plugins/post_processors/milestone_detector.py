@@ -5,6 +5,8 @@ from typing import Any
 
 import asyncpg
 
+from . import validate_sql_identifier
+
 logger = logging.getLogger(__name__)
 
 
@@ -17,9 +19,11 @@ class MilestoneDetector:
     async def process(
         self, output: dict, item_metadata: dict, pool: asyncpg.Pool, config: dict[str, Any],
     ) -> dict:
-        milestone_table = config.get("milestone_table", "votolimpo.milestones")
+        milestone_table = validate_sql_identifier(
+            config.get("milestone_table", "votolimpo.milestones"), "milestone_table"
+        )
         confidence_threshold = config.get("confidence_threshold", 0.70)
-        dedup_window_days = config.get("dedup_window_days", 7)
+        dedup_window_days = int(config.get("dedup_window_days", 7))
 
         # Map politician names to resolved IDs
         politician_id_map: dict[str, int] = {}
@@ -30,7 +34,7 @@ class MilestoneDetector:
         article_id = output.get("article_id")
         persisted_ids = []
 
-        async with pool.acquire() as conn:
+        async with pool.acquire() as conn, conn.transaction():
             for m in output.get("milestones", []):
                 confidence = m.get("confidence", 0)
                 if confidence < confidence_threshold:

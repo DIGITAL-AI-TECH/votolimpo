@@ -58,17 +58,25 @@ class PostProcessor(Protocol):
     async def process(
         self,
         output: dict,           # Output validado do LLM
-        item: dict,             # Item original (id, raw_content, source_url, metadata)
-        conn: asyncpg.Connection,  # DB connection (mesma transação)
+        item_metadata: dict,    # Item metadata (source_url, content_hash, etc.)
+        pool: asyncpg.Pool,     # DB pool — each processor acquires its own connection
         config: dict,           # Config do hook (vem do pipeline YAML)
     ) -> dict:
         """Processa output e retorna output (possivelmente enriquecido).
+
+        DESIGN DECISION (pool vs conn):
+        Each post-processor receives a Pool and acquires its own short-lived
+        connection. This means there is NO shared transaction across processors.
+        Trade-off: more flexible (each processor manages its own lifecycle) but
+        if processor N+1 fails, writes from processors 1..N are NOT rolled back.
+        This is intentional — partial enrichment is acceptable for this domain
+        (better to have entity resolution without scores than nothing at all).
 
         REGRAS:
         - DEVE retornar o output (modificado ou não)
         - PODE adicionar chaves ao output (ex: resolved_politician_ids)
         - NÃO PODE remover chaves existentes
-        - PODE fazer writes no DB (INSERT/UPDATE) via conn
+        - PODE fazer writes no DB (INSERT/UPDATE) — MUST use async with conn.transaction()
         - Exceção = abort do pipeline inteiro (mesmo comportamento de validator)
         """
         ...

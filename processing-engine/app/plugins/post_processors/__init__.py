@@ -36,6 +36,22 @@ class PostProcessor(Protocol):
     ) -> dict: ...
 
 
+# ─── SQL safety ───
+
+_SQL_IDENT_RE = re.compile(r'^[a-zA-Z_][a-zA-Z0-9_.]*$')
+
+
+def validate_sql_identifier(name: str, context: str = "identifier") -> str:
+    """Validate that a string is a safe SQL identifier (table/column name).
+
+    Allows: letters, digits, underscores, dots (for schema.table).
+    Raises ValueError if the name contains dangerous characters.
+    """
+    if not name or not _SQL_IDENT_RE.match(name):
+        raise ValueError(f"Invalid SQL {context}: {name!r}")
+    return name
+
+
 # ─── Shared helper functions (used by multiple post-processors) ───
 
 

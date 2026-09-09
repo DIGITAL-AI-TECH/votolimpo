@@ -11,6 +11,7 @@ from app.plugins.post_processors import (
     normalize_entity_name,
     generate_slug,
     get_post_processor,
+    validate_sql_identifier,
     POST_PROCESSORS,
     _register_all,
 )
@@ -41,12 +42,34 @@ class _AsyncCtx:
 def _make_pool(conn=None):
     """Create a mock asyncpg.Pool that yields a mock connection."""
     mock_conn = conn or AsyncMock()
+    # conn.transaction() must also be an async context manager
+    mock_conn.transaction = MagicMock(return_value=_AsyncCtx(None))
     mock_pool = MagicMock()
     mock_pool.acquire.return_value = _AsyncCtx(mock_conn)
     return mock_pool, mock_conn
 
 
 # ─── Protocol compliance ───
+
+
+class TestSqlIdentifierValidation:
+    def test_valid_simple_name(self):
+        assert validate_sql_identifier("articles", "test") == "articles"
+
+    def test_valid_schema_qualified(self):
+        assert validate_sql_identifier("votolimpo.articles", "test") == "votolimpo.articles"
+
+    def test_rejects_sql_injection(self):
+        with pytest.raises(ValueError):
+            validate_sql_identifier("articles; DROP TABLE users", "test")
+
+    def test_rejects_empty(self):
+        with pytest.raises(ValueError):
+            validate_sql_identifier("", "test")
+
+    def test_rejects_special_chars(self):
+        with pytest.raises(ValueError):
+            validate_sql_identifier("table-name", "test")
 
 
 class TestProtocolCompliance:
@@ -175,9 +198,10 @@ class TestScoreCalculator:
     def test_normalize_multi_source(self):
         assert _normalize_multi_source(0) == 0.0
         assert _normalize_multi_source(-1) == 0.0
-        assert _normalize_multi_source(0.3) == 0.5
+        assert _normalize_multi_source(0.3) == 0.3
         assert _normalize_multi_source(0.5) == 0.5
-        assert _normalize_multi_source(0.8) == 1.0
+        assert _normalize_multi_source(0.8) == 0.8
+        assert _normalize_multi_source(1.5) == 1.0
 
 
 # ─── EntityResolver ───

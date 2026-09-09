@@ -5,6 +5,8 @@ from typing import Any
 
 import asyncpg
 
+from . import validate_sql_identifier
+
 logger = logging.getLogger(__name__)
 
 
@@ -17,8 +19,12 @@ class RelationshipBuilder:
     async def process(
         self, output: dict, item_metadata: dict, pool: asyncpg.Pool, config: dict[str, Any],
     ) -> dict:
-        relationship_table = config.get("relationship_table", "votolimpo.relationships")
-        evidence_table = config.get("evidence_table", "votolimpo.relationship_evidence")
+        relationship_table = validate_sql_identifier(
+            config.get("relationship_table", "votolimpo.relationships"), "relationship_table"
+        )
+        evidence_table = validate_sql_identifier(
+            config.get("evidence_table", "votolimpo.relationship_evidence"), "evidence_table"
+        )
 
         # Build entity ID map from resolved entities
         entity_id_map: dict[str, int] = {}
@@ -32,7 +38,7 @@ class RelationshipBuilder:
         article_id = output.get("article_id")
         persisted_ids = []
 
-        async with pool.acquire() as conn:
+        async with pool.acquire() as conn, conn.transaction():
             for rel in output.get("relationships", []):
                 src_id = entity_id_map.get(rel.get("source"))
                 tgt_id = entity_id_map.get(rel.get("target"))

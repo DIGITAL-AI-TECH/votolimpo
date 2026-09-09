@@ -27,6 +27,7 @@ class ScoreCalculator:
             "emotional_language": 0.10,
         })
         output_field = config.get("output_field", "veracity_score")
+        sources_table = config.get("sources_table", "votolimpo.sources")
 
         signals = output.get("veracity_signals", {})
 
@@ -34,9 +35,11 @@ class ScoreCalculator:
         source_reputation = 0.50
         source_name = item_metadata.get("source_name")
         if source_name:
+            from . import validate_sql_identifier
+            validate_sql_identifier(sources_table, "sources_table")
             async with pool.acquire() as conn:
                 row = await conn.fetchrow(
-                    "SELECT reputation_score FROM votolimpo.sources WHERE name = $1",
+                    f"SELECT reputation_score FROM {sources_table} WHERE name = $1",
                     source_name,
                 )
                 if row:
@@ -79,8 +82,8 @@ def _clamp(value: float, lo: float = 0.0, hi: float = 1.0) -> float:
 
 
 def _normalize_multi_source(raw: float) -> float:
-    if raw <= 0:
-        return 0.0
-    elif raw <= 0.5:
-        return 0.5
-    return 1.0
+    """Normalize multi_source signal to [0, 1] range.
+
+    Uses continuous clamping instead of discretization to preserve signal granularity.
+    """
+    return _clamp(raw, 0.0, 1.0)

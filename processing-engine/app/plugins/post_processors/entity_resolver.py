@@ -5,7 +5,7 @@ from typing import Any
 
 import asyncpg
 
-from . import normalize_for_search, normalize_entity_name, generate_slug
+from . import normalize_for_search, normalize_entity_name, generate_slug, validate_sql_identifier
 
 logger = logging.getLogger(__name__)
 
@@ -20,8 +20,12 @@ class EntityResolver:
     async def process(
         self, output: dict, item_metadata: dict, pool: asyncpg.Pool, config: dict[str, Any],
     ) -> dict:
-        politician_table = config.get("politician_table", "votolimpo.politicians")
-        entity_table = config.get("entity_table", "votolimpo.entities")
+        politician_table = validate_sql_identifier(
+            config.get("politician_table", "votolimpo.politicians"), "politician_table"
+        )
+        entity_table = validate_sql_identifier(
+            config.get("entity_table", "votolimpo.entities"), "entity_table"
+        )
         fuzzy_threshold = config.get("fuzzy_threshold", 0.80)
         fuzzy_party_threshold = config.get("fuzzy_party_threshold", 0.70)
         entity_fuzzy_threshold = config.get("entity_fuzzy_threshold", 0.85)
@@ -29,7 +33,7 @@ class EntityResolver:
         resolved_politician_ids = []
         resolved_entity_ids = []
 
-        async with pool.acquire() as conn:
+        async with pool.acquire() as conn, conn.transaction():
             # Resolve politicians
             for pol in output.get("politicians", []):
                 name = pol.get("name")

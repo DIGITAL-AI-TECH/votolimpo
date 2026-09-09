@@ -8,6 +8,8 @@ from typing import Any, Protocol
 
 import asyncpg
 
+from app.plugins.post_processors import validate_sql_identifier
+
 logger = logging.getLogger(__name__)
 
 
@@ -68,13 +70,26 @@ class PostgreSQLSink:
         table = config.get("table")
         if not table:
             raise ValueError("column_mapping mode requires 'table' in sink config")
+        validate_sql_identifier(table, "table")
 
         mapping = config["column_mapping"]
         conflict_column = config.get("conflict_column")
+        if conflict_column:
+            validate_sql_identifier(conflict_column, "conflict_column")
 
         columns = []
         values = []
         params = []
+
+        # Validate all column names from config
+        for db_col in mapping.values():
+            validate_sql_identifier(db_col, "column")
+        for col in config.get("static_columns", {}):
+            validate_sql_identifier(col, "static_column")
+        for db_col in config.get("item_field_mapping", {}).values():
+            validate_sql_identifier(db_col, "item_field_column")
+        if config.get("jsonb_fallback"):
+            validate_sql_identifier(config["jsonb_fallback"], "jsonb_fallback_column")
 
         # Map output fields → DB columns
         for output_key, db_col in mapping.items():
@@ -206,6 +221,7 @@ class PostgreSQLSink:
     async def _persist_jsonb_fallback(self, conn, output, item_metadata, config, result):
         """Fallback: persist as simple JSONB (item_id + output)."""
         table = config.get("table", "processing_engine.results")
+        validate_sql_identifier(table, "table")
         item_id = item_metadata.get("item_id", "unknown")
         await conn.execute(f"""
             INSERT INTO {table} (item_id, output)

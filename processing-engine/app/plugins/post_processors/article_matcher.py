@@ -5,6 +5,8 @@ from typing import Any
 
 import asyncpg
 
+from . import validate_sql_identifier
+
 logger = logging.getLogger(__name__)
 
 
@@ -18,14 +20,16 @@ class ArticleMatcher:
     async def process(
         self, output: dict, item_metadata: dict, pool: asyncpg.Pool, config: dict[str, Any],
     ) -> dict:
-        match_table = config.get("match_table", "votolimpo.article_matches")
+        match_table = validate_sql_identifier(
+            config.get("match_table", "votolimpo.article_matches"), "match_table"
+        )
         weights = config.get("weights", {
             "entity_overlap": 0.40,
             "keyword_overlap": 0.35,
             "temporal_proximity": 0.25,
         })
         persist_threshold = config.get("persist_threshold", 0.30)
-        window_days = config.get("window_days", 30)
+        window_days = int(config.get("window_days", 30))
 
         article_id = output.get("article_id")
         if not article_id:
@@ -33,7 +37,7 @@ class ArticleMatcher:
 
         matched_ids = []
 
-        async with pool.acquire() as conn:
+        async with pool.acquire() as conn, conn.transaction():
             # Get current article data
             row = await conn.fetchrow("""
                 SELECT a.keywords, a.published_at,
@@ -54,15 +58,15 @@ class ArticleMatcher:
                 return output
 
             # Find candidates sharing politicians within window
-            candidates = await conn.fetch(f"""
+            candidates = await conn.fetch("""
                 SELECT a.id, a.keywords, a.published_at,
                        array_agg(pa.politician_id) as politician_ids
                 FROM votolimpo.articles a
                 JOIN votolimpo.politician_articles pa ON pa.article_id = a.id
-                WHERE a.id != $1 AND a.published_at >= NOW() - INTERVAL '{window_days} days'
+                WHERE a.id != $1 AND a.published_at >= NOW() - ($3 * INTERVAL '1 day')
                   AND pa.politician_id = ANY($2)
                 GROUP BY a.id
-            """, article_id, pids)
+            """, article_id, pids, window_days)
 
             for cand in candidates:
                 sim = _calculate_similarity(

@@ -5,6 +5,8 @@ from typing import Any
 
 import asyncpg
 
+from . import validate_sql_identifier
+
 logger = logging.getLogger(__name__)
 
 
@@ -17,16 +19,22 @@ class ClusterUpdater:
     async def process(
         self, output: dict, item_metadata: dict, pool: asyncpg.Pool, config: dict[str, Any],
     ) -> dict:
-        cluster_table = config.get("cluster_table", "votolimpo.news_clusters")
-        cluster_articles_table = config.get("cluster_articles_table", "votolimpo.cluster_articles")
-        cluster_politicians_table = config.get("cluster_politicians_table", "votolimpo.cluster_politicians")
+        cluster_table = validate_sql_identifier(
+            config.get("cluster_table", "votolimpo.news_clusters"), "cluster_table"
+        )
+        cluster_articles_table = validate_sql_identifier(
+            config.get("cluster_articles_table", "votolimpo.cluster_articles"), "cluster_articles_table"
+        )
+        cluster_politicians_table = validate_sql_identifier(
+            config.get("cluster_politicians_table", "votolimpo.cluster_politicians"), "cluster_politicians_table"
+        )
         similarity_threshold = config.get("similarity_threshold", 0.50)
 
         article_id = output.get("article_id")
         if not article_id:
             return output
 
-        async with pool.acquire() as conn:
+        async with pool.acquire() as conn, conn.transaction():
             # Find high-similarity matches
             matches = await conn.fetch("""
                 SELECT article_a_id, article_b_id
