@@ -11,8 +11,8 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from app.plugins.dedup.hash import HashDedupStrategy
 from app.plugins.dedup.composite import CompositeDedupStrategy
+from app.plugins.dedup.hash import HashDedupStrategy
 
 
 @pytest.fixture
