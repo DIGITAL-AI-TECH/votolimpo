@@ -11,9 +11,12 @@ Revision ID: 015
 Revises: 014
 Create Date: 2026-09-08
 """
+
 import json
-from alembic import op
+
 from sqlalchemy import text
+
+from alembic import op
 
 revision = "015"
 down_revision = "014"
@@ -47,14 +50,29 @@ Se um dado não estiver disponível, use null — NUNCA invente."""
 
 VOTO_LIMPO_OUTPUT_SCHEMA = {
     "type": "object",
-    "required": ["title", "summary", "severity", "veracity", "politicians", "keywords", "categories"],
+    "required": [
+        "title",
+        "summary",
+        "severity",
+        "veracity",
+        "politicians",
+        "keywords",
+        "categories",
+    ],
     "properties": {
         "title": {"type": "string"},
         "summary": {"type": "string"},
         "severity": {"type": "string", "enum": ["low", "medium", "high", "critical"]},
         "veracity": {
             "type": "object",
-            "required": ["score", "source_reputation", "narrative_consistency", "documental_evidence", "temporality_score", "emotional_language"],
+            "required": [
+                "score",
+                "source_reputation",
+                "narrative_consistency",
+                "documental_evidence",
+                "temporality_score",
+                "emotional_language",
+            ],
             "properties": {
                 "score": {"type": "number", "minimum": 0, "maximum": 1},
                 "source_reputation": {"type": "number", "minimum": 0, "maximum": 1},
@@ -75,7 +93,10 @@ VOTO_LIMPO_OUTPUT_SCHEMA = {
                     "party": {"type": ["string", "null"]},
                     "state": {"type": ["string", "null"]},
                     "political_role": {"type": ["string", "null"]},
-                    "role_in_article": {"type": "string", "enum": ["subject", "mentioned", "related"]},
+                    "role_in_article": {
+                        "type": "string",
+                        "enum": ["subject", "mentioned", "related"],
+                    },
                 },
             },
         },
@@ -122,7 +143,7 @@ INSERT INTO processing_engine.pipelines (
     :name, :description, :ingestor_type, :max_content_chars,
     :dedup_strategy, :dedup_threshold,
     :llm_provider, :llm_model, :llm_temperature, :llm_seed, :llm_max_tokens,
-    :system_prompt, :output_schema::jsonb, cast(:validators as text[]), :sink_type, :sink_config::jsonb,
+    :system_prompt, CAST(:output_schema AS jsonb), CAST(:validators AS text[]), :sink_type, CAST(:sink_config AS jsonb),
     :max_concurrent, :rate_limit_rpm, :budget_limit_usd, :budget_period,
     :max_retries, :retry_backoff_base, :cache_ttl_hours
 )
@@ -133,12 +154,29 @@ def upgrade():
     conn = op.get_bind()
 
     _KEYS = [
-        "name", "description", "ingestor_type", "max_content_chars",
-        "dedup_strategy", "dedup_threshold",
-        "llm_provider", "llm_model", "llm_temperature", "llm_seed", "llm_max_tokens",
-        "system_prompt", "output_schema", "validators", "sink_type", "sink_config",
-        "max_concurrent", "rate_limit_rpm", "budget_limit_usd", "budget_period",
-        "max_retries", "retry_backoff_base", "cache_ttl_hours",
+        "name",
+        "description",
+        "ingestor_type",
+        "max_content_chars",
+        "dedup_strategy",
+        "dedup_threshold",
+        "llm_provider",
+        "llm_model",
+        "llm_temperature",
+        "llm_seed",
+        "llm_max_tokens",
+        "system_prompt",
+        "output_schema",
+        "validators",
+        "sink_type",
+        "sink_config",
+        "max_concurrent",
+        "rate_limit_rpm",
+        "budget_limit_usd",
+        "budget_period",
+        "max_retries",
+        "retry_backoff_base",
+        "cache_ttl_hours",
     ]
 
     pipelines = [
@@ -146,86 +184,142 @@ def upgrade():
         (
             "voto-limpo-news-analysis",
             "Análise de notícias políticas brasileiras — extrai políticos, entidades, relações, veracidade e severidade",
-            "auto", 100000,
-            "hash", 0.85,
-            "openai", "gpt-4.1-mini", 0.0, 42, 16384,
+            "auto",
+            100000,
+            "hash",
+            0.85,
+            "openai",
+            "gpt-4.1-mini",
+            0.0,
+            42,
+            16384,
             VOTO_LIMPO_SYSTEM_PROMPT,
             json.dumps(VOTO_LIMPO_OUTPUT_SCHEMA),
             "{schema}",
             "postgresql",
             json.dumps({"table": "voto_limpo.articles", "conflict_column": "pe_item_id"}),
-            5, 60, 50.0, "monthly",
-            3, 2.0, 720,
+            5,
+            60,
+            50.0,
+            "monthly",
+            3,
+            2.0,
+            720,
         ),
         # 2. HELP CORE — Inventory
         (
             "helpcore-inventory",
             "Classificação e inventário de artigos da base de conhecimento",
-            "auto", 100000,
-            "composite", 0.85,
-            "openai", "gpt-4.1-mini", 0.0, 42, 8192,
+            "auto",
+            100000,
+            "composite",
+            0.85,
+            "openai",
+            "gpt-4.1-mini",
+            0.0,
+            42,
+            8192,
             HELPCORE_INVENTORY_PROMPT,
             json.dumps({}),
             "{schema}",
             "postgresql",
             json.dumps({"table": "help_core.inventory", "conflict_column": "pe_item_id"}),
-            5, 60, 30.0, "monthly",
-            3, 2.0, 720,
+            5,
+            60,
+            30.0,
+            "monthly",
+            3,
+            2.0,
+            720,
         ),
         # 3. HELP CORE — Dedup
         (
             "helpcore-dedup",
             "Deduplicação semântica de artigos da base de conhecimento",
-            "auto", 100000,
-            "semantic", 0.85,
-            "openai", "gpt-4.1-mini", 0.0, 42, 8192,
+            "auto",
+            100000,
+            "semantic",
+            0.85,
+            "openai",
+            "gpt-4.1-mini",
+            0.0,
+            42,
+            8192,
             HELPCORE_DEDUP_PROMPT,
             json.dumps({}),
             "{schema}",
             "postgresql",
             json.dumps({"table": "help_core.dedup_proposals", "conflict_column": "pe_item_id"}),
-            3, 30, 20.0, "monthly",
-            3, 2.0, 720,
+            3,
+            30,
+            20.0,
+            "monthly",
+            3,
+            2.0,
+            720,
         ),
         # 4. HELP CORE — Rewrite
         (
             "helpcore-rewrite",
             "Reescrita assistida de artigos para padrão corporativo",
-            "auto", 100000,
-            "hash", 0.85,
-            "openai", "gpt-4.1-mini", 0.0, 42, 16384,
+            "auto",
+            100000,
+            "hash",
+            0.85,
+            "openai",
+            "gpt-4.1-mini",
+            0.0,
+            42,
+            16384,
             HELPCORE_REWRITE_PROMPT,
             json.dumps({}),
             "{schema}",
             "postgresql",
             json.dumps({"table": "help_core.rewrites", "conflict_column": "pe_item_id"}),
-            3, 30, 30.0, "monthly",
-            3, 2.0, 720,
+            3,
+            30,
+            30.0,
+            "monthly",
+            3,
+            2.0,
+            720,
         ),
         # 5. HELP CORE — Quality Score
         (
             "helpcore-quality-score",
             "Scoring de confiabilidade e qualidade de artigos",
-            "auto", 100000,
-            "hash", 0.85,
-            "openai", "gpt-4.1-mini", 0.0, 42, 8192,
+            "auto",
+            100000,
+            "hash",
+            0.85,
+            "openai",
+            "gpt-4.1-mini",
+            0.0,
+            42,
+            8192,
             HELPCORE_QUALITY_PROMPT,
             json.dumps({}),
             "{schema}",
             "postgresql",
             json.dumps({"table": "help_core.quality_scores", "conflict_column": "pe_item_id"}),
-            5, 60, 20.0, "monthly",
-            3, 2.0, 720,
+            5,
+            60,
+            20.0,
+            "monthly",
+            3,
+            2.0,
+            720,
         ),
     ]
 
     for p in pipelines:
-        conn.execute(INSERT, dict(zip(_KEYS, p)))
+        conn.execute(INSERT, dict(zip(_KEYS, p, strict=False)))
 
 
 def downgrade():
     conn = op.get_bind()
-    conn.execute(text("""
+    conn.execute(
+        text("""
         DELETE FROM processing_engine.pipelines
         WHERE name IN (
             'voto-limpo-news-analysis',
@@ -234,4 +328,5 @@ def downgrade():
             'helpcore-rewrite',
             'helpcore-quality-score'
         )
-    """))
+    """)
+    )
