@@ -49,7 +49,9 @@ class TestHashDedupSelfMatch:
 
         # Verify the SQL was called with 4 params (including current_item_id)
         call_args = conn.fetchrow.call_args
-        assert len(call_args[0]) == 5  # sql + pipeline_id + url_hash + content_hash + current_item_id
+        assert (
+            len(call_args[0]) == 5
+        )  # sql + pipeline_id + url_hash + content_hash + current_item_id
         assert call_args[0][4] == item_id  # current_item_id is the 5th arg (4th param)
 
     @pytest.mark.asyncio
@@ -118,9 +120,7 @@ class TestCompositeDedupSelfMatch:
     async def test_propagates_current_item_id(self, item_id: str, pipeline_id: str):
         """current_item_id is forwarded to each sub-strategy."""
         mock_strategy = AsyncMock()
-        mock_strategy.check = AsyncMock(
-            return_value=MagicMock(is_duplicate=False)
-        )
+        mock_strategy.check = AsyncMock(return_value=MagicMock(is_duplicate=False))
 
         composite = CompositeDedupStrategy(strategies=[mock_strategy])
         conn = AsyncMock()
