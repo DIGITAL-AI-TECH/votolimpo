@@ -1,0 +1,179 @@
+{
+  "type": "object",
+  "properties": {
+    "is_political": {
+      "type": "boolean",
+      "description": "Whether the article is political in nature"
+    },
+    "severity": {
+      "type": "string",
+      "enum": ["low", "medium", "high", "critical"],
+      "description": "Severity level of the news for involved politicians"
+    },
+    "title": {
+      "type": ["string", "null"],
+      "description": "Article title if extractable"
+    },
+    "summary": {
+      "type": ["string", "null"],
+      "description": "Brief summary of the article (max 500 chars)"
+    },
+    "published_date": {
+      "type": ["string", "null"],
+      "description": "Publication date in ISO-8601 format"
+    },
+    "politicians": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "Politician name as it appears in text"
+          },
+          "party": {
+            "type": ["string", "null"],
+            "description": "Party if explicitly mentioned"
+          },
+          "state": {
+            "type": ["string", "null"],
+            "description": "State (UF) if explicitly mentioned"
+          },
+          "role": {
+            "type": "string",
+            "enum": ["protagonist", "investigated", "mentioned", "witness", "victim", "other"],
+            "description": "Role in the article"
+          },
+          "office": {
+            "type": ["string", "null"],
+            "description": "Political office if explicitly mentioned"
+          }
+        },
+        "required": ["name", "party", "state", "role", "office"],
+        "additionalProperties": false
+      },
+      "description": "Politicians mentioned in the article"
+    },
+    "veracity_signals": {
+      "type": "object",
+      "properties": {
+        "source_reputation": {
+          "type": "number",
+          "description": "Source reputation score 0.0-1.0"
+        },
+        "narrative_consistency": {
+          "type": "number",
+          "description": "Internal consistency score 0.0-1.0"
+        },
+        "documental_evidence": {
+          "type": "number",
+          "description": "Documentary evidence score 0.0-1.0"
+        },
+        "temporality": {
+          "type": "number",
+          "description": "Temporal precision score 0.0-1.0"
+        },
+        "emotional_language": {
+          "type": "number",
+          "description": "Neutral=1.0, emotional=0.0"
+        }
+      },
+      "required": ["source_reputation", "narrative_consistency", "documental_evidence", "temporality", "emotional_language"],
+      "additionalProperties": false,
+      "description": "Veracity signals for fact-checking"
+    },
+    "entities": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "Entity name"
+          },
+          "type": {
+            "type": "string",
+            "enum": ["organization", "court", "party", "government_body", "company", "ngo", "media", "other"],
+            "description": "Entity type"
+          }
+        },
+        "required": ["name", "type"],
+        "additionalProperties": false
+      },
+      "description": "Non-person entities mentioned"
+    },
+    "relationships": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "source": {
+            "type": "string",
+            "description": "Source entity name"
+          },
+          "target": {
+            "type": "string",
+            "description": "Target entity name"
+          },
+          "type": {
+            "type": "string",
+            "enum": ["investigates", "accuses", "defends", "finances", "allies_with", "opposes", "member_of", "leads", "other"],
+            "description": "Relationship type"
+          },
+          "description": {
+            "type": ["string", "null"],
+            "description": "Brief description of the relationship"
+          }
+        },
+        "required": ["source", "target", "type", "description"],
+        "additionalProperties": false
+      },
+      "description": "Relationships between entities"
+    },
+    "milestones": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "date": {
+            "type": ["string", "null"],
+            "description": "Date in ISO-8601 format"
+          },
+          "description": {
+            "type": "string",
+            "description": "What happened"
+          },
+          "type": {
+            "type": "string",
+            "enum": ["investigation_opened", "charges_filed", "trial_started", "convicted", "acquitted", "arrested", "released", "resigned", "elected", "impeached", "other"],
+            "description": "Milestone type"
+          }
+        },
+        "required": ["date", "description", "type"],
+        "additionalProperties": false
+      },
+      "description": "Key temporal milestones"
+    },
+    "keywords": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "Relevant keywords from the article"
+    }
+  },
+  "required": [
+    "is_political",
+    "severity",
+    "title",
+    "summary",
+    "published_date",
+    "politicians",
+    "veracity_signals",
+    "entities",
+    "relationships",
+    "milestones",
+    "keywords"
+  ],
+  "additionalProperties": false
+}
