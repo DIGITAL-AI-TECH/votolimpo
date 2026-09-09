@@ -1,97 +1,41 @@
 version: "3.8"
 
 services:
-  api:
-    image: registry.digital-ai.tech/processing-engine:${TAG:-latest}
+  processing-engine:
+    image: registry.digital-ai.tech/votolimpo-processing-engine:${IMAGE_TAG:-latest}
     environment:
-      - DB_HOST=pe-postgres
-      - DB_PORT=5432
-      - DB_NAME=processing_engine
-      - DB_USER=postgres
-      - DB_PASSWORD=${DB_PASSWORD}
-      - OPENAI_API_KEY=${OPENAI_API_KEY}
-      - API_KEY=${API_KEY}
-      - ENGINE_ROLE=both
-      - WORKER_POLL_INTERVAL_SECONDS=1.0
-      - LOG_LEVEL=INFO
-      - BATCHER_ENABLED=true
-      - BATCHER_POLL_INTERVAL_SECONDS=5
-      - BATCHER_DEFAULT_BATCH_SIZE=50
+      PE_API_KEY: "${PE_API_KEY}"
+      PE_DATABASE_URL: "${PE_DATABASE_URL}"
+      PE_VOTOLIMPO_DATABASE_URL: "${PE_VOTOLIMPO_DATABASE_URL}"
+      PE_OPENAI_API_KEY: "${PE_OPENAI_API_KEY}"
+      PE_ENGINE_ROLE: "both"
+      PE_WORKER_CONCURRENCY: "2"
+      PE_WORKER_POLL_INTERVAL: "5"
+      PE_LOG_LEVEL: "info"
     networks:
-      - oraculusnet_v2
-      - pe-net
+      - oraculusnet
     deploy:
       replicas: 1
-      resources:
-        limits:
-          cpus: "1.0"
-          memory: 512M
-        reservations:
-          cpus: "0.25"
-          memory: 128M
       labels:
         - "traefik.enable=true"
-        - "traefik.docker.network=oraculusnet_v2"
-        - "traefik.http.routers.processing-engine.rule=Host(`processing-engine.digital-ai.tech`)"
-        - "traefik.http.routers.processing-engine.entrypoints=websecure"
-        - "traefik.http.routers.processing-engine.tls.certresolver=letsencryptresolver"
-        - "traefik.http.services.processing-engine.loadbalancer.server.port=8000"
-        # HTTP -> HTTPS redirect
-        - "traefik.http.routers.processing-engine-http.rule=Host(`processing-engine.digital-ai.tech`)"
-        - "traefik.http.routers.processing-engine-http.entrypoints=web"
-        - "traefik.http.routers.processing-engine-http.middlewares=redirect-to-https"
-      update_config:
-        parallelism: 1
-        delay: 10s
-        order: stop-first
-        failure_action: pause
-        monitor: 30s
-      rollback_config:
-        parallelism: 1
-        delay: 5s
-        order: stop-first
-    healthcheck:
-      test: ["CMD-SHELL", "python -c \"import httpx; r=httpx.get('http://localhost:8000/health'); exit(0 if r.status_code in (200,503) else 1)\""]
-      interval: 15s
-      timeout: 10s
-      retries: 5
-      start_period: 120s
-
-  postgres:
-    image: pgvector/pgvector:pg16
-    environment:
-      - POSTGRES_DB=processing_engine
-      - POSTGRES_USER=postgres
-      - POSTGRES_PASSWORD=${DB_PASSWORD}
-    volumes:
-      - type: volume
-        source: pgdata
-        target: /var/lib/postgresql/data
-    networks:
-      pe-net:
-        aliases:
-          - pe-postgres
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres -d processing_engine"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-      start_period: 30s
-    deploy:
-      placement:
-        constraints:
-          - node.hostname == oraculus-server-4
+        - "traefik.docker.network=oraculusnet"
+        - "traefik.http.routers.votolimpo-pe.rule=Host(`pe.votolimpo.digital-ai.tech`)"
+        - "traefik.http.routers.votolimpo-pe.entrypoints=websecure"
+        - "traefik.http.routers.votolimpo-pe.tls.certresolver=letsencrypt"
+        - "traefik.http.routers.votolimpo-pe-http.rule=Host(`pe.votolimpo.digital-ai.tech`)"
+        - "traefik.http.routers.votolimpo-pe-http.entrypoints=web"
+        - "traefik.http.routers.votolimpo-pe-http.middlewares=redirect-to-https"
+        - "traefik.http.services.votolimpo-pe.loadbalancer.server.port=8000"
       resources:
         limits:
-          cpus: "1.0"
-          memory: 1G
+          memory: 512M
+        reservations:
+          memory: 256M
+      restart_policy:
+        condition: on-failure
+        delay: 10s
+        max_attempts: 3
 
 networks:
-  oraculusnet_v2:
+  oraculusnet:
     external: true
-  pe-net:
-    driver: overlay
-    attachable: true
-
-volumes:
-  pgdata:
