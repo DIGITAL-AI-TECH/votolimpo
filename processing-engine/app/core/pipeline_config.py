@@ -42,9 +42,21 @@ class SinkMapping(BaseModel):
     key_column: str | None = None
 
 
+class PostProcessorEntry(BaseModel):
+    type: str
+    config: dict[str, Any] = Field(default_factory=dict)
+
+
 class SinkConfig(BaseModel):
     type: str = "postgresql"
     config: dict[str, Any] = Field(default_factory=dict)
+
+
+class CronEntry(BaseModel):
+    type: str
+    schedule: str = ""
+    config: dict[str, Any] = Field(default_factory=dict)
+    enabled: bool = True
 
 
 class CacheConfig(BaseModel):
@@ -62,7 +74,9 @@ class PipelineConfig(BaseModel):
     dedup: DedupConfig = Field(default_factory=DedupConfig)
     llm: LLMConfig = Field(default_factory=LLMConfig)
     validators: list[ValidatorEntry] = Field(default_factory=list)
+    post_processors: list[PostProcessorEntry] = Field(default_factory=list)
     sink: SinkConfig = Field(default_factory=SinkConfig)
+    crons: list[CronEntry] = Field(default_factory=list)
     cache: CacheConfig = Field(default_factory=CacheConfig)
 
 

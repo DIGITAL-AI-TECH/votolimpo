@@ -1,0 +1,266 @@
+name: voto-limpo-news-analysis
+description: >
+  Pipeline de analise de noticias politicas brasileiras. Extrai politicos,
+  severity, veracidade, entidades, relacionamentos e milestones usando
+  GPT-4.1-mini com structured output. Persiste no schema votolimpo.*.
+
+# --- Ingestao ---
+ingestor_type: auto  # detecta HTML/text/JSON automaticamente
+
+# --- Dedup ---
+dedup_strategy: composite  # hash + semantic
+dedup_config:
+  strategies: [hash, semantic]
+  semantic_threshold: 0.92
+
+# --- LLM ---
+llm_provider: openai
+llm_model: gpt-4.1-mini
+llm_temperature: 0.1
+llm_seed: 42
+llm_max_tokens: 2000
+
+system_prompt: |
+  Voce e um analista de inteligencia politica brasileira especializado em
+  extrair dados estruturados de noticias.
+
+  REGRAS ANTI-ALUCINACAO:
+  R1. Extraia APENAS informacoes EXPLICITAMENTE presentes no texto.
+  R2. Se um campo nao puder ser determinado, use null.
+  R3. NAO infira relacoes de causalidade nao declaradas.
+  R4. NAO atribua intencoes a politicos sem citacao direta.
+  R5. Severity deve refletir o FATO, nao a manchete sensacionalista.
+  R6. confidence de milestones: 1.0 = fato consumado com fonte judicial,
+      0.9 = reportado por 2+ veiculos, 0.7 = reportado por 1 veiculo.
+  R7. Para cada politico, extraia o papel MAIS ESPECIFICO (investigated > mentioned).
+  R8. keywords: use termos que identificam o EVENTO, nao genericos.
+  R9. relationships: so inclua se o texto EXPLICITA a relacao.
+  R10. entities: inclua apenas entidades com papel relevante na noticia.
+  R11. is_political: false para noticias que MENCIONAM politicos mas cujo
+       tema central nao e politico (ex: politico em evento esportivo).
+
+  Responda EXCLUSIVAMENTE com JSON valido no formato do schema.
+
+user_prompt_template: |
+  Analise a seguinte noticia politica brasileira.
+
+  Titulo: {title}
+  Fonte: {source_name}
+  Data de publicacao: {published_date}
+
+  Conteudo:
+  {content}
+
+output_schema:
+  type: object
+  required:
+    - politicians
+    - severity
+    - summary
+    - keywords
+    - veracity_signals
+    - entities
+    - relationships
+    - milestones
+    - is_political
+    - language
+  additionalProperties: false
+  properties:
+    politicians:
+      type: array
+      items:
+        type: object
+        required: [name, party, state, role, article_role, relevance_score]
+        additionalProperties: false
+        properties:
+          name: { type: string }
+          party: { type: [string, "null"] }
+          state: { type: [string, "null"] }
+          role: { type: [string, "null"] }
+          article_role:
+            type: string
+            enum: [protagonist, mentioned, investigated, witness, victim, other]
+          relevance_score: { type: number, minimum: 0.0, maximum: 1.0 }
+    severity:
+      type: string
+      enum: [low, medium, high, critical]
+    summary:
+      type: string
+      maxLength: 300
+    keywords:
+      type: array
+      items: { type: string }
+    veracity_signals:
+      type: object
+      required:
+        - source_reputation
+        - multi_source
+        - narrative_consistency
+        - documental_evidence
+        - temporality
+        - emotional_language
+      additionalProperties: false
+      properties:
+        source_reputation: { type: number, minimum: 0.0, maximum: 1.0 }
+        multi_source: { type: number, minimum: 0.0, maximum: 1.0 }
+        narrative_consistency: { type: number, minimum: 0.0, maximum: 1.0 }
+        documental_evidence: { type: number, minimum: 0.0, maximum: 1.0 }
+        temporality: { type: number, minimum: 0.0, maximum: 1.0 }
+        emotional_language: { type: number, minimum: 0.0, maximum: 1.0 }
+    entities:
+      type: array
+      items:
+        type: object
+        required: [name, type, context]
+        additionalProperties: false
+        properties:
+          name: { type: string }
+          type:
+            type: string
+            enum: [person, organization, location, event, concept]
+          context: { type: string }
+    relationships:
+      type: array
+      items:
+        type: object
+        required: [source, target, type, evidence]
+        additionalProperties: false
+        properties:
+          source: { type: string }
+          target: { type: string }
+          type:
+            type: string
+            enum: [ally, opponent, party_member, family, business, legal, investigation]
+          evidence: { type: string }
+    milestones:
+      type: array
+      items:
+        type: object
+        required: [politician_name, type, title, description, date, confidence]
+        additionalProperties: false
+        properties:
+          politician_name: { type: string }
+          type:
+            type: string
+            enum: [inquiry, complaint, conviction, acquittal, arrest, impeachment, plea_deal, fine]
+          title: { type: string }
+          description: { type: string }
+          date: { type: string, pattern: "^\\d{4}-\\d{2}-\\d{2}$" }
+          confidence: { type: number, minimum: 0.0, maximum: 1.0 }
+    is_political: { type: boolean }
+    language:
+      type: string
+      enum: [pt, en, es, other]
+
+# --- Validators ---
+validators: [schema, grounding, range]
+validator_config:
+  grounding:
+    min_overlap_ratio: 0.3  # 30% das keywords devem aparecer no texto
+  range:
+    ranges:
+      "veracity_signals.source_reputation": [0.0, 1.0]
+      "veracity_signals.multi_source": [0.0, 1.0]
+      "veracity_signals.narrative_consistency": [0.0, 1.0]
+      "veracity_signals.documental_evidence": [0.0, 1.0]
+      "veracity_signals.temporality": [0.0, 1.0]
+      "veracity_signals.emotional_language": [0.0, 1.0]
+
+# --- Post-Processors (novo!) ---
+post_processors:
+  - type: entity_resolver
+    config:
+      politician_table: votolimpo.politicians
+      entity_table: votolimpo.entities
+      fuzzy_threshold: 0.80
+      fuzzy_party_threshold: 0.70
+      entity_fuzzy_threshold: 0.85
+
+  - type: score_calculator
+    config:
+      weights:
+        source_reputation: 0.30
+        multi_source: 0.25
+        narrative_consistency: 0.15
+        documental_evidence: 0.10
+        temporality: 0.10
+        emotional_language: 0.10
+      output_field: veracity_score
+
+  - type: relationship_builder
+    config:
+      relationship_table: votolimpo.relationships
+      evidence_table: votolimpo.relationship_evidence
+
+  - type: milestone_detector
+    config:
+      milestone_table: votolimpo.milestones
+      confidence_threshold: 0.70
+      dedup_window_days: 7
+
+  - type: article_matcher
+    config:
+      match_table: votolimpo.article_matches
+      weights:
+        entity_overlap: 0.40
+        keyword_overlap: 0.35
+        temporal_proximity: 0.25
+      persist_threshold: 0.30
+      window_days: 30
+
+  - type: cluster_updater
+    config:
+      cluster_table: votolimpo.news_clusters
+      cluster_articles_table: votolimpo.cluster_articles
+      cluster_politicians_table: votolimpo.cluster_politicians
+      similarity_threshold: 0.50
+
+# --- Sink ---
+sink_type: postgresql
+sink_config:
+  table: votolimpo.articles
+  conflict_column: url_hash
+  column_mapping:
+    title: title
+    summary: summary
+    severity: severity
+    veracity_score: veracity_score
+    score_components: score_components
+    keywords: keywords
+    language: language
+    is_political: is_political
+  static_columns:
+    processing_status: completed
+  item_field_mapping:
+    source_url: source_url
+  jsonb_fallback: raw_output
+
+# --- Crons (executados pelo worker deste pipeline) ---
+crons:
+  - name: recalculate_politician_scores
+    schedule: "0 3 * * *"  # 03:00 UTC diario
+    handler: score_calculator.recalculate_all
+
+  - name: refresh_materialized_views
+    schedule: "0 */6 * * *"  # cada 6h
+    handler: mv_refresher.refresh_all
+
+  - name: update_source_reputation
+    schedule: "0 4 * * 0"  # domingo 04:00 UTC
+    handler: score_calculator.update_source_reputation
+
+  - name: regenerate_content
+    schedule: "0 5 * * 0"  # domingo 05:00 UTC
+    handler: content_generator.regenerate_all
+
+  - name: deactivate_stale_clusters
+    schedule: "0 4 * * *"  # 04:00 UTC diario
+    handler: cluster_updater.deactivate_stale
+
+# --- Limites ---
+max_concurrent: 5
+rate_limit_rpm: 60
+max_retries: 1
+cache_ttl_hours: 720
+budget_limit_usd: 10.0
+budget_period: month
