@@ -5,8 +5,9 @@ import logging
 
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI
+from fastapi import Depends, FastAPI
 
+from .api.auth import verify_api_key
 from .config import settings
 from .storage.database import get_pool, close_pool, init_engine_schema
 from .core.pipeline_config import load_pipelines
@@ -86,8 +87,14 @@ app = FastAPI(
 from .api.routes import jobs, pipelines, health  # noqa: E402
 
 app.include_router(health.router, tags=["health"])
-app.include_router(jobs.router, prefix="/v1", tags=["jobs"])
-app.include_router(pipelines.router, prefix="/v1", tags=["pipelines"])
+app.include_router(
+    jobs.router, prefix="/v1", tags=["jobs"],
+    dependencies=[Depends(verify_api_key)],
+)
+app.include_router(
+    pipelines.router, prefix="/v1", tags=["pipelines"],
+    dependencies=[Depends(verify_api_key)],
+)
 
 
 if __name__ == "__main__":

@@ -2,7 +2,7 @@
 
 from fastapi import APIRouter, HTTPException
 
-from ...core.pipeline_config import get_pipeline, _registry
+from ...core.pipeline_config import get_pipeline, list_pipelines as get_all_pipelines
 
 router = APIRouter()
 
@@ -22,7 +22,7 @@ async def list_pipelines():
                 "validators": [v.type for v in p.validators],
                 "sink": p.sink.type,
             }
-            for p in _registry.values()
+            for p in get_all_pipelines()
         ]
     }
 

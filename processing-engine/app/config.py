@@ -7,7 +7,7 @@ class Settings(BaseSettings):
     """Processing Engine configuration."""
 
     # API
-    api_key: str = "changeme"
+    api_key: str  # W1 fix: no insecure default — PE_API_KEY env var required
     host: str = "0.0.0.0"
     port: int = 8000
 

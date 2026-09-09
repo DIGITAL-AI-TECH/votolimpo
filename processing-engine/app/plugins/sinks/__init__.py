@@ -26,11 +26,34 @@ class PostgreSQLSink:
     """Persist to PostgreSQL — handles votolimpo schema with entity resolution, scoring, etc."""
 
     async def persist(self, output: dict, item_metadata: dict, config: dict, conn: asyncpg.Connection) -> dict:
-        """Persist extraction output transactionally to votolimpo.* tables."""
+        """Persist extraction output transactionally to votolimpo.* tables.
+
+        C4: If config has 'database_url_env', open a separate connection to the
+        target database. Otherwise, use the provided conn (same DB instance).
+        """
+        import os
         mappings = config.get("mappings", [])
         result = {"tables_written": [], "article_id": None}
 
-        # We run everything in a single transaction
+        # C4 fix: allow separate target DB
+        db_env = config.get("database_url_env")
+        own_conn = None
+        if db_env:
+            target_url = os.environ.get(db_env)
+            if target_url:
+                own_conn = await asyncpg.connect(target_url)
+                conn = own_conn
+
+        try:
+            await self._do_persist(conn, output, item_metadata, mappings, result)
+        finally:
+            if own_conn:
+                await own_conn.close()
+
+        return result
+
+    async def _do_persist(self, conn, output, item_metadata, mappings, result):
+        """Inner persist logic — extracted for connection flexibility."""
         async with conn.transaction():
             for mapping in mappings:
                 source_path = mapping.get("source_path", "")
@@ -122,10 +145,13 @@ class PostgreSQLSink:
         return row["id"]
 
     async def _resolve_politicians(self, conn: asyncpg.Connection, output: dict, article_id: int):
-        """Resolve and link politicians to article."""
+        """Resolve and link politicians to article (H6: safe .get access)."""
         for pol in output.get("politicians", []):
+            name = pol.get("name")
+            if not name:
+                continue
             politician_id = await self._resolve_politician(
-                conn, pol["name"], pol.get("party"), pol.get("state")
+                conn, name, pol.get("party"), pol.get("state")
             )
 
             # Update metadata
@@ -198,8 +224,10 @@ class PostgreSQLSink:
         entity_id_map: dict[str, int] = {}
 
         for ent in output.get("entities", []):
-            name = ent["name"]
-            ent_type = ent["type"]
+            name = ent.get("name")
+            ent_type = ent.get("type")
+            if not name or not ent_type:
+                continue
             norm = _normalize_for_search(name)
 
             # Exact

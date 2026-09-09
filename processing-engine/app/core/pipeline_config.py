@@ -98,9 +98,6 @@ def get_pipeline(pipeline_id: str) -> PipelineConfig | None:
     return _registry.get(pipeline_id)
 
 
-def resolve_env_vars(value: str) -> str:
-    """Resolve ${VAR} references in config values."""
-    if isinstance(value, str) and value.startswith("${") and value.endswith("}"):
-        var_name = value[2:-1]
-        return os.environ.get(var_name, value)
-    return value
+def list_pipelines() -> list[PipelineConfig]:
+    """Return all loaded pipeline configs (W7: public accessor)."""
+    return list(_registry.values())

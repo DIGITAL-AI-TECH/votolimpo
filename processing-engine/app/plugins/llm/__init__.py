@@ -71,7 +71,12 @@ class OpenAIProvider:
 
         response = await self.client.chat.completions.create(**kwargs)
         raw = response.choices[0].message.content
-        output = json.loads(raw)
+
+        # W4 fix: explicit JSONDecodeError handling
+        try:
+            output = json.loads(raw)
+        except json.JSONDecodeError as e:
+            raise ValueError(f"LLM returned invalid JSON: {e}. Raw: {raw[:200]}") from e
 
         usage = {
             "prompt_tokens": response.usage.prompt_tokens if response.usage else 0,
@@ -80,16 +85,31 @@ class OpenAIProvider:
             "model": model,
         }
 
-        # Estimate cost (GPT-4.1-mini pricing)
-        prompt_cost = (usage["prompt_tokens"] / 1_000_000) * 0.40
-        completion_cost = (usage["completion_tokens"] / 1_000_000) * 1.60
-        cost_usd = prompt_cost + completion_cost
+        # W3 fix: pricing map per model ($/1M tokens)
+        cost_usd = _estimate_cost(model, usage["prompt_tokens"], usage["completion_tokens"])
 
         return {
             "output": output,
             "usage": usage,
             "cost_usd": round(cost_usd, 6),
         }
+
+
+# W3 fix: pricing per model ($/1M tokens: [input, output])
+MODEL_PRICING: dict[str, tuple[float, float]] = {
+    "gpt-4.1-mini": (0.40, 1.60),
+    "gpt-4.1": (2.00, 8.00),
+    "gpt-4o": (2.50, 10.00),
+    "gpt-4o-mini": (0.15, 0.60),
+}
+
+
+def _estimate_cost(model: str, prompt_tokens: int, completion_tokens: int) -> float:
+    """Estimate cost based on model pricing map."""
+    input_rate, output_rate = MODEL_PRICING.get(model, (0.40, 1.60))
+    prompt_cost = (prompt_tokens / 1_000_000) * input_rate
+    completion_cost = (completion_tokens / 1_000_000) * output_rate
+    return round(prompt_cost + completion_cost, 6)
 
 
 LLM_PROVIDERS: dict[str, type] = {

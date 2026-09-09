@@ -1,7 +1,7 @@
 """Validator plugins — validate LLM output before persisting."""
 
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any, Protocol
 
 logger = logging.getLogger(__name__)
@@ -91,7 +91,7 @@ class DateValidator:
                     continue
                 try:
                     dt = datetime.fromisoformat(val.replace("Z", "+00:00"))
-                    if no_future and dt.date() > datetime.now().date():
+                    if no_future and dt.date() > datetime.now(timezone.utc).date():
                         errors.append(f"Date: {field_path} is in the future: {val}")
                 except (ValueError, TypeError):
                     errors.append(f"Date: {field_path} not parseable: {val}")
