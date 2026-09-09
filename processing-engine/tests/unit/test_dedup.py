@@ -98,8 +98,8 @@ class TestHashDedupStrategy:
         conn.fetchrow.assert_called_once()
         # The query should NOT contain url_hash param (only 2 args: pipeline_id + content_hash)
         call_args = conn.fetchrow.call_args
-        # call_args[0] is positional args: (query, pipeline_id, content_hash)
-        assert len(call_args[0]) == 3  # query + 2 params
+        # call_args[0] is positional args: (query, pipeline_id, content_hash, current_item_id)
+        assert len(call_args[0]) == 4  # query + 3 params (including current_item_id=None)
 
     async def test_with_url_uses_three_params(self):
         """When url is provided, the query should include url_hash param."""
@@ -114,8 +114,8 @@ class TestHashDedupStrategy:
 
         conn.fetchrow.assert_called_once()
         call_args = conn.fetchrow.call_args
-        # query + 3 params: pipeline_id, url_hash, content_hash
-        assert len(call_args[0]) == 4
+        # query + 4 params: pipeline_id, url_hash, content_hash, current_item_id
+        assert len(call_args[0]) == 5
 
     async def test_similarity_is_none_for_hash_strategy(self):
         conn = self._make_conn(row=None)

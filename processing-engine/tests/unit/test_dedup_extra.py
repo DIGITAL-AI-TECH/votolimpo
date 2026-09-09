@@ -199,6 +199,7 @@ class TestCompositeDedupStrategy:
             "https://example.com",
             self.pipeline_id,
             conn,
+            None,  # current_item_id defaults to None
         )
 
 
