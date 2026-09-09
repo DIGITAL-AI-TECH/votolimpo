@@ -1,0 +1,44 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "processing-engine"
+version = "0.1.0"
+description = "Agnostic data processing engine with LLM pipelines"
+requires-python = ">=3.12"
+dependencies = [
+    # Web framework
+    "fastapi>=0.115.0",
+    "uvicorn[standard]>=0.30.0",
+    # Database
+    "asyncpg>=0.29.0",
+    # Validation & config
+    "pydantic>=2.7.0",
+    "pydantic-settings>=2.3.0",
+    # HTTP client
+    "httpx>=0.27.0",
+    # LLM
+    "openai>=1.30.0",
+    # YAML config
+    "pyyaml>=6.0.0",
+    # Logging
+    "structlog>=24.0.0",
+    # Scheduler
+    "apscheduler>=3.10.0,<4",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0.0",
+    "pytest-asyncio>=0.23.0",
+    "respx>=0.21.0",
+    "httpx>=0.27.0",
+]
+
+[tool.setuptools.packages.find]
+where = ["."]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]

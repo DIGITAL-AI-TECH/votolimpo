@@ -1,0 +1,39 @@
+version: "3.8"
+
+services:
+  processing-engine:
+    image: registry.digital-ai.tech/votolimpo-processing-engine:latest
+    environment:
+      PE_DATABASE_URL: "${PE_DATABASE_URL}"
+      PE_VOTOLIMPO_DATABASE_URL: "${PE_VOTOLIMPO_DATABASE_URL}"
+      PE_OPENAI_API_KEY: "${PE_OPENAI_API_KEY}"
+      PE_ENGINE_ROLE: "both"
+      PE_WORKER_CONCURRENCY: "2"
+      PE_WORKER_POLL_INTERVAL: "5"
+      PE_LOG_LEVEL: "info"
+    networks:
+      - traefik-public
+      - internal
+    deploy:
+      replicas: 1
+      labels:
+        - "traefik.enable=true"
+        - "traefik.http.routers.votolimpo-pe.rule=Host(`pe.votolimpo.digital-ai.tech`)"
+        - "traefik.http.routers.votolimpo-pe.entrypoints=websecure"
+        - "traefik.http.routers.votolimpo-pe.tls.certresolver=letsencrypt"
+        - "traefik.http.services.votolimpo-pe.loadbalancer.server.port=8000"
+      resources:
+        limits:
+          memory: 512M
+        reservations:
+          memory: 256M
+      restart_policy:
+        condition: on-failure
+        delay: 10s
+        max_attempts: 3
+
+networks:
+  traefik-public:
+    external: true
+  internal:
+    driver: overlay
