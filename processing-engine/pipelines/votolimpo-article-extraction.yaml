@@ -56,8 +56,26 @@ validators:
 sink:
   type: postgresql
   config:
-    schema: votolimpo
     database_url_env: PE_VOTOLIMPO_DATABASE_URL
+    table: votolimpo.articles
+    conflict_column: url_hash
+    column_mapping:
+      title: title
+      summary: summary
+      severity: severity
+      veracity_score: veracity_score
+      score_components: score_components
+      keywords: keywords
+      language: language
+      is_political: is_political
+    static_columns:
+      processing_status: completed
+    item_field_mapping:
+      source_url: source_url
+    jsonb_fallback: raw_output
+    type_casts:
+      severity: "votolimpo.severity_level"
+      processing_status: "votolimpo.processing_status"
 
 cache:
   enabled: true

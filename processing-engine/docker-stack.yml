@@ -2,7 +2,7 @@ version: "3.8"
 
 services:
   processing-engine:
-    image: registry.digital-ai.tech/votolimpo-processing-engine:${IMAGE_TAG:-latest}
+    image: registry.digital-ai.tech/votolimpo/processing-engine:${IMAGE_TAG:-latest}
     environment:
       PE_API_KEY: "${PE_API_KEY}"
       PE_DATABASE_URL: "${PE_DATABASE_URL}"

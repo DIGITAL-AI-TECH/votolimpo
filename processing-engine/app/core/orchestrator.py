@@ -445,8 +445,9 @@ async def _send_callback(url: str, job_id: str, status: str):
         logger.warning("Callback DNS resolution failed for %s: %s", url, e)
         return
     try:
+        headers = {"x-api-key": settings.api_key}
         async with httpx.AsyncClient(timeout=10, follow_redirects=False) as client:
-            await client.post(url, json={"job_id": job_id, "status": status})
+            await client.post(url, json={"job_id": job_id, "status": status}, headers=headers)
         logger.info("Callback sent: %s → %s", job_id, url)
     except Exception as e:
         logger.warning("Callback failed for job %s: %s", job_id, e)

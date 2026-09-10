@@ -91,19 +91,44 @@ class PostgreSQLSink:
         if config.get("jsonb_fallback"):
             validate_sql_identifier(config["jsonb_fallback"], "jsonb_fallback_column")
 
+        # Auto-generate url_hash from source_url when conflict_column is url_hash
+        # (required for ON CONFLICT to work — url_hash must be in the INSERT)
+        if conflict_column == "url_hash" and "url_hash" not in [
+            v for v in mapping.values()
+        ]:
+            source_url = item_metadata.get("source_url", "")
+            url_hash = hashlib.sha256(source_url.encode()).hexdigest()
+            columns.append("url_hash")
+            params.append(url_hash)
+            values.append(f"${len(params)}")
+            # Also ensure 'url' column is populated if not mapped
+            if "url" not in [v for v in mapping.values()] and "url" not in config.get(
+                "item_field_mapping", {}
+            ).values():
+                columns.append("url")
+                params.append(source_url)
+                values.append(f"${len(params)}")
+
+        # Type casts for enum/custom PostgreSQL types (e.g. {"severity": "votolimpo.severity_level"})
+        type_casts = config.get("type_casts", {})
+
         # Map output fields → DB columns
         for output_key, db_col in mapping.items():
             val = output.get(output_key)
             if val is not None:
                 columns.append(db_col)
                 params.append(json.dumps(val) if isinstance(val, (dict, list)) else val)
-                values.append(f"${len(params)}")
+                cast = type_casts.get(db_col, "")
+                cast_suffix = f"::{cast}" if cast else ""
+                values.append(f"${len(params)}{cast_suffix}")
 
         # Static columns (fixed values per row)
         for col, val in config.get("static_columns", {}).items():
             columns.append(col)
             params.append(val)
-            values.append(f"${len(params)}")
+            cast = type_casts.get(col, "")
+            cast_suffix = f"::{cast}" if cast else ""
+            values.append(f"${len(params)}{cast_suffix}")
 
         # Item field mapping (item metadata → DB columns)
         for item_key, db_col in config.get("item_field_mapping", {}).items():
