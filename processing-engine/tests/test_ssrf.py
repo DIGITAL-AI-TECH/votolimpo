@@ -1,6 +1,5 @@
 """Tests for SSRF protection in orchestrator and sink."""
 
-import pytest
 
 from app.core.orchestrator import _validate_callback_url
 

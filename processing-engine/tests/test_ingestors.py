@@ -2,7 +2,7 @@
 
 import pytest
 
-from app.plugins.ingestors import get_ingestor, RawTextIngestor, HTMLIngestor
+from app.plugins.ingestors import HTMLIngestor, RawTextIngestor, get_ingestor
 
 
 class TestRawTextIngestor:

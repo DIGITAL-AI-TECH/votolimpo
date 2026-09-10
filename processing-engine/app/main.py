@@ -2,17 +2,16 @@
 
 import asyncio
 import logging
-
 from contextlib import asynccontextmanager
 
 from fastapi import Depends, FastAPI
 
 from .api.auth import verify_api_key
 from .config import settings
-from .storage.database import get_pool, close_pool, init_engine_schema
-from .core.pipeline_config import load_pipelines
 from .core.orchestrator import process_next_job
+from .core.pipeline_config import load_pipelines
 from .cron import setup_cron_scheduler
+from .storage.database import close_pool, get_pool, init_engine_schema
 
 logger = logging.getLogger(__name__)
 
@@ -84,7 +83,7 @@ app = FastAPI(
 )
 
 # Import and register routes
-from .api.routes import jobs, pipelines, health  # noqa: E402
+from .api.routes import health, jobs, pipelines
 
 app.include_router(health.router, tags=["health"])
 app.include_router(

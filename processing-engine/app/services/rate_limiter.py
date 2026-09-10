@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import time
+from typing import Self
 
 logger = logging.getLogger(__name__)
 
@@ -32,7 +33,7 @@ class RateLimiter:
                 await asyncio.sleep(wait)
             self._last_request = time.monotonic()
 
-    async def __aenter__(self) -> RateLimiter:
+    async def __aenter__(self) -> Self:
         await self.acquire()
         return self
 

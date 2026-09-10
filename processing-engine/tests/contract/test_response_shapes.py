@@ -275,7 +275,7 @@ class TestItemResultContract:
 
     def test_optional_fields(self):
         data = self._make_item_dict()
-        for field, _expected_type in self.OPTIONAL_FIELDS.items():
+        for field in self.OPTIONAL_FIELDS:
             assert field in data, f"ItemResult missing field: {field}"
 
     def test_usage_sub_object(self):

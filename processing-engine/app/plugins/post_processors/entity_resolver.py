@@ -5,7 +5,12 @@ from typing import Any
 
 import asyncpg
 
-from . import normalize_for_search, normalize_entity_name, generate_slug, validate_sql_identifier
+from . import (
+    generate_slug,
+    normalize_entity_name,
+    normalize_for_search,
+    validate_sql_identifier,
+)
 
 logger = logging.getLogger(__name__)
 

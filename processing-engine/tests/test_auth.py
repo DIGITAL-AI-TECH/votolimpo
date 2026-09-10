@@ -1,8 +1,6 @@
 """Tests for API key authentication."""
 
-import hmac
 
-import pytest
 
 from app.api.auth import verify_api_key
 

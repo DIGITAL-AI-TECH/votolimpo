@@ -1,6 +1,5 @@
 """Pipeline configuration loader — reads YAML configs from pipelines/ directory."""
 
-import os
 from pathlib import Path
 from typing import Any
 
@@ -140,7 +139,7 @@ def _normalize_yaml(raw: dict) -> dict:
         data["sink"] = sink
 
     # Validators: list of strings → list of ValidatorEntry dicts
-    if "validators" in data and data["validators"]:
+    if data.get("validators"):
         validator_config = data.get("validator_config", {})
         normalized = []
         for v in data["validators"]:

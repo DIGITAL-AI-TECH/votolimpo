@@ -1,0 +1,16 @@
+[lint]
+ignore = [
+    "RUF012",   # Mutable class attributes — false positives on Pydantic models
+    "BLE001",   # Broad exception catch — acceptable in orchestrator error handling
+    "S110",     # try-except-pass — used intentionally in health checks
+    "B008",     # Function call in default arg — FastAPI Security() pattern
+    "ASYNC230", # Blocking open() in async — used for small config files
+    "SIM117",   # Nested with — readability preference
+    "PLW0602",  # Global without assignment — registry pattern
+    "TRY004",   # Prefer TypeError — stylistic
+    "PERF102",  # Incorrect key check — stylistic
+    "FURB162",  # Datetime.min — stylistic
+    "PYI034",   # Return Self — not applicable
+    "DTZ001",   # datetime without tz — handled by UTC import
+    "DTZ005",   # datetime.now without tz — handled by UTC import
+]

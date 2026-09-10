@@ -1,10 +1,8 @@
 """Tests for politician score calculation."""
 
-from datetime import datetime, timezone, timedelta
+from datetime import UTC, datetime, timedelta
 
-import pytest
-
-from app.cron import _calculate_politician_score, SEVERITY_WEIGHT, ROLE_WEIGHT
+from app.cron import ROLE_WEIGHT, SEVERITY_WEIGHT, _calculate_politician_score
 
 
 class TestCalculatePoliticianScore:
@@ -16,7 +14,7 @@ class TestCalculatePoliticianScore:
     def test_single_article_low_severity(self):
         articles = [
             {"severity": "low", "role": "mentioned", "veracity_score": 0.5,
-             "published_at": datetime.now(timezone.utc)},
+             "published_at": datetime.now(UTC)},
         ]
         result = _calculate_politician_score(articles)
         assert 0 < result["score"] < 100
@@ -24,7 +22,7 @@ class TestCalculatePoliticianScore:
 
     def test_high_severity_gives_higher_score(self):
         base = {"role": "protagonist", "veracity_score": 0.8,
-                "published_at": datetime.now(timezone.utc)}
+                "published_at": datetime.now(UTC)}
         low = _calculate_politician_score([{**base, "severity": "low"}])
         high = _calculate_politician_score([{**base, "severity": "critical"}])
         assert high["score"] > low["score"]
@@ -32,16 +30,16 @@ class TestCalculatePoliticianScore:
     def test_recency_decay(self):
         base = {"severity": "high", "role": "protagonist", "veracity_score": 0.8}
         recent = _calculate_politician_score([
-            {**base, "published_at": datetime.now(timezone.utc)},
+            {**base, "published_at": datetime.now(UTC)},
         ])
         old = _calculate_politician_score([
-            {**base, "published_at": datetime.now(timezone.utc) - timedelta(days=365)},
+            {**base, "published_at": datetime.now(UTC) - timedelta(days=365)},
         ])
         assert recent["score"] > old["score"]
 
     def test_volume_bonus(self):
         base = {"severity": "medium", "role": "mentioned", "veracity_score": 0.5,
-                "published_at": datetime.now(timezone.utc)}
+                "published_at": datetime.now(UTC)}
         one = _calculate_politician_score([base])
         many = _calculate_politician_score([base] * 10)
         assert many["components"]["volume_bonus"] > one["components"]["volume_bonus"]
@@ -49,7 +47,7 @@ class TestCalculatePoliticianScore:
     def test_score_bounded_0_100(self):
         articles = [
             {"severity": "critical", "role": "protagonist", "veracity_score": 1.0,
-             "published_at": datetime.now(timezone.utc)}
+             "published_at": datetime.now(UTC)}
         ] * 100
         result = _calculate_politician_score(articles)
         assert 0 <= result["score"] <= 100
@@ -57,7 +55,7 @@ class TestCalculatePoliticianScore:
     def test_missing_veracity_defaults_to_half(self):
         articles = [
             {"severity": "medium", "role": "mentioned", "veracity_score": None,
-             "published_at": datetime.now(timezone.utc)},
+             "published_at": datetime.now(UTC)},
         ]
         result = _calculate_politician_score(articles)
         assert result["score"] > 0

@@ -6,7 +6,11 @@ from typing import Any
 
 import asyncpg
 
-from app.sql.costs import CHECK_BUDGET, INSERT_LLM_CALL, SELECT_PRICING_BY_PROVIDER_MODEL
+from app.sql.costs import (
+    CHECK_BUDGET,
+    INSERT_LLM_CALL,
+    SELECT_PRICING_BY_PROVIDER_MODEL,
+)
 
 logger = logging.getLogger(__name__)
 

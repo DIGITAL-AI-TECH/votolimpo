@@ -93,12 +93,12 @@ POST_PROCESSORS: dict[str, type] = {}
 
 def _register_all():
     """Register all built-in post-processors."""
-    from .entity_resolver import EntityResolver
-    from .score_calculator import ScoreCalculator
-    from .relationship_builder import RelationshipBuilder
-    from .milestone_detector import MilestoneDetector
     from .article_matcher import ArticleMatcher
     from .cluster_updater import ClusterUpdater
+    from .entity_resolver import EntityResolver
+    from .milestone_detector import MilestoneDetector
+    from .relationship_builder import RelationshipBuilder
+    from .score_calculator import ScoreCalculator
 
     POST_PROCESSORS.update({
         "entity_resolver": EntityResolver,

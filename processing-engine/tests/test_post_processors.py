@@ -1,27 +1,32 @@
 """Tests for post-processor plugins."""
 
-import asyncio
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
 from app.plugins.post_processors import (
+    POST_PROCESSORS,
     PostProcessor,
-    normalize_for_search,
-    normalize_entity_name,
+    _register_all,
     generate_slug,
     get_post_processor,
+    normalize_entity_name,
+    normalize_for_search,
     validate_sql_identifier,
-    POST_PROCESSORS,
-    _register_all,
 )
-from app.plugins.post_processors.entity_resolver import EntityResolver
-from app.plugins.post_processors.score_calculator import ScoreCalculator, _clamp, _normalize_multi_source
-from app.plugins.post_processors.relationship_builder import RelationshipBuilder
-from app.plugins.post_processors.milestone_detector import MilestoneDetector
-from app.plugins.post_processors.article_matcher import ArticleMatcher, _calculate_similarity
+from app.plugins.post_processors.article_matcher import (
+    ArticleMatcher,
+    _calculate_similarity,
+)
 from app.plugins.post_processors.cluster_updater import ClusterUpdater
-
+from app.plugins.post_processors.entity_resolver import EntityResolver
+from app.plugins.post_processors.milestone_detector import MilestoneDetector
+from app.plugins.post_processors.relationship_builder import RelationshipBuilder
+from app.plugins.post_processors.score_calculator import (
+    ScoreCalculator,
+    _clamp,
+    _normalize_multi_source,
+)
 
 # ─── Helpers ───
 
@@ -230,7 +235,7 @@ class TestEntityResolver:
         assert result["resolved_politician_ids"] == [99]
 
     async def test_skips_politicians_without_name(self):
-        pool, conn = _make_pool()
+        pool, _conn = _make_pool()
 
         output = {"politicians": [{"party": "PT"}]}
         result = await EntityResolver().process(output, {}, pool, {})
@@ -249,7 +254,7 @@ class TestEntityResolver:
         assert result["entities"][0]["resolved_id"] == 10
 
     async def test_skips_entities_without_type(self):
-        pool, conn = _make_pool()
+        pool, _conn = _make_pool()
 
         output = {"entities": [{"name": "Petrobras"}]}
         result = await EntityResolver().process(output, {}, pool, {})
@@ -257,7 +262,7 @@ class TestEntityResolver:
         assert result["resolved_entity_ids"] == []
 
     async def test_preserves_existing_output_keys(self):
-        pool, conn = _make_pool()
+        pool, _conn = _make_pool()
 
         output = {"politicians": [], "entities": [], "existing_key": "untouched"}
         result = await EntityResolver().process(output, {}, pool, {})
@@ -290,7 +295,7 @@ class TestRelationshipBuilder:
         assert result["persisted_relationship_ids"] == [1]
 
     async def test_skips_relationship_missing_source(self):
-        pool, conn = _make_pool()
+        pool, _conn = _make_pool()
 
         output = {
             "entities": [{"name": "A", "resolved_id": 1}],
@@ -301,7 +306,7 @@ class TestRelationshipBuilder:
         assert result["persisted_relationship_ids"] == []
 
     async def test_no_relationships_key_returns_empty(self):
-        pool, conn = _make_pool()
+        pool, _conn = _make_pool()
 
         output = {"entities": [], "politicians": []}
         result = await RelationshipBuilder().process(output, {}, pool, {})
@@ -333,7 +338,7 @@ class TestMilestoneDetector:
         assert result["persisted_milestone_ids"] == [5]
 
     async def test_skips_below_threshold(self):
-        pool, conn = _make_pool()
+        pool, _conn = _make_pool()
 
         output = {
             "article_id": 100,
@@ -349,7 +354,7 @@ class TestMilestoneDetector:
         assert result["persisted_milestone_ids"] == []
 
     async def test_skips_without_politician_id(self):
-        pool, conn = _make_pool()
+        pool, _conn = _make_pool()
 
         output = {
             "article_id": 100,
@@ -404,7 +409,7 @@ class TestArticleMatcher:
         assert result["keyword_overlap"] == 0.0
 
     def test_calculate_similarity_temporal_same_day(self):
-        from datetime import datetime, timedelta
+        from datetime import datetime
         now = datetime.now()
         a = {"keywords": [], "published_at": now, "politician_ids": [1]}
         b = {"keywords": [], "published_at": now, "politician_ids": [1]}

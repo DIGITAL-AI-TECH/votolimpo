@@ -1,8 +1,7 @@
 """Tests for data models."""
 
-import pytest
 
-from app.core.models import ProcessingJob, ProcessingItem, JobStatus, JobPriority
+from app.core.models import JobPriority, JobStatus, ProcessingItem, ProcessingJob
 
 
 class TestProcessingJob:

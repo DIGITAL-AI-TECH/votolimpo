@@ -5,8 +5,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from app.plugins.sinks import PostgreSQLSink, get_sink, SINKS
-
+from app.plugins.sinks import SINKS, PostgreSQLSink, get_sink
 
 # ─── Helpers ───
 
@@ -100,7 +99,7 @@ class TestColumnMappingMode:
             "static_columns": {"processing_status": "completed", "source": "pe"},
         }
 
-        result = await sink._do_persist(conn, output, {}, config)
+        await sink._do_persist(conn, output, {}, config)
         call_sql = conn.fetchrow.call_args[0][0]
         assert "processing_status" in call_sql
         assert "source" in call_sql
@@ -120,7 +119,7 @@ class TestColumnMappingMode:
             },
         }
 
-        result = await sink._do_persist(conn, output, metadata, config)
+        await sink._do_persist(conn, output, metadata, config)
         call_args = conn.fetchrow.call_args
         # Should have title + source_url + nc_article_id as params
         assert len(call_args[0]) >= 4  # sql + 3 params
@@ -136,7 +135,7 @@ class TestColumnMappingMode:
             "jsonb_fallback": "raw_extraction",
         }
 
-        result = await sink._do_persist(conn, output, {}, config)
+        await sink._do_persist(conn, output, {}, config)
         call_sql = conn.fetchrow.call_args[0][0]
         assert "raw_extraction" in call_sql
         assert "::jsonb" in call_sql
@@ -151,7 +150,7 @@ class TestColumnMappingMode:
             "column_mapping": {"title": "title", "optional_field": "optional_col"},
         }
 
-        result = await sink._do_persist(conn, output, {}, config)
+        await sink._do_persist(conn, output, {}, config)
         call_sql = conn.fetchrow.call_args[0][0]
         assert "optional_col" not in call_sql
 
@@ -168,7 +167,7 @@ class TestColumnMappingMode:
             "conflict_column": "url_hash",
         }
 
-        result = await sink._do_persist(conn, output, metadata, config)
+        await sink._do_persist(conn, output, metadata, config)
         call_sql = conn.fetchrow.call_args[0][0]
         assert "url_hash" in call_sql
         assert "ON CONFLICT (url_hash)" in call_sql
@@ -304,7 +303,7 @@ class TestJsonbFallbackMode:
         conn = _make_conn()
         sink = PostgreSQLSink()
 
-        result = await sink._do_persist(conn, {}, {"item_id": "x"}, {"table": "custom.results"})
+        await sink._do_persist(conn, {}, {"item_id": "x"}, {"table": "custom.results"})
         call_sql = conn.execute.call_args[0][0]
         assert "custom.results" in call_sql
 
@@ -365,7 +364,7 @@ class TestConnectionRouting:
 
         with patch("asyncpg.connect", new_callable=AsyncMock, return_value=mock_conn) as mock_connect, \
              patch.dict("os.environ", {"PE_VOTOLIMPO_DATABASE_URL": "postgres://test"}):
-            result = await sink.persist(output, metadata, config, default_conn)
+            await sink.persist(output, metadata, config, default_conn)
 
         mock_connect.assert_called_once()
         mock_conn.close.assert_called_once()

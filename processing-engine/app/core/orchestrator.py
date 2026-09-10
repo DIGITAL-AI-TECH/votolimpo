@@ -5,20 +5,19 @@ import hashlib
 import json
 import logging
 import time
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from ipaddress import ip_address
 from urllib.parse import urlparse
 
 from ..config import settings
-from ..storage.database import get_pool
-from ..plugins.ingestors import get_ingestor
 from ..plugins.dedup import get_dedup
-from ..plugins.llm import get_llm_provider, load_system_prompt, load_output_schema
-from ..plugins.validators import get_validator
-from ..plugins.sinks import get_sink
+from ..plugins.ingestors import get_ingestor
+from ..plugins.llm import get_llm_provider, load_output_schema, load_system_prompt
 from ..plugins.post_processors import get_post_processor
-from .pipeline_config import get_pipeline, PipelineConfig
-from .models import JobStatus
+from ..plugins.sinks import get_sink
+from ..plugins.validators import get_validator
+from ..storage.database import get_pool
+from .pipeline_config import PipelineConfig, get_pipeline
 
 logger = logging.getLogger(__name__)
 
@@ -69,9 +68,8 @@ async def process_next_job():
     pool = await get_pool()
 
     # Proper SKIP LOCKED: SELECT FOR UPDATE inside transaction, then UPDATE
-    async with pool.acquire() as conn:
-        async with conn.transaction():
-            row = await conn.fetchrow("""
+    async with pool.acquire() as conn, conn.transaction():
+        row = await conn.fetchrow("""
                 SELECT id, pipeline_id FROM processing_engine.jobs
                 WHERE status = 'pending'
                 ORDER BY
@@ -86,10 +84,10 @@ async def process_next_job():
                 FOR UPDATE SKIP LOCKED
             """)
 
-            if not row:
-                return None
+        if not row:
+            return None
 
-            await conn.execute("""
+        await conn.execute("""
                 UPDATE processing_engine.jobs
                 SET status = 'processing', started_at = NOW(), updated_at = NOW()
                 WHERE id = $1
@@ -337,7 +335,7 @@ async def _process_single_item(
 
         # Cache the result
         if pipeline.cache.enabled:
-            expires = datetime.now(timezone.utc) + timedelta(hours=pipeline.cache.ttl_hours)
+            expires = datetime.now(UTC) + timedelta(hours=pipeline.cache.ttl_hours)
             async with pool.acquire() as conn:
                 await conn.execute("""
                     INSERT INTO processing_engine.cache (content_hash, pipeline_id, output, expires_at)
@@ -431,6 +429,7 @@ async def _send_callback(url: str, job_id: str, status: str):
         logger.warning("Callback URL blocked (SSRF protection): %s", url)
         return
     import socket
+
     import httpx
     # DNS rebinding protection: resolve hostname and validate IP
     try:

@@ -2,11 +2,11 @@
 
 import json
 import logging
+from datetime import UTC
 from math import exp, log2
 
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
-
 from openai import AsyncOpenAI
 
 from ..config import settings
@@ -25,8 +25,8 @@ def _calculate_politician_score(articles: list[dict]) -> dict:
     if not articles:
         return {"score": 0.0, "components": {}}
 
-    from datetime import datetime, timezone
-    now = datetime.now(timezone.utc)
+    from datetime import datetime
+    now = datetime.now(UTC)
     weighted_sum = 0.0
 
     for a in articles:
@@ -38,7 +38,7 @@ def _calculate_politician_score(articles: list[dict]) -> dict:
         days_since = 30
         if published:
             if published.tzinfo is None:
-                published = published.replace(tzinfo=timezone.utc)
+                published = published.replace(tzinfo=UTC)
             days_since = (now - published).days
 
         recency_decay = exp(-0.02 * max(0, days_since))
@@ -83,7 +83,7 @@ async def cron_recalculate_scores():
         for row in rows:
             articles = [json.loads(a) for a in row["articles_json"]]
             # Convert published_at strings back to datetime
-            from datetime import datetime, timezone
+            from datetime import datetime
             for a in articles:
                 if a.get("published_at"):
                     try:

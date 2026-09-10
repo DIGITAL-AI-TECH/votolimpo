@@ -1,10 +1,8 @@
 """Tests for dedup plugins."""
 
-import hashlib
 
-import pytest
 
-from app.plugins.dedup import HashDedup, CompositeDedup, get_dedup, DEDUP_STRATEGIES
+from app.plugins.dedup import DEDUP_STRATEGIES, CompositeDedup, HashDedup, get_dedup
 
 
 class TestHashDedup:

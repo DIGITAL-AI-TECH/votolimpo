@@ -2,7 +2,8 @@
 
 from fastapi import APIRouter, HTTPException
 
-from ...core.pipeline_config import get_pipeline, list_pipelines as get_all_pipelines
+from ...core.pipeline_config import get_pipeline
+from ...core.pipeline_config import list_pipelines as get_all_pipelines
 
 router = APIRouter()
 

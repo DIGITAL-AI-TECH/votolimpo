@@ -1,11 +1,9 @@
 """Tests for cron job functions."""
 
 import math
-from datetime import datetime, timezone, timedelta
+from datetime import UTC, datetime, timedelta
 
-import pytest
-
-from app.cron import _calculate_politician_score, SEVERITY_WEIGHT, ROLE_WEIGHT
+from app.cron import ROLE_WEIGHT, SEVERITY_WEIGHT, _calculate_politician_score
 
 
 class TestCalculatePoliticianScore:
@@ -18,13 +16,13 @@ class TestCalculatePoliticianScore:
 
     def test_single_article_returns_positive(self):
         articles = [{"severity": "medium", "role": "protagonist", "veracity_score": 0.8,
-                      "published_at": datetime.now(timezone.utc)}]
+                      "published_at": datetime.now(UTC)}]
         result = _calculate_politician_score(articles)
         assert result["score"] > 0.0
         assert result["components"]["article_count"] == 1
 
     def test_more_articles_increase_score(self):
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         base_article = {"severity": "medium", "role": "protagonist",
                         "veracity_score": 0.6, "published_at": now}
         low = _calculate_politician_score([base_article])
@@ -32,7 +30,7 @@ class TestCalculatePoliticianScore:
         assert high["score"] > low["score"]
 
     def test_higher_severity_increases_score(self):
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         low = _calculate_politician_score(
             [{"severity": "low", "role": "mentioned", "veracity_score": 0.5, "published_at": now}]
         )
@@ -42,7 +40,7 @@ class TestCalculatePoliticianScore:
         assert high["score"] > low["score"]
 
     def test_recency_decay_older_articles_lower(self):
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         recent = _calculate_politician_score(
             [{"severity": "medium", "role": "protagonist", "veracity_score": 0.7, "published_at": now}]
         )
@@ -53,7 +51,7 @@ class TestCalculatePoliticianScore:
         assert recent["score"] > old["score"]
 
     def test_score_bounded_0_100(self):
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         articles = [{"severity": "critical", "role": "protagonist",
                       "veracity_score": 1.0, "published_at": now}] * 200
         result = _calculate_politician_score(articles)
@@ -61,7 +59,7 @@ class TestCalculatePoliticianScore:
 
     def test_score_returns_float(self):
         result = _calculate_politician_score(
-            [{"severity": "low", "published_at": datetime.now(timezone.utc)}]
+            [{"severity": "low", "published_at": datetime.now(UTC)}]
         )
         assert isinstance(result["score"], float)
         assert not math.isnan(result["score"])

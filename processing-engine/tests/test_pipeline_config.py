@@ -1,17 +1,15 @@
 """Tests for pipeline config loading."""
 
-import tempfile
 from pathlib import Path
 
 import pytest
 import yaml
 
 from app.core.pipeline_config import (
-    PipelineConfig,
-    load_pipelines,
-    get_pipeline,
-    _registry,
     _normalize_yaml,
+    _registry,
+    get_pipeline,
+    load_pipelines,
 )
 
 

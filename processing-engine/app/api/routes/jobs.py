@@ -5,7 +5,7 @@ import uuid
 
 from fastapi import APIRouter, HTTPException
 
-from ...core.models import ProcessingJob, JobResult
+from ...core.models import ProcessingJob
 from ...core.orchestrator import submit_job
 from ...storage.database import get_pool
 
