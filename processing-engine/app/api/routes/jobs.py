@@ -17,6 +17,7 @@ def _to_uuid(val: str) -> uuid.UUID:
     except ValueError:
         raise HTTPException(status_code=400, detail=f"Invalid UUID: {val}")
 
+
 router = APIRouter()
 
 
