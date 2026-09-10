@@ -13,11 +13,16 @@ class CallbackService:
     """Sends POST callback to configured URL after job completion."""
 
     def __init__(
-        self, timeout: float = 30.0, max_retries: int = 3, backoff_base: float = 2.0
+        self,
+        timeout: float = 30.0,
+        max_retries: int = 3,
+        backoff_base: float = 2.0,
+        api_key: str | None = None,
     ):
         self.timeout = timeout
         self.max_retries = max_retries
         self.backoff_base = backoff_base
+        self.api_key = api_key
 
     async def send(self, url: str, payload: dict[str, Any]) -> bool:
         """Send POST with job result. Returns True on success.
@@ -25,10 +30,14 @@ class CallbackService:
         Retries up to max_retries with exponential backoff.
         Never raises — failures are logged.
         """
+        headers: dict[str, str] = {}
+        if self.api_key:
+            headers["x-api-key"] = self.api_key
+
         for attempt in range(self.max_retries + 1):
             try:
                 async with httpx.AsyncClient(timeout=self.timeout) as client:
-                    resp = await client.post(url, json=payload)
+                    resp = await client.post(url, json=payload, headers=headers)
                     if resp.status_code < 400:
                         logger.info(
                             "Callback sent to %s (status=%d)", url, resp.status_code

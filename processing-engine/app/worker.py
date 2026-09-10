@@ -7,6 +7,7 @@ from typing import Any
 
 import asyncpg
 
+from app.config import Settings
 from app.db import get_pool
 from app.services.callback import CallbackService
 from app.services.orchestrator import Orchestrator
@@ -229,7 +230,7 @@ class Worker:
         # Send callback if configured
         callback_url = job.get("callback_url")
         if callback_url:
-            callback = CallbackService()
+            callback = CallbackService(api_key=Settings().api_key)
             await callback.send(
                 callback_url,
                 {

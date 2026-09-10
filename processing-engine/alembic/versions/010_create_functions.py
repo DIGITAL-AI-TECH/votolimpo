@@ -76,7 +76,7 @@ def upgrade() -> None:
               AND l.created_at >= v_start
               AND l.status = 'success';
 
-            RETURN QUERY SELECT v_cost, v_budget, (v_cost / v_budget * 100.0), (v_cost >= v_budget);
+            RETURN QUERY SELECT v_cost, v_budget, (v_cost / v_budget * 100.0)::REAL, (v_cost >= v_budget);
         END;
         $$ LANGUAGE plpgsql STABLE
     """)
