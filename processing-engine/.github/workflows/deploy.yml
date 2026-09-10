@@ -8,7 +8,7 @@ on:
 
 env:
   REGISTRY: registry.digital-ai.tech
-  IMAGE: registry.digital-ai.tech/votolimpo-processing-engine
+  IMAGE: registry.digital-ai.tech/processing-engine
   N8N_NOTIFY_URL: https://webhook.digital-ai.tech/webhook/1c708636-864f-469d-8540-0dab5c145c7c
 
 jobs:
@@ -189,7 +189,7 @@ jobs:
           SHORT_SHA="${SHA:0:8}"
 
           # Replace image tag in stack file for production traceability
-          sed -i "s|votolimpo-processing-engine:latest|votolimpo-processing-engine:${SHORT_SHA}|g" processing-engine/docker-stack.yml
+          sed -i "s|processing-engine:latest|processing-engine:${SHORT_SHA}|g" processing-engine/docker-stack.yml
 
           COMPOSE_CONTENT=$(cat processing-engine/docker-stack.yml | python3 -c "import sys,json; print(json.dumps(sys.stdin.read()))")
 
@@ -248,7 +248,7 @@ jobs:
       - name: Health check — PE
         run: |
           for i in $(seq 1 10); do
-            STATUS=$(curl -skf -o /dev/null -w "%{http_code}" https://pe.votolimpo.digital-ai.tech/health 2>/dev/null || echo "000")
+            STATUS=$(curl -skf -o /dev/null -w "%{http_code}" https://processing-engine.digital-ai.tech/health 2>/dev/null || echo "000")
             if [ "$STATUS" = "200" ]; then
               echo "PE health check passed (attempt $i)"
               exit 0
@@ -274,7 +274,7 @@ jobs:
               'branch':os.environ['BRANCH'],'actor':os.environ['ACTOR'],
               'commit_sha':os.environ['SHA'],
               'run_url':os.environ['RUN_URL'],
-              'stage':'Health Check','message':'PE respondendo em https://pe.votolimpo.digital-ai.tech/health'
+              'stage':'Health Check','message':'PE respondendo em https://processing-engine.digital-ai.tech/health'
             }))")" || true
 
       - name: Notify — Health Check Falhou

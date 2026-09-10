@@ -19,7 +19,7 @@ concurrency:
 
 env:
   REGISTRY: registry.digital-ai.tech
-  IMAGE_NAME: registry.digital-ai.tech/votolimpo-processing-engine
+  IMAGE_NAME: registry.digital-ai.tech/processing-engine
   N8N_NOTIFY_URL: https://webhook.digital-ai.tech/webhook/1c708636-864f-469d-8540-0dab5c145c7c
 
 jobs:
@@ -93,7 +93,7 @@ jobs:
           curl -sf -X POST "${N8N_NOTIFY_URL}" \
             -H "Content-Type: application/json" \
             -d "$(python3 -c "import json,os; print(json.dumps({
-              'status':'started','repo':'votolimpo/processing-engine',
+              'status':'started','repo':'processing-engine',
               'branch':os.environ['BRANCH'],'actor':os.environ['ACTOR'],
               'commit_sha':os.environ['SHA'],'commit_message':os.environ['COMMIT_MSG'],
               'run_url':os.environ['RUN_URL'],
@@ -136,7 +136,7 @@ jobs:
           curl -sf -X POST "${N8N_NOTIFY_URL}" \
             -H "Content-Type: application/json" \
             -d "$(python3 -c "import json,os; print(json.dumps({
-              'status':'info','repo':'votolimpo/processing-engine',
+              'status':'info','repo':'processing-engine',
               'branch':os.environ['BRANCH'],'actor':os.environ['ACTOR'],
               'commit_sha':os.environ['SHA'],
               'run_url':os.environ['RUN_URL'],
@@ -155,7 +155,7 @@ jobs:
           curl -sf -X POST "${N8N_NOTIFY_URL}" \
             -H "Content-Type: application/json" \
             -d "$(python3 -c "import json,os; print(json.dumps({
-              'status':'failure','repo':'votolimpo/processing-engine',
+              'status':'failure','repo':'processing-engine',
               'branch':os.environ['BRANCH'],'actor':os.environ['ACTOR'],
               'commit_sha':os.environ['SHA'],
               'run_url':os.environ['RUN_URL'],
@@ -179,7 +179,7 @@ jobs:
           curl -sf -X POST "${N8N_NOTIFY_URL}" \
             -H "Content-Type: application/json" \
             -d "$(python3 -c "import json,os; print(json.dumps({
-              'status':'info','repo':'votolimpo/processing-engine',
+              'status':'info','repo':'processing-engine',
               'branch':os.environ['BRANCH'],'actor':os.environ['ACTOR'],
               'commit_sha':os.environ['SHA'],
               'run_url':os.environ['RUN_URL'],
@@ -233,11 +233,11 @@ jobs:
           curl -sf -X POST "${N8N_NOTIFY_URL}" \
             -H "Content-Type: application/json" \
             -d "$(python3 -c "import json,os; print(json.dumps({
-              'status':'success','repo':'votolimpo/processing-engine',
+              'status':'success','repo':'processing-engine',
               'branch':os.environ['BRANCH'],'actor':os.environ['ACTOR'],
               'commit_sha':os.environ['SHA'],'commit_message':os.environ['COMMIT_MSG'],
               'run_url':os.environ['RUN_URL'],
-              'message':'Deploy concluido: https://pe.votolimpo.digital-ai.tech'
+              'message':'Deploy concluido: https://processing-engine.digital-ai.tech'
             }))")" || true
 
       - name: Notify -- Deploy Falhou
@@ -251,7 +251,7 @@ jobs:
           curl -sf -X POST "${N8N_NOTIFY_URL}" \
             -H "Content-Type: application/json" \
             -d "$(python3 -c "import json,os; print(json.dumps({
-              'status':'failure','repo':'votolimpo/processing-engine',
+              'status':'failure','repo':'processing-engine',
               'branch':os.environ['BRANCH'],'actor':os.environ['ACTOR'],
               'commit_sha':os.environ['SHA'],
               'run_url':os.environ['RUN_URL'],
