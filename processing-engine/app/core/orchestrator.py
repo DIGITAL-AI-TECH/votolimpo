@@ -509,7 +509,7 @@ async def _process_single_item(
                     """
                     INSERT INTO processing_engine.cache (content_hash, pipeline_id, output, expires_at)
                     VALUES ($1, $2, $3, $4)
-                    ON CONFLICT (content_hash) DO UPDATE SET output = EXCLUDED.output, expires_at = EXCLUDED.expires_at
+                    ON CONFLICT (content_hash, pipeline_id) DO UPDATE SET output = EXCLUDED.output, expires_at = EXCLUDED.expires_at
                 """,
                     content_hash,
                     pipeline_uuid,
