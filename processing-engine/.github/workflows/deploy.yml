@@ -8,7 +8,7 @@ on:
 
 env:
   REGISTRY: registry.digital-ai.tech
-  IMAGE: registry.digital-ai.tech/votolimpo/processing-engine
+  IMAGE: registry.digital-ai.tech/votolimpo-processing-engine
   N8N_NOTIFY_URL: https://webhook.digital-ai.tech/webhook/1c708636-864f-469d-8540-0dab5c145c7c
 
 jobs:
@@ -189,7 +189,7 @@ jobs:
           SHORT_SHA="${SHA:0:8}"
 
           # Replace image tag in stack file for production traceability
-          sed -i "s|votolimpo/processing-engine:latest|votolimpo/processing-engine:${SHORT_SHA}|g" processing-engine/docker-stack.yml
+          sed -i "s|votolimpo-processing-engine:latest|votolimpo-processing-engine:${SHORT_SHA}|g" processing-engine/docker-stack.yml
 
           COMPOSE_CONTENT=$(cat processing-engine/docker-stack.yml | python3 -c "import sys,json; print(json.dumps(sys.stdin.read()))")
 
