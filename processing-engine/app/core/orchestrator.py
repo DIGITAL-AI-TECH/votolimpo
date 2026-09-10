@@ -255,6 +255,11 @@ async def _process_single_item(
     """
     t0 = time.time()
     item_id = item["id"]
+    pipeline_uuid = (
+        _uuid.UUID(pipeline.id)
+        if not isinstance(pipeline.id, _uuid.UUID)
+        else pipeline.id
+    )
     cost = 0.0
 
     try:
@@ -275,7 +280,7 @@ async def _process_single_item(
                 cached = await conn.fetchrow(
                     "SELECT output FROM processing_engine.cache WHERE content_hash = $1 AND pipeline_id = $2 AND expires_at > NOW()",
                     content_hash,
-                    pipeline.id,
+                    pipeline_uuid,
                 )
             if cached:
                 duration_ms = int((time.time() - t0) * 1000)
@@ -507,7 +512,7 @@ async def _process_single_item(
                     ON CONFLICT (content_hash) DO UPDATE SET output = EXCLUDED.output, expires_at = EXCLUDED.expires_at
                 """,
                     content_hash,
-                    pipeline.id,
+                    pipeline_uuid,
                     json.dumps(output),
                     expires,
                 )

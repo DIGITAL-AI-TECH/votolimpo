@@ -10,6 +10,7 @@ Revision ID: 016
 Revises: 015
 Create Date: 2026-09-10
 """
+
 from alembic import op
 
 # revision identifiers, used by Alembic
@@ -142,15 +143,11 @@ def upgrade() -> None:
     )
 
     # log_step — orchestrator uses these step names
-    op.execute(
-        "ALTER TYPE processing_engine.log_step ADD VALUE IF NOT EXISTS 'llm'"
-    )
+    op.execute("ALTER TYPE processing_engine.log_step ADD VALUE IF NOT EXISTS 'llm'")
     op.execute(
         "ALTER TYPE processing_engine.log_step ADD VALUE IF NOT EXISTS 'cache_hit'"
     )
-    op.execute(
-        "ALTER TYPE processing_engine.log_step ADD VALUE IF NOT EXISTS 'error'"
-    )
+    op.execute("ALTER TYPE processing_engine.log_step ADD VALUE IF NOT EXISTS 'error'")
     op.execute(
         "ALTER TYPE processing_engine.log_step ADD VALUE IF NOT EXISTS 'post_process'"
     )
@@ -178,6 +175,22 @@ def upgrade() -> None:
                             WHEN -1 THEN 'low'
                             ELSE 'normal'
                         END;
+            END IF;
+        END $$
+    """)
+
+    # ── 9. Rename table: cache_entries → cache ─────────────────────
+    op.execute("""
+        DO $$
+        BEGIN
+            IF EXISTS (
+                SELECT 1 FROM information_schema.tables
+                WHERE table_schema = 'processing_engine' AND table_name = 'cache_entries'
+            ) AND NOT EXISTS (
+                SELECT 1 FROM information_schema.tables
+                WHERE table_schema = 'processing_engine' AND table_name = 'cache'
+            ) THEN
+                ALTER TABLE processing_engine.cache_entries RENAME TO cache;
             END IF;
         END $$
     """)
