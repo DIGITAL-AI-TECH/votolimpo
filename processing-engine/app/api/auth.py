@@ -6,7 +6,6 @@ Accepts both:
 """
 
 import hmac
-from typing import Optional
 
 from fastapi import Header, HTTPException, Request
 
@@ -15,10 +14,10 @@ from ..config import settings
 
 async def verify_api_key(
     request: Request,
-    x_api_key: Optional[str] = Header(None),
+    x_api_key: str | None = Header(None),
 ) -> str:
     """Validate API key from Bearer token or X-Api-Key header (timing-safe)."""
-    token: Optional[str] = None
+    token: str | None = None
 
     # Try X-Api-Key header first
     if x_api_key:
