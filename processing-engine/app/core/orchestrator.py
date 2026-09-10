@@ -5,6 +5,7 @@ import hashlib
 import json
 import logging
 import time
+import uuid as _uuid
 from datetime import UTC, datetime, timedelta
 from ipaddress import ip_address
 from urllib.parse import urlparse
@@ -25,10 +26,10 @@ logger = logging.getLogger(__name__)
 async def submit_job(job_data: dict) -> str:
     """Submit a new processing job. Returns job_id."""
     pool = await get_pool()
-    job_id = job_data["job_id"]
-    pipeline_id = job_data["pipeline_id"]
+    job_id = _uuid.UUID(job_data["job_id"])
+    pipeline_id = _uuid.UUID(job_data["pipeline_id"])
     items = job_data["items"]
-    priority = job_data.get("priority", "normal")
+    priority = str(job_data.get("priority", "normal"))
     callback_url = job_data.get("callback_url")
     idempotency_key = job_data.get("idempotency_key")
 
@@ -41,7 +42,7 @@ async def submit_job(job_data: dict) -> str:
                     idempotency_key,
                 )
                 if row:
-                    return row["id"]
+                    return str(row["id"])
 
             await conn.execute(
                 """
@@ -64,7 +65,7 @@ async def submit_job(job_data: dict) -> str:
                         (id, job_id, content, content_type, source_url, metadata, status)
                     VALUES ($1, $2, $3, $4, $5, $6, 'pending')
                 """,
-                    item["item_id"],
+                    _uuid.UUID(item["item_id"]),
                     job_id,
                     item["content"],
                     item.get("content_type", "text/plain"),
@@ -73,7 +74,7 @@ async def submit_job(job_data: dict) -> str:
                 )
 
     logger.info("Job submitted: %s (%d items)", job_id, len(items))
-    return job_id
+    return str(job_id)
 
 
 async def process_next_job():
@@ -109,8 +110,8 @@ async def process_next_job():
             row["id"],
         )
 
-    job_id = row["id"]
-    pipeline_id = row["pipeline_id"]
+    job_id = row["id"]  # UUID from DB
+    pipeline_id = str(row["pipeline_id"])  # str for get_pipeline lookup
 
     logger.info("Processing job: %s (pipeline: %s)", job_id, pipeline_id)
 
@@ -462,10 +463,11 @@ async def _process_single_item(
                         conn,
                         job_id,
                         item_id,
-                        f"post_process:{pp_type}",
+                        "post_process",
                         "failed",
                         error_message=str(pp_err),
                         duration_ms=duration_ms,
+                        metadata={"processor": pp_type},
                     )
                 return {
                     "completed": 0,
@@ -561,17 +563,19 @@ async def _process_single_item(
         return {"completed": 0, "failed": 1, "cost": cost, "duration": duration_ms}
 
 
-async def _fail_job(job_id: str, error: str):
+async def _fail_job(job_id, error: str):
     """Mark a job as failed."""
     pool = await get_pool()
+    jid = _uuid.UUID(str(job_id)) if not isinstance(job_id, _uuid.UUID) else job_id
     async with pool.acquire() as conn:
         await conn.execute(
             """
             UPDATE processing_engine.jobs
-            SET status = 'failed', completed_at = NOW(), updated_at = NOW()
+            SET status = 'failed', error_message = $2, completed_at = NOW(), updated_at = NOW()
             WHERE id = $1
         """,
-            job_id,
+            jid,
+            error,
         )
     logger.error("Job %s failed: %s", job_id, error)
 
@@ -661,7 +665,7 @@ async def _send_callback(url: str, job_id: str, status: str):
         headers = {"x-api-key": settings.api_key}
         async with httpx.AsyncClient(timeout=10, follow_redirects=False) as client:
             await client.post(
-                url, json={"job_id": job_id, "status": status}, headers=headers
+                url, json={"job_id": str(job_id), "status": status}, headers=headers
             )
         logger.info("Callback sent: %s → %s", job_id, url)
     except Exception as e:

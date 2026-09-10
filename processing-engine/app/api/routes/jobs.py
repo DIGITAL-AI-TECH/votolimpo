@@ -9,6 +9,14 @@ from ...core.models import ProcessingJob
 from ...core.orchestrator import submit_job
 from ...storage.database import get_pool
 
+
+def _to_uuid(val: str) -> uuid.UUID:
+    """Convert string to UUID for asyncpg queries."""
+    try:
+        return uuid.UUID(val)
+    except ValueError:
+        raise HTTPException(status_code=400, detail=f"Invalid UUID: {val}")
+
 router = APIRouter()
 
 
@@ -81,14 +89,15 @@ async def get_job(job_id: str):
     pool = await get_pool()
     async with pool.acquire() as conn:
         row = await conn.fetchrow(
-            "SELECT * FROM processing_engine.jobs WHERE id = $1", job_id
+            "SELECT * FROM processing_engine.jobs WHERE id = $1",
+            _to_uuid(job_id),
         )
         if not row:
             raise HTTPException(status_code=404, detail="Job not found")
 
     return {
-        "job_id": row["id"],
-        "pipeline_id": row["pipeline_id"],
+        "job_id": str(row["id"]),
+        "pipeline_id": str(row["pipeline_id"]),
         "status": row["status"],
         "priority": row["priority"],
         "total_items": row["total_items"],
@@ -109,32 +118,33 @@ async def get_job_result(job_id: str):
     """Get full job result with all item outputs."""
     pool = await get_pool()
     async with pool.acquire() as conn:
+        uid = _to_uuid(job_id)
         job = await conn.fetchrow(
-            "SELECT * FROM processing_engine.jobs WHERE id = $1", job_id
+            "SELECT * FROM processing_engine.jobs WHERE id = $1", uid
         )
         if not job:
             raise HTTPException(status_code=404, detail="Job not found")
 
         items = await conn.fetch(
             "SELECT * FROM processing_engine.job_items WHERE job_id = $1 ORDER BY created_at",
-            job_id,
+            uid,
         )
 
     return {
-        "job_id": job["id"],
+        "job_id": str(job["id"]),
         "status": job["status"],
         "items": [
             {
-                "item_id": item["id"],
+                "item_id": str(item["id"]),
                 "status": item["status"],
                 "output": json.loads(item["output"]) if item["output"] else None,
                 "cached": item["cached"],
-                "dedup_result": item["dedup_result"],
+                "dedup_result": item.get("dedup_result"),
                 "cost_usd": float(item["cost_usd"] or 0),
                 "duration_ms": item["duration_ms"] or 0,
                 "error": item["error"],
                 "validation_errors": json.loads(item["validation_errors"])
-                if item["validation_errors"]
+                if item.get("validation_errors")
                 else None,
             }
             for item in items
