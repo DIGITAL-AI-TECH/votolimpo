@@ -155,6 +155,59 @@ class TestColumnMappingMode:
         call_sql = conn.fetchrow.call_args[0][0]
         assert "optional_col" not in call_sql
 
+    async def test_auto_generates_url_hash_for_conflict(self):
+        """When conflict_column is url_hash but not in mapping, auto-generate from source_url."""
+        conn = _make_conn()
+        sink = PostgreSQLSink()
+
+        output = {"title": "Test"}
+        metadata = {"source_url": "https://example.com/article"}
+        config = {
+            "table": "votolimpo.articles",
+            "column_mapping": {"title": "title"},
+            "conflict_column": "url_hash",
+        }
+
+        result = await sink._do_persist(conn, output, metadata, config)
+        call_sql = conn.fetchrow.call_args[0][0]
+        assert "url_hash" in call_sql
+        assert "ON CONFLICT (url_hash)" in call_sql
+        # url and url_hash should both be in the INSERT
+        assert "url" in call_sql
+
+    async def test_type_casts_applied(self):
+        """type_casts config adds SQL casts to parameter placeholders."""
+        conn = _make_conn()
+        sink = PostgreSQLSink()
+
+        output = {"severity": "high"}
+        config = {
+            "table": "articles",
+            "column_mapping": {"severity": "severity"},
+            "type_casts": {"severity": "votolimpo.severity_level"},
+        }
+
+        await sink._do_persist(conn, output, {}, config)
+        call_sql = conn.fetchrow.call_args[0][0]
+        assert "::votolimpo.severity_level" in call_sql
+
+    async def test_type_casts_on_static_columns(self):
+        """type_casts also work for static columns."""
+        conn = _make_conn()
+        sink = PostgreSQLSink()
+
+        output = {"title": "Test"}
+        config = {
+            "table": "articles",
+            "column_mapping": {"title": "title"},
+            "static_columns": {"processing_status": "completed"},
+            "type_casts": {"processing_status": "votolimpo.processing_status"},
+        }
+
+        await sink._do_persist(conn, output, {}, config)
+        call_sql = conn.fetchrow.call_args[0][0]
+        assert "::votolimpo.processing_status" in call_sql
+
     async def test_requires_table(self):
         conn = _make_conn()
         sink = PostgreSQLSink()

@@ -234,6 +234,9 @@ sink_config:
   item_field_mapping:
     source_url: source_url
   jsonb_fallback: raw_output
+  type_casts:
+    severity: "votolimpo.severity_level"
+    processing_status: "votolimpo.processing_status"
 
 # --- Crons (executados pelo worker deste pipeline) ---
 crons:
