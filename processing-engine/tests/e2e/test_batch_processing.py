@@ -51,7 +51,10 @@ class TestBatchJobSubmission:
 
     async def test_submit_batch_job_multiple_items(self, client, pipeline):
         """POST /jobs accepts multiple items in a single job."""
-        items = [{"content": f"Content number {i}", "content_type": "text/plain"} for i in range(5)]
+        items = [
+            {"content": f"Content number {i}", "content_type": "text/plain"}
+            for i in range(5)
+        ]
         resp = await client.post(
             "/jobs",
             json={"pipeline_id": pipeline["id"], "items": items},
@@ -138,7 +141,9 @@ class TestStatsAndCostsE2E:
     HEADERS = {"X-API-Key": "test-key"}
 
     async def test_stats_period_day(self, client):
-        resp = await client.get("/stats", params={"period": "day"}, headers=self.HEADERS)
+        resp = await client.get(
+            "/stats", params={"period": "day"}, headers=self.HEADERS
+        )
         assert resp.status_code == 200
         data = resp.json()
         assert data["period"] == "day"
@@ -146,36 +151,50 @@ class TestStatsAndCostsE2E:
         assert "dedup_rate" in data
 
     async def test_stats_period_week(self, client):
-        resp = await client.get("/stats", params={"period": "week"}, headers=self.HEADERS)
+        resp = await client.get(
+            "/stats", params={"period": "week"}, headers=self.HEADERS
+        )
         assert resp.status_code == 200
         assert resp.json()["period"] == "week"
 
     async def test_stats_period_month(self, client):
-        resp = await client.get("/stats", params={"period": "month"}, headers=self.HEADERS)
+        resp = await client.get(
+            "/stats", params={"period": "month"}, headers=self.HEADERS
+        )
         assert resp.status_code == 200
         assert resp.json()["period"] == "month"
 
     async def test_stats_period_all(self, client):
-        resp = await client.get("/stats", params={"period": "all"}, headers=self.HEADERS)
+        resp = await client.get(
+            "/stats", params={"period": "all"}, headers=self.HEADERS
+        )
         assert resp.status_code == 200
         assert resp.json()["period"] == "all"
 
     async def test_stats_filter_by_pipeline(self, client):
         fake_id = str(uuid.uuid4())
-        resp = await client.get("/stats", params={"pipeline_id": fake_id}, headers=self.HEADERS)
+        resp = await client.get(
+            "/stats", params={"pipeline_id": fake_id}, headers=self.HEADERS
+        )
         assert resp.status_code == 200
 
     async def test_costs_group_by_pipeline(self, client):
-        resp = await client.get("/costs", params={"group_by": "pipeline"}, headers=self.HEADERS)
+        resp = await client.get(
+            "/costs", params={"group_by": "pipeline"}, headers=self.HEADERS
+        )
         assert resp.status_code == 200
         assert "breakdown" in resp.json()
 
     async def test_costs_group_by_model(self, client):
-        resp = await client.get("/costs", params={"group_by": "model"}, headers=self.HEADERS)
+        resp = await client.get(
+            "/costs", params={"group_by": "model"}, headers=self.HEADERS
+        )
         assert resp.status_code == 200
 
     async def test_costs_group_by_day(self, client):
-        resp = await client.get("/costs", params={"group_by": "day"}, headers=self.HEADERS)
+        resp = await client.get(
+            "/costs", params={"group_by": "day"}, headers=self.HEADERS
+        )
         assert resp.status_code == 200
 
     async def test_budget_status_not_found(self, client):

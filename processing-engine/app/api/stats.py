@@ -30,11 +30,15 @@ def _period_to_range(period: str) -> tuple[datetime, datetime]:
     return start, now
 
 
-@router.get("/stats", response_model=Stats, summary="Métricas agregadas de processamento")
+@router.get(
+    "/stats", response_model=Stats, summary="Métricas agregadas de processamento"
+)
 async def get_stats(
     conn: Annotated[asyncpg.Connection, Depends(get_db)],
     _key: Annotated[str, Depends(verify_api_key)],
-    pipeline_id: Annotated[uuid.UUID | None, Query(description="Filtrar por pipeline")] = None,
+    pipeline_id: Annotated[
+        uuid.UUID | None, Query(description="Filtrar por pipeline")
+    ] = None,
     period: Annotated[str, Query(description="Período: day, week, month, all")] = "all",
 ) -> Stats:
     start, end = _period_to_range(period)

@@ -21,7 +21,9 @@ _worker_task: asyncio.Task | None = None
 
 async def _worker_loop():
     """Background worker that polls for pending jobs."""
-    logger.info("Worker loop started (poll_interval=%ds)", settings.worker_poll_interval)
+    logger.info(
+        "Worker loop started (poll_interval=%ds)", settings.worker_poll_interval
+    )
     while True:
         try:
             job_id = await process_next_job()
@@ -87,11 +89,15 @@ from .api.routes import health, jobs, pipelines
 
 app.include_router(health.router, tags=["health"])
 app.include_router(
-    jobs.router, prefix="/v1", tags=["jobs"],
+    jobs.router,
+    prefix="/v1",
+    tags=["jobs"],
     dependencies=[Depends(verify_api_key)],
 )
 app.include_router(
-    pipelines.router, prefix="/v1", tags=["pipelines"],
+    pipelines.router,
+    prefix="/v1",
+    tags=["pipelines"],
     dependencies=[Depends(verify_api_key)],
 )
 

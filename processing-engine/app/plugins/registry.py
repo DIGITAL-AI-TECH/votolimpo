@@ -24,7 +24,9 @@ def get(plugin_type: str, name: str) -> type:
     """Get a plugin class by type and name. Raises KeyError if not found."""
     if name not in _registry.get(plugin_type, {}):
         available = list(_registry.get(plugin_type, {}).keys())
-        raise KeyError(f"Plugin '{name}' not found in type '{plugin_type}'. Available: {available}")
+        raise KeyError(
+            f"Plugin '{name}' not found in type '{plugin_type}'. Available: {available}"
+        )
     return _registry[plugin_type][name]
 
 

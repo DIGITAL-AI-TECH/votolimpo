@@ -24,11 +24,17 @@ class HTMLIngestor:
 
     async def ingest(self, content: str, config: dict) -> str:
         import re
+
         max_chars = config.get("max_content_chars", 15000)
 
         if config.get("strip_tags", True):
             # Remove script and style elements
-            text = re.sub(r"<(script|style)[^>]*>.*?</\1>", "", content, flags=re.DOTALL | re.IGNORECASE)
+            text = re.sub(
+                r"<(script|style)[^>]*>.*?</\1>",
+                "",
+                content,
+                flags=re.DOTALL | re.IGNORECASE,
+            )
             # Remove HTML tags
             text = re.sub(r"<[^>]+>", " ", text)
             # Collapse whitespace

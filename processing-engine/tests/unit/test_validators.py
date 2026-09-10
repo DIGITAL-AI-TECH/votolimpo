@@ -83,7 +83,10 @@ class TestSchemaValidator:
         assert result.valid is True
 
     def test_multiple_errors_reported(self):
-        output = {"name": 99, "extra_field": "oops"}  # wrong type + missing required + extra
+        output = {
+            "name": 99,
+            "extra_field": "oops",
+        }  # wrong type + missing required + extra
         result = self.validator.validate(output, "source", self.SCHEMA)
         assert result.valid is False
         assert len(result.errors) >= 2

@@ -18,7 +18,9 @@ logger = logging.getLogger(__name__)
 class BudgetExceededError(Exception):
     """Raised when pipeline budget limit is exceeded."""
 
-    def __init__(self, pipeline_id: uuid.UUID, current_cost: float, budget_limit: float):
+    def __init__(
+        self, pipeline_id: uuid.UUID, current_cost: float, budget_limit: float
+    ):
         self.pipeline_id = pipeline_id
         self.current_cost = current_cost
         self.budget_limit = budget_limit
@@ -50,7 +52,9 @@ class CostTracker:
         retry_number: int = 0,
     ) -> dict[str, Any]:
         """Log an LLM call and calculate cost from model_pricing."""
-        cost = await self.calculate_cost(conn, provider, model, prompt_tokens, completion_tokens)
+        cost = await self.calculate_cost(
+            conn, provider, model, prompt_tokens, completion_tokens
+        )
 
         record = await conn.fetchrow(
             INSERT_LLM_CALL,

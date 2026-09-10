@@ -16,16 +16,23 @@ class ScoreCalculator:
     """
 
     async def process(
-        self, output: dict, item_metadata: dict, pool: asyncpg.Pool, config: dict[str, Any],
+        self,
+        output: dict,
+        item_metadata: dict,
+        pool: asyncpg.Pool,
+        config: dict[str, Any],
     ) -> dict:
-        weights = config.get("weights", {
-            "source_reputation": 0.30,
-            "multi_source": 0.25,
-            "narrative_consistency": 0.15,
-            "documental_evidence": 0.10,
-            "temporality": 0.10,
-            "emotional_language": 0.10,
-        })
+        weights = config.get(
+            "weights",
+            {
+                "source_reputation": 0.30,
+                "multi_source": 0.25,
+                "narrative_consistency": 0.15,
+                "documental_evidence": 0.10,
+                "temporality": 0.10,
+                "emotional_language": 0.10,
+            },
+        )
         output_field = config.get("output_field", "veracity_score")
         sources_table = config.get("sources_table", "votolimpo.sources")
 
@@ -36,6 +43,7 @@ class ScoreCalculator:
         source_name = item_metadata.get("source_name")
         if source_name:
             from . import validate_sql_identifier
+
             validate_sql_identifier(sources_table, "sources_table")
             async with pool.acquire() as conn:
                 row = await conn.fetchrow(

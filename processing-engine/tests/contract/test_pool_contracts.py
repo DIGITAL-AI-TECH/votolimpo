@@ -36,7 +36,9 @@ class TestPoolIngestResponseShape:
             rejected=1,
             pool_ids=[pool_id],
             rejections=[
-                PoolRejection(index=2, reason="duplicate_url", existing_pool_id=uuid.uuid4())
+                PoolRejection(
+                    index=2, reason="duplicate_url", existing_pool_id=uuid.uuid4()
+                )
             ],
         )
         data = resp.model_dump(mode="json")
@@ -59,7 +61,9 @@ class TestPoolIngestResponseShape:
         assert data["rejections"] == []
 
     def test_required_fields_present(self):
-        resp = PoolIngestResponse(accepted=1, rejected=0, pool_ids=[uuid.uuid4()], rejections=[])
+        resp = PoolIngestResponse(
+            accepted=1, rejected=0, pool_ids=[uuid.uuid4()], rejections=[]
+        )
         data = resp.model_dump(mode="json")
         required = {"accepted", "rejected", "pool_ids", "rejections"}
         assert required.issubset(data.keys())
@@ -126,7 +130,9 @@ class TestPoolRejectionShape:
     """Contract: PoolRejection must have exact fields."""
 
     def test_rejection_with_existing_id(self):
-        r = PoolRejection(index=3, reason="duplicate_url", existing_pool_id=uuid.uuid4())
+        r = PoolRejection(
+            index=3, reason="duplicate_url", existing_pool_id=uuid.uuid4()
+        )
         data = r.model_dump(mode="json")
 
         assert isinstance(data["index"], int)

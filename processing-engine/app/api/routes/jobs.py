@@ -98,7 +98,9 @@ async def get_job(job_id: str):
         "total_duration_ms": row["total_duration_ms"] or 0,
         "created_at": row["created_at"].isoformat() if row["created_at"] else None,
         "started_at": row["started_at"].isoformat() if row["started_at"] else None,
-        "completed_at": row["completed_at"].isoformat() if row["completed_at"] else None,
+        "completed_at": row["completed_at"].isoformat()
+        if row["completed_at"]
+        else None,
     }
 
 
@@ -131,7 +133,9 @@ async def get_job_result(job_id: str):
                 "cost_usd": float(item["cost_usd"] or 0),
                 "duration_ms": item["duration_ms"] or 0,
                 "error": item["error"],
-                "validation_errors": json.loads(item["validation_errors"]) if item["validation_errors"] else None,
+                "validation_errors": json.loads(item["validation_errors"])
+                if item["validation_errors"]
+                else None,
             }
             for item in items
         ],

@@ -120,7 +120,10 @@ class TestPoolIngest:
                 "pipeline_id": str(pipeline_id),
                 "source_id": "test-scraper",
                 "items": [
-                    {"source_url": f"https://example.com/page{i}", "content": f"Content {i}"}
+                    {
+                        "source_url": f"https://example.com/page{i}",
+                        "content": f"Content {i}",
+                    }
                     for i in range(3)
                 ],
             },

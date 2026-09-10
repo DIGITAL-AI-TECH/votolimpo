@@ -120,7 +120,9 @@ class TestWorkerJobProcessing:
                 finalize_calls.append(args)
 
         mock_conn = AsyncMock()
-        mock_conn.fetchrow = AsyncMock(side_effect=[pipeline, None])  # pipeline, then job
+        mock_conn.fetchrow = AsyncMock(
+            side_effect=[pipeline, None]
+        )  # pipeline, then job
         mock_conn.fetch = AsyncMock(return_value=items)
         mock_conn.execute = AsyncMock(side_effect=mock_execute)
 
@@ -136,7 +138,13 @@ class TestWorkerJobProcessing:
         updated_job["items_failed"] = 0
 
         pool = AsyncMock()
-        conn_sequence = [mock_conn, mock_conn, mock_counter_conn, mock_conn, mock_counter_conn]
+        conn_sequence = [
+            mock_conn,
+            mock_conn,
+            mock_counter_conn,
+            mock_conn,
+            mock_counter_conn,
+        ]
         acquire_contexts = []
         for c in conn_sequence:
             ctx = AsyncMock()
@@ -226,7 +234,9 @@ class TestWorkerCallback:
             mock_client.__aexit__ = AsyncMock(return_value=False)
             MockClient.return_value = mock_client
 
-            result = await callback.send("https://example.com/cb", {"status": "completed"})
+            result = await callback.send(
+                "https://example.com/cb", {"status": "completed"}
+            )
 
         assert result is True
         assert mock_client.post.call_count == 2

@@ -96,7 +96,9 @@ class Orchestrator:
         content_hash = hashlib.sha256(ingested.encode("utf-8")).hexdigest()
         if not skip_cache:
             cache_start = time.monotonic()
-            cache_hit = await conn.fetchrow(SELECT_CACHE_HIT, content_hash, pipeline["id"])
+            cache_hit = await conn.fetchrow(
+                SELECT_CACHE_HIT, content_hash, pipeline["id"]
+            )
             cache_duration = int((time.monotonic() - cache_start) * 1000)
             if cache_hit:
                 await conn.execute(INCREMENT_CACHE_HIT, content_hash, pipeline["id"])
@@ -142,7 +144,8 @@ class Orchestrator:
                 item_id=item_id,
                 job_id=job_id,
                 pipeline_id=pipeline["id"],
-                provider=llm_response.provider or pipeline.get("llm_provider", "openai"),
+                provider=llm_response.provider
+                or pipeline.get("llm_provider", "openai"),
                 model=llm_response.model or pipeline.get("llm_model", "gpt-4.1-mini"),
                 call_type="completion",
                 prompt_tokens=llm_response.prompt_tokens,
@@ -158,7 +161,13 @@ class Orchestrator:
         # --- 4. VALIDATE ---
         await conn.execute(_UPDATE_ITEM_STATUS, item_id, "validating")
         validation: ValidationResult = await self._run_step(
-            conn, item_id, "validate", self._validate, result["output"], ingested, pipeline
+            conn,
+            item_id,
+            "validate",
+            self._validate,
+            result["output"],
+            ingested,
+            pipeline,
         )
         if not validation.valid:
             raise ValueError(f"Validation failed: {validation.errors}")
@@ -167,7 +176,14 @@ class Orchestrator:
         if not dry_run:
             await conn.execute(_UPDATE_ITEM_STATUS, item_id, "persisting")
             await self._run_step(
-                conn, item_id, "persist", self._persist, item_id, result["output"], pipeline, conn
+                conn,
+                item_id,
+                "persist",
+                self._persist,
+                item_id,
+                result["output"],
+                pipeline,
+                conn,
             )
 
         # Save to cache
@@ -195,7 +211,9 @@ class Orchestrator:
 
     async def _ingest(self, raw: str, content_type: str, pipeline: dict) -> str:
         ingestor = get_instance("ingestor", pipeline.get("ingestor_type", "auto"))
-        return await ingestor.ingest(raw, content_type, pipeline.get("max_content_chars", 100000))
+        return await ingestor.ingest(
+            raw, content_type, pipeline.get("max_content_chars", 100000)
+        )
 
     async def _dedup(
         self,
@@ -206,7 +224,9 @@ class Orchestrator:
         current_item_id: str | None = None,
     ) -> DedupResult:
         strategy = get_instance("dedup", pipeline.get("dedup_strategy", "hash"))
-        return await strategy.check(content, url, str(pipeline["id"]), conn, current_item_id)
+        return await strategy.check(
+            content, url, str(pipeline["id"]), conn, current_item_id
+        )
 
     async def _process_llm(
         self, content: str, pipeline: dict, override_model: str | None
@@ -225,7 +245,9 @@ class Orchestrator:
             config=config,
         )
 
-    async def _validate(self, output: dict, source: str, pipeline: dict) -> ValidationResult:
+    async def _validate(
+        self, output: dict, source: str, pipeline: dict
+    ) -> ValidationResult:
         validators = pipeline.get("validators", ["schema"])
         # Run first validator (schema is the only built-in for now)
         validator = get_instance("validator", validators[0] if validators else "schema")
@@ -291,7 +313,9 @@ class Orchestrator:
                     )
         raise last_error  # type: ignore[misc]
 
-    async def _log(self, conn, item_id, step, status, duration_ms, error=None, meta=None):
+    async def _log(
+        self, conn, item_id, step, status, duration_ms, error=None, meta=None
+    ):
         await conn.execute(
             _INSERT_LOG,
             item_id,

@@ -1,7 +1,5 @@
 """Tests for API key authentication."""
 
-
-
 from app.api.auth import verify_api_key
 
 
@@ -11,6 +9,7 @@ class TestTimingSafeComparison:
     def test_hmac_compare_digest_used(self):
         """The auth module should use hmac.compare_digest, not ==."""
         import inspect
+
         source = inspect.getsource(verify_api_key)
         assert "hmac.compare_digest" in source
-        assert 'credentials.credentials !=' not in source
+        assert "credentials.credentials !=" not in source

@@ -35,11 +35,19 @@ def _default_end() -> datetime:
 async def get_costs(
     conn: Annotated[asyncpg.Connection, Depends(get_db)],
     _key: Annotated[str, Depends(verify_api_key)],
-    pipeline_id: Annotated[uuid.UUID | None, Query(description="Filtrar por pipeline")] = None,
+    pipeline_id: Annotated[
+        uuid.UUID | None, Query(description="Filtrar por pipeline")
+    ] = None,
     job_id: Annotated[uuid.UUID | None, Query(description="Filtrar por job")] = None,
-    group_by: Annotated[str, Query(description="Agrupar por: pipeline, model, day")] = "pipeline",
-    start_date: Annotated[datetime | None, Query(description="Data início (ISO 8601)")] = None,
-    end_date: Annotated[datetime | None, Query(description="Data fim (ISO 8601)")] = None,
+    group_by: Annotated[
+        str, Query(description="Agrupar por: pipeline, model, day")
+    ] = "pipeline",
+    start_date: Annotated[
+        datetime | None, Query(description="Data início (ISO 8601)")
+    ] = None,
+    end_date: Annotated[
+        datetime | None, Query(description="Data fim (ISO 8601)")
+    ] = None,
 ) -> CostReport:
     start = start_date or _default_start()
     end = end_date or _default_end()
@@ -96,7 +104,9 @@ async def get_budget_status(
     return BudgetStatus(
         pipeline_id=pipeline_id,
         current_cost=float(record["current_cost"] or 0),
-        budget_limit=float(record["budget_limit"]) if record["budget_limit"] is not None else None,
+        budget_limit=float(record["budget_limit"])
+        if record["budget_limit"] is not None
+        else None,
         pct_used=float(record["pct_used"] or 0),
         is_exceeded=bool(record["is_exceeded"]),
     )

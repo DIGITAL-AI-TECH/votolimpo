@@ -27,7 +27,9 @@ class TestCostTracker:
                 "output_price_per_million_tokens": 1.60,
             }
         )
-        cost = await tracker.calculate_cost(mock_conn, "openai", "gpt-4.1-mini", 1000, 500)
+        cost = await tracker.calculate_cost(
+            mock_conn, "openai", "gpt-4.1-mini", 1000, 500
+        )
         # (1000 * 0.40 / 1M) + (500 * 1.60 / 1M) = 0.0004 + 0.0008 = 0.0012
         assert abs(cost - 0.0012) < 1e-6
 
@@ -46,7 +48,10 @@ class TestCostTracker:
         mock_conn.fetchrow = AsyncMock(
             side_effect=[
                 # First call: calculate_cost -> pricing lookup
-                {"input_price_per_million_tokens": 0.40, "output_price_per_million_tokens": 1.60},
+                {
+                    "input_price_per_million_tokens": 0.40,
+                    "output_price_per_million_tokens": 1.60,
+                },
                 # Second call: INSERT_LLM_CALL
                 {"id": uuid.uuid4(), "cost_usd": 0.0012},
             ]

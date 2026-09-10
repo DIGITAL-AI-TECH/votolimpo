@@ -99,7 +99,9 @@ class TestHashDedupStrategy:
         # The query should NOT contain url_hash param (only 2 args: pipeline_id + content_hash)
         call_args = conn.fetchrow.call_args
         # call_args[0] is positional args: (query, pipeline_id, content_hash, current_item_id)
-        assert len(call_args[0]) == 4  # query + 3 params (including current_item_id=None)
+        assert (
+            len(call_args[0]) == 4
+        )  # query + 3 params (including current_item_id=None)
 
     async def test_with_url_uses_three_params(self):
         """When url is provided, the query should include url_hash param."""

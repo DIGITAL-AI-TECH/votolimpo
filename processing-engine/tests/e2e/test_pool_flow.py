@@ -45,8 +45,14 @@ class TestPoolFlow:
                 "source_id": "e2e-scraper",
                 "batch_ref": "test-batch-001",
                 "items": [
-                    {"source_url": "https://e2e-test.com/page1", "content": "Content 1"},
-                    {"source_url": "https://e2e-test.com/page2", "content": "Content 2"},
+                    {
+                        "source_url": "https://e2e-test.com/page1",
+                        "content": "Content 1",
+                    },
+                    {
+                        "source_url": "https://e2e-test.com/page2",
+                        "content": "Content 2",
+                    },
                     {"content": "Content without URL"},
                 ],
             },
@@ -88,7 +94,9 @@ class TestPoolFlow:
             "/v1/pool/ingest",
             json={
                 "pipeline_id": pipeline_id,
-                "items": [{"source_url": "https://dedup-test.com/page1", "content": "First"}],
+                "items": [
+                    {"source_url": "https://dedup-test.com/page1", "content": "First"}
+                ],
             },
             headers={"X-API-Key": "test-key"},
         )
@@ -99,7 +107,12 @@ class TestPoolFlow:
             "/v1/pool/ingest",
             json={
                 "pipeline_id": pipeline_id,
-                "items": [{"source_url": "https://dedup-test.com/page1", "content": "Duplicate"}],
+                "items": [
+                    {
+                        "source_url": "https://dedup-test.com/page1",
+                        "content": "Duplicate",
+                    }
+                ],
             },
             headers={"X-API-Key": "test-key"},
         )

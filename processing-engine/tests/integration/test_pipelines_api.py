@@ -157,7 +157,9 @@ async def test_update_pipeline_bumps_version(client) -> None:
 async def test_update_nonexistent_pipeline(client) -> None:
     """PUT em UUID inexistente deve retornar 404."""
     fake_id = "00000000-0000-0000-0000-000000000002"
-    response = await client.put(f"/v1/pipelines/{fake_id}", json=VALID_PAYLOAD, headers=HEADERS)
+    response = await client.put(
+        f"/v1/pipelines/{fake_id}", json=VALID_PAYLOAD, headers=HEADERS
+    )
     assert response.status_code == 404
 
 

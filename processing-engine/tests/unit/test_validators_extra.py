@@ -82,7 +82,12 @@ class TestRangeValidator:
     def test_range_valid(self):
         """Todos os numeros dentro do range retornam valid=True."""
         output = {"age": 30, "score": 85}
-        schema = {"range_rules": {"age": {"min": 0, "max": 150}, "score": {"min": 0, "max": 100}}}
+        schema = {
+            "range_rules": {
+                "age": {"min": 0, "max": 150},
+                "score": {"min": 0, "max": 100},
+            }
+        }
         result = self.validator.validate(output, "", schema)
         assert isinstance(result, ValidationResult)
         assert result.valid is True
@@ -138,14 +143,24 @@ class TestRangeValidator:
     def test_range_boundary_values_inclusive(self):
         """Valores exatamente no min ou max sao validos (limites inclusivos)."""
         output = {"age": 0, "score": 100}
-        schema = {"range_rules": {"age": {"min": 0, "max": 150}, "score": {"min": 0, "max": 100}}}
+        schema = {
+            "range_rules": {
+                "age": {"min": 0, "max": 150},
+                "score": {"min": 0, "max": 100},
+            }
+        }
         result = self.validator.validate(output, "", schema)
         assert result.valid is True
 
     def test_range_multiple_errors(self):
         """Multiplos campos fora do range retornam todos os erros."""
         output = {"age": -5, "score": 200}
-        schema = {"range_rules": {"age": {"min": 0, "max": 150}, "score": {"min": 0, "max": 100}}}
+        schema = {
+            "range_rules": {
+                "age": {"min": 0, "max": 150},
+                "score": {"min": 0, "max": 100},
+            }
+        }
         result = self.validator.validate(output, "", schema)
         assert result.valid is False
         assert len(result.errors) == 2

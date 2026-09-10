@@ -62,7 +62,10 @@ class TestSqlIdentifierValidation:
         assert validate_sql_identifier("articles", "test") == "articles"
 
     def test_valid_schema_qualified(self):
-        assert validate_sql_identifier("votolimpo.articles", "test") == "votolimpo.articles"
+        assert (
+            validate_sql_identifier("votolimpo.articles", "test")
+            == "votolimpo.articles"
+        )
 
     def test_rejects_sql_injection(self):
         with pytest.raises(ValueError):
@@ -191,7 +194,10 @@ class TestScoreCalculator:
         conn.fetchrow = AsyncMock(return_value=None)
 
         result = await ScoreCalculator().process(
-            {"veracity_signals": {}}, {}, pool, {"output_field": "custom_score"},
+            {"veracity_signals": {}},
+            {},
+            pool,
+            {"output_field": "custom_score"},
         )
         assert "custom_score" in result
 
@@ -229,7 +235,9 @@ class TestEntityResolver:
         # No exact match, no fuzzy match, no party match → create returns id=99
         conn.fetchrow = AsyncMock(side_effect=[None, None, None, {"id": 99}])
 
-        output = {"politicians": [{"name": "Novo Político", "party": "PL", "state": "SP"}]}
+        output = {
+            "politicians": [{"name": "Novo Político", "party": "PL", "state": "SP"}]
+        }
         result = await EntityResolver().process(output, {}, pool, {})
 
         assert result["resolved_politician_ids"] == [99]
@@ -288,7 +296,12 @@ class TestRelationshipBuilder:
             ],
             "politicians": [],
             "relationships": [
-                {"source": "Petrobras", "target": "Lava Jato", "type": "investigation", "evidence": "texto"},
+                {
+                    "source": "Petrobras",
+                    "target": "Lava Jato",
+                    "type": "investigation",
+                    "evidence": "texto",
+                },
             ],
         }
         result = await RelationshipBuilder().process(output, {}, pool, {})
@@ -325,14 +338,16 @@ class TestMilestoneDetector:
         output = {
             "article_id": 100,
             "politicians": [{"name": "Lula", "resolved_id": 42}],
-            "milestones": [{
-                "politician_name": "Lula",
-                "type": "indictment",
-                "date": "2026-01-15",
-                "title": "Indiciamento",
-                "description": "Desc",
-                "confidence": 0.90,
-            }],
+            "milestones": [
+                {
+                    "politician_name": "Lula",
+                    "type": "indictment",
+                    "date": "2026-01-15",
+                    "title": "Indiciamento",
+                    "description": "Desc",
+                    "confidence": 0.90,
+                }
+            ],
         }
         result = await MilestoneDetector().process(output, {}, pool, {})
         assert result["persisted_milestone_ids"] == [5]
@@ -343,14 +358,18 @@ class TestMilestoneDetector:
         output = {
             "article_id": 100,
             "politicians": [{"name": "Lula", "resolved_id": 42}],
-            "milestones": [{
-                "politician_name": "Lula",
-                "type": "indictment",
-                "date": "2026-01-15",
-                "confidence": 0.50,
-            }],
+            "milestones": [
+                {
+                    "politician_name": "Lula",
+                    "type": "indictment",
+                    "date": "2026-01-15",
+                    "confidence": 0.50,
+                }
+            ],
         }
-        result = await MilestoneDetector().process(output, {}, pool, {"confidence_threshold": 0.70})
+        result = await MilestoneDetector().process(
+            output, {}, pool, {"confidence_threshold": 0.70}
+        )
         assert result["persisted_milestone_ids"] == []
 
     async def test_skips_without_politician_id(self):
@@ -359,12 +378,14 @@ class TestMilestoneDetector:
         output = {
             "article_id": 100,
             "politicians": [{"name": "Lula"}],  # no resolved_id
-            "milestones": [{
-                "politician_name": "Lula",
-                "type": "indictment",
-                "date": "2026-01-15",
-                "confidence": 0.90,
-            }],
+            "milestones": [
+                {
+                    "politician_name": "Lula",
+                    "type": "indictment",
+                    "date": "2026-01-15",
+                    "confidence": 0.90,
+                }
+            ],
         }
         result = await MilestoneDetector().process(output, {}, pool, {})
         assert result["persisted_milestone_ids"] == []
@@ -377,12 +398,14 @@ class TestMilestoneDetector:
         output = {
             "article_id": 100,
             "politicians": [{"name": "Lula", "resolved_id": 42}],
-            "milestones": [{
-                "politician_name": "Lula",
-                "type": "indictment",
-                "date": "2026-01-15",
-                "confidence": 0.90,
-            }],
+            "milestones": [
+                {
+                    "politician_name": "Lula",
+                    "type": "indictment",
+                    "date": "2026-01-15",
+                    "confidence": 0.90,
+                }
+            ],
         }
         result = await MilestoneDetector().process(output, {}, pool, {})
         assert result["persisted_milestone_ids"] == []
@@ -393,9 +416,21 @@ class TestMilestoneDetector:
 
 class TestArticleMatcher:
     def test_calculate_similarity_full_overlap(self):
-        a = {"keywords": ["corrupção", "lava jato"], "published_at": None, "politician_ids": [1, 2]}
-        b = {"keywords": ["corrupção", "lava jato"], "published_at": None, "politician_ids": [1, 2]}
-        weights = {"entity_overlap": 0.40, "keyword_overlap": 0.35, "temporal_proximity": 0.25}
+        a = {
+            "keywords": ["corrupção", "lava jato"],
+            "published_at": None,
+            "politician_ids": [1, 2],
+        }
+        b = {
+            "keywords": ["corrupção", "lava jato"],
+            "published_at": None,
+            "politician_ids": [1, 2],
+        }
+        weights = {
+            "entity_overlap": 0.40,
+            "keyword_overlap": 0.35,
+            "temporal_proximity": 0.25,
+        }
         result = _calculate_similarity(a, b, weights)
         assert result["entity_overlap"] == 1.0
         assert result["keyword_overlap"] == 1.0
@@ -403,26 +438,44 @@ class TestArticleMatcher:
     def test_calculate_similarity_no_overlap(self):
         a = {"keywords": ["educação"], "published_at": None, "politician_ids": [1]}
         b = {"keywords": ["saúde"], "published_at": None, "politician_ids": [2]}
-        weights = {"entity_overlap": 0.40, "keyword_overlap": 0.35, "temporal_proximity": 0.25}
+        weights = {
+            "entity_overlap": 0.40,
+            "keyword_overlap": 0.35,
+            "temporal_proximity": 0.25,
+        }
         result = _calculate_similarity(a, b, weights)
         assert result["entity_overlap"] == 0.0
         assert result["keyword_overlap"] == 0.0
 
     def test_calculate_similarity_temporal_same_day(self):
         from datetime import datetime
+
         now = datetime.now()
         a = {"keywords": [], "published_at": now, "politician_ids": [1]}
         b = {"keywords": [], "published_at": now, "politician_ids": [1]}
-        weights = {"entity_overlap": 0.40, "keyword_overlap": 0.35, "temporal_proximity": 0.25}
+        weights = {
+            "entity_overlap": 0.40,
+            "keyword_overlap": 0.35,
+            "temporal_proximity": 0.25,
+        }
         result = _calculate_similarity(a, b, weights)
         assert result["temporal_prox"] == 1.0
 
     def test_calculate_similarity_temporal_7_days(self):
         from datetime import datetime, timedelta
+
         now = datetime.now()
         a = {"keywords": [], "published_at": now, "politician_ids": [1]}
-        b = {"keywords": [], "published_at": now - timedelta(days=5), "politician_ids": [1]}
-        weights = {"entity_overlap": 0.40, "keyword_overlap": 0.35, "temporal_proximity": 0.25}
+        b = {
+            "keywords": [],
+            "published_at": now - timedelta(days=5),
+            "politician_ids": [1],
+        }
+        weights = {
+            "entity_overlap": 0.40,
+            "keyword_overlap": 0.35,
+            "temporal_proximity": 0.25,
+        }
         result = _calculate_similarity(a, b, weights)
         assert result["temporal_prox"] == 0.7
 
@@ -435,9 +488,13 @@ class TestArticleMatcher:
     async def test_returns_empty_when_no_matches(self):
         pool, conn = _make_pool()
         # fetchrow returns article data, then fetch returns no candidates
-        conn.fetchrow = AsyncMock(return_value={
-            "keywords": ["test"], "published_at": None, "politician_ids": [None],
-        })
+        conn.fetchrow = AsyncMock(
+            return_value={
+                "keywords": ["test"],
+                "published_at": None,
+                "politician_ids": [None],
+            }
+        )
         conn.fetch = AsyncMock(return_value=[])
 
         output = {"article_id": 1}
@@ -468,15 +525,19 @@ class TestClusterUpdater:
     async def test_creates_cluster_when_no_existing(self):
         pool, conn = _make_pool()
         # fetch matches
-        conn.fetch = AsyncMock(side_effect=[
-            [{"article_a_id": 1, "article_b_id": 2}],  # matches
-            [],  # cluster_politicians (empty)
-        ])
+        conn.fetch = AsyncMock(
+            side_effect=[
+                [{"article_a_id": 1, "article_b_id": 2}],  # matches
+                [],  # cluster_politicians (empty)
+            ]
+        )
         # fetchrow: no existing cluster, then create cluster
-        conn.fetchrow = AsyncMock(side_effect=[
-            None,  # no existing cluster
-            {"id": 50},  # new cluster created
-        ])
+        conn.fetchrow = AsyncMock(
+            side_effect=[
+                None,  # no existing cluster
+                {"id": 50},  # new cluster created
+            ]
+        )
         conn.execute = AsyncMock()
 
         output = {"article_id": 1}
@@ -485,10 +546,12 @@ class TestClusterUpdater:
 
     async def test_joins_existing_cluster(self):
         pool, conn = _make_pool()
-        conn.fetch = AsyncMock(side_effect=[
-            [{"article_a_id": 1, "article_b_id": 3}],  # matches
-            [],  # cluster_politicians
-        ])
+        conn.fetch = AsyncMock(
+            side_effect=[
+                [{"article_a_id": 1, "article_b_id": 3}],  # matches
+                [],  # cluster_politicians
+            ]
+        )
         conn.fetchrow = AsyncMock(return_value={"cluster_id": 25})  # existing cluster
         conn.execute = AsyncMock()
 
@@ -515,7 +578,10 @@ class TestOutputChain:
 
         # ScoreCalculator should not remove any keys
         result = await ScoreCalculator().process(
-            {**base_output, "veracity_signals": {}}, {}, pool, {},
+            {**base_output, "veracity_signals": {}},
+            {},
+            pool,
+            {},
         )
         for key in base_output:
             assert key in result, f"ScoreCalculator removed key '{key}'"
@@ -525,7 +591,12 @@ class TestOutputChain:
         pool, conn = _make_pool()
         conn.fetchrow = AsyncMock(return_value=None)
 
-        output = {"veracity_signals": {}, "entities": [], "politicians": [], "relationships": []}
+        output = {
+            "veracity_signals": {},
+            "entities": [],
+            "politicians": [],
+            "relationships": [],
+        }
 
         # Step 1: ScoreCalculator adds veracity_score
         output = await ScoreCalculator().process(output, {}, pool, {})

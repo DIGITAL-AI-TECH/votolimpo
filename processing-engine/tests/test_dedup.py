@@ -1,7 +1,5 @@
 """Tests for dedup plugins."""
 
-
-
 from app.plugins.dedup import DEDUP_STRATEGIES, CompositeDedup, HashDedup, get_dedup
 
 

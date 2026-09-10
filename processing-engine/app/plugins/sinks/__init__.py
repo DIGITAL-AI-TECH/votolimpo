@@ -16,7 +16,9 @@ logger = logging.getLogger(__name__)
 class Sink(Protocol):
     """Protocol for sink plugins."""
 
-    async def persist(self, output: dict, item_metadata: dict, config: dict, conn: asyncpg.Connection) -> dict:
+    async def persist(
+        self, output: dict, item_metadata: dict, config: dict, conn: asyncpg.Connection
+    ) -> dict:
         """Persist processed output. Returns persistence details."""
         ...
 
@@ -30,7 +32,9 @@ class PostgreSQLSink:
     3. fallback: simple JSONB insert (item_id + output)
     """
 
-    async def persist(self, output: dict, item_metadata: dict, config: dict, conn: asyncpg.Connection) -> dict:
+    async def persist(
+        self, output: dict, item_metadata: dict, config: dict, conn: asyncpg.Connection
+    ) -> dict:
         """Persist output. Handles connection routing for separate target DBs."""
         # C4 fix: allow separate target DB (whitelist of allowed env vars)
         ALLOWED_DB_ENVS = {"PE_VOTOLIMPO_DATABASE_URL", "PE_DATABASE_URL"}
@@ -38,7 +42,9 @@ class PostgreSQLSink:
         own_conn = None
         if db_env:
             if db_env not in ALLOWED_DB_ENVS:
-                raise ValueError(f"database_url_env '{db_env}' not in whitelist: {ALLOWED_DB_ENVS}")
+                raise ValueError(
+                    f"database_url_env '{db_env}' not in whitelist: {ALLOWED_DB_ENVS}"
+                )
             target_url = os.environ.get(db_env)
             if target_url:
                 own_conn = await asyncpg.connect(target_url, timeout=10)
@@ -57,15 +63,23 @@ class PostgreSQLSink:
         result = {"tables_written": [], "article_id": None}
 
         if "column_mapping" in config:
-            await self._persist_column_mapping(conn, output, item_metadata, config, result)
+            await self._persist_column_mapping(
+                conn, output, item_metadata, config, result
+            )
         elif "mappings" in config:
-            await self._persist_legacy_mappings(conn, output, item_metadata, config, result)
+            await self._persist_legacy_mappings(
+                conn, output, item_metadata, config, result
+            )
         else:
-            await self._persist_jsonb_fallback(conn, output, item_metadata, config, result)
+            await self._persist_jsonb_fallback(
+                conn, output, item_metadata, config, result
+            )
 
         return result
 
-    async def _persist_column_mapping(self, conn, output, item_metadata, config, result):
+    async def _persist_column_mapping(
+        self, conn, output, item_metadata, config, result
+    ):
         """Dynamic INSERT/UPSERT based on column_mapping config."""
         table = config.get("table")
         if not table:
@@ -102,9 +116,10 @@ class PostgreSQLSink:
             params.append(url_hash)
             values.append(f"${len(params)}")
             # Also ensure 'url' column is populated if not mapped
-            if "url" not in [v for v in mapping.values()] and "url" not in config.get(
-                "item_field_mapping", {}
-            ).values():
+            if (
+                "url" not in [v for v in mapping.values()]
+                and "url" not in config.get("item_field_mapping", {}).values()
+            ):
                 columns.append("url")
                 params.append(source_url)
                 values.append(f"${len(params)}")
@@ -153,15 +168,15 @@ class PostgreSQLSink:
             update_cols = [c for c in columns if c != conflict_column]
             update_clause = ", ".join(f"{c} = EXCLUDED.{c}" for c in update_cols)
             query = f"""
-                INSERT INTO {table} ({', '.join(columns)})
-                VALUES ({', '.join(values)})
+                INSERT INTO {table} ({", ".join(columns)})
+                VALUES ({", ".join(values)})
                 ON CONFLICT ({conflict_column}) DO UPDATE SET {update_clause}
                 RETURNING id
             """
         else:
             query = f"""
-                INSERT INTO {table} ({', '.join(columns)})
-                VALUES ({', '.join(values)})
+                INSERT INTO {table} ({", ".join(columns)})
+                VALUES ({", ".join(values)})
                 RETURNING id
             """
 
@@ -170,7 +185,9 @@ class PostgreSQLSink:
             result["article_id"] = row["id"]
         result["tables_written"].append(table)
 
-    async def _persist_legacy_mappings(self, conn, output, item_metadata, config, result):
+    async def _persist_legacy_mappings(
+        self, conn, output, item_metadata, config, result
+    ):
         """Legacy strategy-based persistence (backward compat with existing pipelines)."""
         mappings = config["mappings"]
 
@@ -186,7 +203,9 @@ class PostgreSQLSink:
 
         return result
 
-    async def _upsert_article(self, conn: asyncpg.Connection, output: dict, metadata: dict) -> int:
+    async def _upsert_article(
+        self, conn: asyncpg.Connection, output: dict, metadata: dict
+    ) -> int:
         """Upsert article into votolimpo.articles (legacy mode)."""
         url = metadata.get("source_url", "")
         url_hash = hashlib.sha256(url.encode()).hexdigest()
@@ -195,14 +214,18 @@ class PostgreSQLSink:
         source_name = metadata.get("source_name")
         source_id = None
         if source_name:
-            row = await conn.fetchrow("""
+            row = await conn.fetchrow(
+                """
                 INSERT INTO votolimpo.sources (name, domain)
                 VALUES ($1, $2)
                 ON CONFLICT (name) DO UPDATE SET
                     article_count = votolimpo.sources.article_count + 1,
                     updated_at = NOW()
                 RETURNING id
-            """, source_name, metadata.get("source_domain"))
+            """,
+                source_name,
+                metadata.get("source_domain"),
+            )
             if row:
                 source_id = row["id"]
 
@@ -211,7 +234,8 @@ class PostgreSQLSink:
         if not isinstance(keywords, list):
             keywords = []
 
-        row = await conn.fetchrow("""
+        row = await conn.fetchrow(
+            """
             INSERT INTO votolimpo.articles
                 (title, url, url_hash, source_id, published_at,
                  severity, summary, keywords, processing_status,
@@ -243,16 +267,22 @@ class PostgreSQLSink:
         )
         return row["id"]
 
-    async def _persist_jsonb_fallback(self, conn, output, item_metadata, config, result):
+    async def _persist_jsonb_fallback(
+        self, conn, output, item_metadata, config, result
+    ):
         """Fallback: persist as simple JSONB (item_id + output)."""
         table = config.get("table", "processing_engine.results")
         validate_sql_identifier(table, "table")
         item_id = item_metadata.get("item_id", "unknown")
-        await conn.execute(f"""
+        await conn.execute(
+            f"""
             INSERT INTO {table} (item_id, output)
             VALUES ($1, $2::jsonb)
             ON CONFLICT (item_id) DO UPDATE SET output = EXCLUDED.output
-        """, item_id, json.dumps(output))
+        """,
+            item_id,
+            json.dumps(output),
+        )
         result["tables_written"].append(table)
 
 

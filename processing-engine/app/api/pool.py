@@ -64,7 +64,9 @@ async def _ingest_items(
 
             # Check URL dedup
             if url_hash is not None:
-                existing_id = await conn.fetchval(CHECK_URL_HASH_EXISTS, url_hash, pipeline_id)
+                existing_id = await conn.fetchval(
+                    CHECK_URL_HASH_EXISTS, url_hash, pipeline_id
+                )
                 if existing_id is not None:
                     rejections.append(
                         PoolRejection(

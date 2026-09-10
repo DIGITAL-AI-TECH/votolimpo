@@ -182,7 +182,9 @@ class TestCacheIntegration:
         mock_llm.complete.assert_called_once()
 
     @pytest.mark.asyncio
-    async def test_cache_saved_after_successful_processing(self, mock_conn, sample_pipeline):
+    async def test_cache_saved_after_successful_processing(
+        self, mock_conn, sample_pipeline
+    ):
         item_id = uuid.uuid4()
         orchestrator = Orchestrator()
         mock_conn.fetchrow = AsyncMock(return_value=None)

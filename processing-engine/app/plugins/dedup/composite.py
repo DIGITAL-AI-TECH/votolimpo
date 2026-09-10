@@ -31,7 +31,9 @@ class CompositeDedupStrategy:
         current_item_id: str | None = None,
     ) -> DedupResult:
         for strategy in self.strategies:
-            result = await strategy.check(content, url, pipeline_id, conn, current_item_id)
+            result = await strategy.check(
+                content, url, pipeline_id, conn, current_item_id
+            )
             if result.is_duplicate:
                 return result
 

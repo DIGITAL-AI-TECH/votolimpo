@@ -29,7 +29,9 @@ class SchemaValidator:
 
         try:
             validator = jsonschema.Draft7Validator(schema)
-            for error in sorted(validator.iter_errors(output), key=lambda e: list(e.path)):
+            for error in sorted(
+                validator.iter_errors(output), key=lambda e: list(e.path)
+            ):
                 # Build a readable path like "field.subfield"
                 path = ".".join(str(p) for p in error.path) if error.path else "<root>"
                 errors.append(f"{path}: {error.message}")

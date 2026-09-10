@@ -51,9 +51,7 @@ SET status = 'failed', error_message = $2, duration_ms = $3
 WHERE id = $1
 """
 
-_INCREMENT_COMPLETED = (
-    "UPDATE processing_engine.jobs SET items_completed = items_completed + 1 WHERE id = $1"
-)
+_INCREMENT_COMPLETED = "UPDATE processing_engine.jobs SET items_completed = items_completed + 1 WHERE id = $1"
 _INCREMENT_FAILED = (
     "UPDATE processing_engine.jobs SET items_failed = items_failed + 1 WHERE id = $1"
 )
@@ -123,7 +121,12 @@ class Worker:
             pipeline = dict(pipeline_record)
 
             # asyncpg returns JSONB columns as strings — parse them
-            for jsonb_field in ("output_schema", "sink_config", "validators", "metadata"):
+            for jsonb_field in (
+                "output_schema",
+                "sink_config",
+                "validators",
+                "metadata",
+            ):
                 val = pipeline.get(jsonb_field)
                 if isinstance(val, str):
                     pipeline[jsonb_field] = json.loads(val)
@@ -147,7 +150,9 @@ class Worker:
                     try:
                         result = await orchestrator.process_item(
                             item_id=item["id"],
-                            raw_content=item.get("content") or item.get("raw_content") or "",
+                            raw_content=item.get("content")
+                            or item.get("raw_content")
+                            or "",
                             source_url=item.get("source_url"),
                             content_type=item.get("content_type", "text/plain"),
                             pipeline=pipeline,
@@ -185,14 +190,20 @@ class Worker:
                         pass  # handled below
                     # Check item final status
                     updated_item = await counter_conn.fetchrow(
-                        "SELECT status FROM processing_engine.items WHERE id = $1", item["id"]
+                        "SELECT status FROM processing_engine.items WHERE id = $1",
+                        item["id"],
                     )
-                    if updated_item and updated_item["status"] in ("completed", "duplicate"):
+                    if updated_item and updated_item["status"] in (
+                        "completed",
+                        "duplicate",
+                    ):
                         await counter_conn.execute(_INCREMENT_COMPLETED, job["id"])
                     else:
                         await counter_conn.execute(_INCREMENT_FAILED, job["id"])
 
-        await asyncio.gather(*[process_one(item) for item in items], return_exceptions=True)
+        await asyncio.gather(
+            *[process_one(item) for item in items], return_exceptions=True
+        )
 
         # Determine final job status
         async with pool.acquire() as conn:

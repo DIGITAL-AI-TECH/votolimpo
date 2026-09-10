@@ -56,7 +56,9 @@ class TestTextIngestor:
 
     async def test_no_truncation_when_short(self):
         content = "short text"
-        result = await self.ingestor.ingest(content, CONTENT_TYPE_PLAIN, max_chars=10000)
+        result = await self.ingestor.ingest(
+            content, CONTENT_TYPE_PLAIN, max_chars=10000
+        )
         assert result == "short text"
 
     async def test_truncation_exact_boundary(self):

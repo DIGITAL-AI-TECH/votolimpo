@@ -161,7 +161,9 @@ class TestAutoBatcher:
 
         batcher = AutoBatcher(pool=mock_pool, poll_interval=1, batch_size=10)
 
-        with patch.object(batcher, "_claim_and_create_jobs", new_callable=AsyncMock) as mock_claim:
+        with patch.object(
+            batcher, "_claim_and_create_jobs", new_callable=AsyncMock
+        ) as mock_claim:
             mock_claim.return_value = 0
             await batcher._batch_cycle()
 

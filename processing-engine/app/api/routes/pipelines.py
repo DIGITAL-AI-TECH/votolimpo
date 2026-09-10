@@ -39,7 +39,10 @@ async def get_pipeline_detail(pipeline_id: str):
         "id": pipeline.id,
         "name": pipeline.name,
         "version": pipeline.version,
-        "ingestor": {"type": pipeline.ingestor.type, "config": pipeline.ingestor.config},
+        "ingestor": {
+            "type": pipeline.ingestor.type,
+            "config": pipeline.ingestor.config,
+        },
         "dedup": {"strategy": pipeline.dedup.strategy, "config": pipeline.dedup.config},
         "llm": {
             "provider": pipeline.llm.provider,
@@ -50,7 +53,12 @@ async def get_pipeline_detail(pipeline_id: str):
             "output_schema_file": pipeline.llm.output_schema_file,
             "max_retries": pipeline.llm.max_retries,
         },
-        "validators": [{"type": v.type, "config": v.config} for v in pipeline.validators],
+        "validators": [
+            {"type": v.type, "config": v.config} for v in pipeline.validators
+        ],
         "sink": {"type": pipeline.sink.type, "config": pipeline.sink.config},
-        "cache": {"enabled": pipeline.cache.enabled, "ttl_hours": pipeline.cache.ttl_hours},
+        "cache": {
+            "enabled": pipeline.cache.enabled,
+            "ttl_hours": pipeline.cache.ttl_hours,
+        },
     }

@@ -38,7 +38,7 @@ class PostProcessor(Protocol):
 
 # ─── SQL safety ───
 
-_SQL_IDENT_RE = re.compile(r'^[a-zA-Z_][a-zA-Z0-9_.]*$')
+_SQL_IDENT_RE = re.compile(r"^[a-zA-Z_][a-zA-Z0-9_.]*$")
 
 
 def validate_sql_identifier(name: str, context: str = "identifier") -> str:
@@ -66,14 +66,25 @@ def normalize_entity_name(name: str) -> str:
     """Remove political title prefixes from entity names."""
     name = name.strip()
     prefixes = [
-        "ex-", "ex ", "deputado ", "deputada ", "senador ", "senadora ",
-        "ministro ", "ministra ", "governador ", "governadora ",
-        "prefeito ", "prefeita ", "vereador ", "vereadora ",
+        "ex-",
+        "ex ",
+        "deputado ",
+        "deputada ",
+        "senador ",
+        "senadora ",
+        "ministro ",
+        "ministra ",
+        "governador ",
+        "governadora ",
+        "prefeito ",
+        "prefeita ",
+        "vereador ",
+        "vereadora ",
     ]
     lower = name.lower()
     for p in prefixes:
         if lower.startswith(p):
-            name = name[len(p):]
+            name = name[len(p) :]
             break
     return name.strip()
 
@@ -100,14 +111,16 @@ def _register_all():
     from .relationship_builder import RelationshipBuilder
     from .score_calculator import ScoreCalculator
 
-    POST_PROCESSORS.update({
-        "entity_resolver": EntityResolver,
-        "score_calculator": ScoreCalculator,
-        "relationship_builder": RelationshipBuilder,
-        "milestone_detector": MilestoneDetector,
-        "article_matcher": ArticleMatcher,
-        "cluster_updater": ClusterUpdater,
-    })
+    POST_PROCESSORS.update(
+        {
+            "entity_resolver": EntityResolver,
+            "score_calculator": ScoreCalculator,
+            "relationship_builder": RelationshipBuilder,
+            "milestone_detector": MilestoneDetector,
+            "article_matcher": ArticleMatcher,
+            "cluster_updater": ClusterUpdater,
+        }
+    )
 
 
 def get_post_processor(pp_type: str) -> PostProcessor:

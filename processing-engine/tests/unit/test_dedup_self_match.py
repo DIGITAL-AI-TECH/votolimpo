@@ -29,7 +29,9 @@ class TestHashDedupSelfMatch:
     """HashDedupStrategy must not match the item against itself."""
 
     @pytest.mark.asyncio
-    async def test_no_self_match_with_current_item_id(self, item_id: str, pipeline_id: str):
+    async def test_no_self_match_with_current_item_id(
+        self, item_id: str, pipeline_id: str
+    ):
         """When current_item_id is passed and the only match is itself, result is NOT duplicate."""
         conn = AsyncMock()
         # Simulate: query with exclusion returns no rows (the only match was itself)
@@ -55,7 +57,9 @@ class TestHashDedupSelfMatch:
         assert call_args[0][4] == item_id  # current_item_id is the 5th arg (4th param)
 
     @pytest.mark.asyncio
-    async def test_detects_real_duplicate_with_different_id(self, item_id: str, pipeline_id: str):
+    async def test_detects_real_duplicate_with_different_id(
+        self, item_id: str, pipeline_id: str
+    ):
         """When another item has the same hash, it IS detected as duplicate."""
         other_id = str(uuid.uuid4())
         conn = AsyncMock()

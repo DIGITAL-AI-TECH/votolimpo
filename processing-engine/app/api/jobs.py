@@ -151,7 +151,9 @@ async def create_job(
 async def list_jobs(
     conn: Annotated[asyncpg.Connection, Depends(get_db)],
     _key: Annotated[str, Depends(verify_api_key)],
-    pipeline_id: Annotated[uuid.UUID | None, Query(description="Filtrar por pipeline")] = None,
+    pipeline_id: Annotated[
+        uuid.UUID | None, Query(description="Filtrar por pipeline")
+    ] = None,
     status: Annotated[str | None, Query(description="Filtrar por status")] = None,
     limit: Annotated[int, Query(ge=1, le=500, description="Máximo de resultados")] = 20,
     offset: Annotated[int, Query(ge=0, description="Offset para paginação")] = 0,
@@ -220,7 +222,9 @@ async def get_job_logs(
     _key: Annotated[str, Depends(verify_api_key)],
     step: Annotated[
         str | None,
-        Query(description="Filtrar por step (ingest, dedup, process, validate, persist)"),
+        Query(
+            description="Filtrar por step (ingest, dedup, process, validate, persist)"
+        ),
     ] = None,
 ) -> list[ProcessingLog]:
     job_record = await conn.fetchrow(SELECT_JOB_BY_ID, job_id)

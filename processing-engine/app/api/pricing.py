@@ -16,17 +16,25 @@ def _record_to_pricing(record: asyncpg.Record) -> ModelPricing:
     return ModelPricing.model_validate(dict(record))
 
 
-@router.get("/pricing", response_model=list[ModelPricing], summary="Listar preços de modelos LLM")
+@router.get(
+    "/pricing",
+    response_model=list[ModelPricing],
+    summary="Listar preços de modelos LLM",
+)
 async def list_pricing(
     conn: Annotated[asyncpg.Connection, Depends(get_db)],
     _key: Annotated[str, Depends(verify_api_key)],
-    active_only: Annotated[bool | None, Query(description="Filtrar apenas ativos")] = True,
+    active_only: Annotated[
+        bool | None, Query(description="Filtrar apenas ativos")
+    ] = True,
 ) -> list[ModelPricing]:
     records = await conn.fetch(SELECT_ALL_PRICING, active_only)
     return [_record_to_pricing(r) for r in records]
 
 
-@router.post("/pricing", response_model=ModelPricing, summary="Criar/atualizar preço de modelo")
+@router.post(
+    "/pricing", response_model=ModelPricing, summary="Criar/atualizar preço de modelo"
+)
 async def upsert_pricing(
     payload: ModelPricingCreate,
     conn: Annotated[asyncpg.Connection, Depends(get_db)],

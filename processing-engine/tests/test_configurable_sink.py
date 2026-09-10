@@ -258,10 +258,12 @@ class TestLegacyMappingsMode:
         conn.transaction.return_value = tx
 
         # fetchrow for source upsert, then article upsert
-        conn.fetchrow = AsyncMock(side_effect=[
-            {"id": 5},   # source upsert
-            {"id": 100},  # article upsert
-        ])
+        conn.fetchrow = AsyncMock(
+            side_effect=[
+                {"id": 5},  # source upsert
+                {"id": 100},  # article upsert
+            ]
+        )
 
         sink = PostgreSQLSink()
         output = {"severity": "high", "summary": "Test", "keywords": ["test"]}
@@ -362,8 +364,12 @@ class TestConnectionRouting:
         mock_conn = _make_conn()
         default_conn = _make_conn()
 
-        with patch("asyncpg.connect", new_callable=AsyncMock, return_value=mock_conn) as mock_connect, \
-             patch.dict("os.environ", {"PE_VOTOLIMPO_DATABASE_URL": "postgres://test"}):
+        with (
+            patch(
+                "asyncpg.connect", new_callable=AsyncMock, return_value=mock_conn
+            ) as mock_connect,
+            patch.dict("os.environ", {"PE_VOTOLIMPO_DATABASE_URL": "postgres://test"}),
+        ):
             await sink.persist(output, metadata, config, default_conn)
 
         mock_connect.assert_called_once()
@@ -373,4 +379,6 @@ class TestConnectionRouting:
         sink = PostgreSQLSink()
 
         with pytest.raises(ValueError, match="not in whitelist"):
-            await sink.persist({}, {}, {"database_url_env": "EVIL_DB_URL"}, _make_conn())
+            await sink.persist(
+                {}, {}, {"database_url_env": "EVIL_DB_URL"}, _make_conn()
+            )

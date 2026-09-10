@@ -17,7 +17,11 @@ class MilestoneDetector:
     """
 
     async def process(
-        self, output: dict, item_metadata: dict, pool: asyncpg.Pool, config: dict[str, Any],
+        self,
+        output: dict,
+        item_metadata: dict,
+        pool: asyncpg.Pool,
+        config: dict[str, Any],
     ) -> dict:
         milestone_table = validate_sql_identifier(
             config.get("milestone_table", "votolimpo.milestones"), "milestone_table"
@@ -55,22 +59,36 @@ class MilestoneDetector:
                     continue
 
                 # Dedup: same politician + type within window
-                existing = await conn.fetchrow(f"""
+                existing = await conn.fetchrow(
+                    f"""
                     SELECT id FROM {milestone_table}
                     WHERE politician_id = $1 AND type = $2::votolimpo.milestone_type
                       AND ABS(date - $3::date) <= $4
-                """, politician_id, milestone_type, milestone_date, dedup_window_days)
+                """,
+                    politician_id,
+                    milestone_type,
+                    milestone_date,
+                    dedup_window_days,
+                )
 
                 if existing:
                     continue
 
-                row = await conn.fetchrow(f"""
+                row = await conn.fetchrow(
+                    f"""
                     INSERT INTO {milestone_table}
                         (politician_id, article_id, type, title, description, date, confidence)
                     VALUES ($1, $2, $3::votolimpo.milestone_type, $4, $5, $6, $7)
                     RETURNING id
-                """, politician_id, article_id, milestone_type,
-                    m.get("title"), m.get("description"), milestone_date, confidence)
+                """,
+                    politician_id,
+                    article_id,
+                    milestone_type,
+                    m.get("title"),
+                    m.get("description"),
+                    milestone_date,
+                    confidence,
+                )
 
                 if row:
                     persisted_ids.append(row["id"])

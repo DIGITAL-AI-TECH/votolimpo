@@ -46,7 +46,9 @@ class RangeValidator:
                 max_val is not None and value > max_val
             )
             if out_of_range:
-                errors.append(f"{field_name}: value {value} out of range [{min_val}, {max_val}]")
+                errors.append(
+                    f"{field_name}: value {value} out of range [{min_val}, {max_val}]"
+                )
 
         if errors:
             return ValidationResult(valid=False, errors=errors)

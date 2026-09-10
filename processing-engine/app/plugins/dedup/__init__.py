@@ -9,7 +9,13 @@ import asyncpg
 class DedupStrategy(Protocol):
     """Protocol for dedup strategies."""
 
-    async def check(self, content: str, source_url: str | None, config: dict, conn: asyncpg.Connection) -> str:
+    async def check(
+        self,
+        content: str,
+        source_url: str | None,
+        config: dict,
+        conn: asyncpg.Connection,
+    ) -> str:
         """Check for duplicates. Returns: 'new' | 'duplicate' | 'similar'."""
         ...
 
@@ -17,7 +23,13 @@ class DedupStrategy(Protocol):
 class HashDedup:
     """Hash-based exact dedup on content + URL."""
 
-    async def check(self, content: str, source_url: str | None, config: dict, conn: asyncpg.Connection) -> str:
+    async def check(
+        self,
+        content: str,
+        source_url: str | None,
+        config: dict,
+        conn: asyncpg.Connection,
+    ) -> str:
         hash_fields = config.get("hash_fields", ["content"])
         parts = []
         if "source_url" in hash_fields and source_url:
@@ -44,7 +56,13 @@ class HashDedup:
 class CompositeDedup:
     """Composite: hash + optional semantic dedup."""
 
-    async def check(self, content: str, source_url: str | None, config: dict, conn: asyncpg.Connection) -> str:
+    async def check(
+        self,
+        content: str,
+        source_url: str | None,
+        config: dict,
+        conn: asyncpg.Connection,
+    ) -> str:
         # First do hash check
         hash_result = await HashDedup().check(content, source_url, config, conn)
         if hash_result == "duplicate":

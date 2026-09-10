@@ -192,7 +192,9 @@ class TestCompositeDedupStrategy:
         strategy = _make_strategy(DedupResult(is_duplicate=False, strategy="hash"))
         composite = CompositeDedupStrategy(strategies=[strategy])
 
-        await composite.check("meu conteúdo", "https://example.com", self.pipeline_id, conn)
+        await composite.check(
+            "meu conteúdo", "https://example.com", self.pipeline_id, conn
+        )
 
         strategy.check.assert_called_once_with(
             "meu conteúdo",

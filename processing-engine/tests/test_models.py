@@ -1,6 +1,5 @@
 """Tests for data models."""
 
-
 from app.core.models import JobPriority, JobStatus, ProcessingItem, ProcessingJob
 
 

@@ -24,6 +24,7 @@ class JobPriority(str, Enum):
 
 class ProcessingItem(BaseModel):
     """A single item to process."""
+
     item_id: str = Field(default_factory=lambda: str(uuid.uuid4()))
     content: str
     content_type: str = "text/plain"
@@ -33,6 +34,7 @@ class ProcessingItem(BaseModel):
 
 class ProcessingJob(BaseModel):
     """A batch job submitted for processing."""
+
     job_id: str = Field(default_factory=lambda: str(uuid.uuid4()))
     pipeline_id: str
     items: list[ProcessingItem] = Field(min_length=1)
@@ -43,6 +45,7 @@ class ProcessingJob(BaseModel):
 
 class ItemResult(BaseModel):
     """Result of processing a single item."""
+
     item_id: str
     status: JobStatus
     output: dict[str, Any] | None = None
@@ -57,6 +60,7 @@ class ItemResult(BaseModel):
 
 class JobResult(BaseModel):
     """Aggregate result of a processing job."""
+
     job_id: str
     status: JobStatus
     pipeline_id: str

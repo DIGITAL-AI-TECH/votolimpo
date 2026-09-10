@@ -1,6 +1,5 @@
 """Tests for validator plugins."""
 
-
 from app.plugins.validators import (
     DateValidator,
     GroundingValidator,
@@ -27,14 +26,22 @@ class TestGroundingValidator:
     def test_last_name_found(self):
         v = GroundingValidator()
         output = {"politicians": [{"name": "Jair Bolsonaro"}]}
-        config = {"check_fields": [{"path": "politicians[].name", "strategy": "last_name_in_text"}]}
+        config = {
+            "check_fields": [
+                {"path": "politicians[].name", "strategy": "last_name_in_text"}
+            ]
+        }
         errors = v.validate(output, "O presidente Bolsonaro viajou.", config)
         assert len(errors) == 0
 
     def test_last_name_not_found(self):
         v = GroundingValidator()
         output = {"politicians": [{"name": "Fernando Collor"}]}
-        config = {"check_fields": [{"path": "politicians[].name", "strategy": "last_name_in_text"}]}
+        config = {
+            "check_fields": [
+                {"path": "politicians[].name", "strategy": "last_name_in_text"}
+            ]
+        }
         errors = v.validate(output, "O presidente Bolsonaro viajou.", config)
         assert len(errors) == 1
         assert "Collor" in errors[0]
@@ -42,21 +49,33 @@ class TestGroundingValidator:
     def test_any_word_found(self):
         v = GroundingValidator()
         output = {"entities": [{"name": "Supremo Tribunal Federal"}]}
-        config = {"check_fields": [{"path": "entities[].name", "strategy": "any_word_in_text"}]}
+        config = {
+            "check_fields": [
+                {"path": "entities[].name", "strategy": "any_word_in_text"}
+            ]
+        }
         errors = v.validate(output, "O Supremo decidiu nesta terça.", config)
         assert len(errors) == 0
 
     def test_any_word_not_found(self):
         v = GroundingValidator()
         output = {"entities": [{"name": "TSE"}]}
-        config = {"check_fields": [{"path": "entities[].name", "strategy": "any_word_in_text"}]}
+        config = {
+            "check_fields": [
+                {"path": "entities[].name", "strategy": "any_word_in_text"}
+            ]
+        }
         errors = v.validate(output, "O Supremo decidiu nesta terça.", config)
         assert len(errors) == 1
 
     def test_skips_none_values(self):
         v = GroundingValidator()
         output = {"politicians": [{"name": None}]}
-        config = {"check_fields": [{"path": "politicians[].name", "strategy": "last_name_in_text"}]}
+        config = {
+            "check_fields": [
+                {"path": "politicians[].name", "strategy": "last_name_in_text"}
+            ]
+        }
         errors = v.validate(output, "Qualquer texto.", config)
         assert len(errors) == 0
 
@@ -78,7 +97,11 @@ class TestRangeValidator:
     def test_nested_field(self):
         v = RangeValidator()
         output = {"veracity_signals": {"source_reputation": 0.8}}
-        config = {"fields": ["veracity_signals.source_reputation"], "min": 0.0, "max": 1.0}
+        config = {
+            "fields": ["veracity_signals.source_reputation"],
+            "min": 0.0,
+            "max": 1.0,
+        }
         assert v.validate(output, "", config) == []
 
 

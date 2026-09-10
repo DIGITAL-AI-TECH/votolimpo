@@ -32,7 +32,9 @@ class ValidationResult:
 
 @runtime_checkable
 class Ingestor(Protocol):
-    async def ingest(self, raw: str | bytes, content_type: str, max_chars: int = 100000) -> str: ...
+    async def ingest(
+        self, raw: str | bytes, content_type: str, max_chars: int = 100000
+    ) -> str: ...
 
 
 @runtime_checkable

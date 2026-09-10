@@ -88,7 +88,9 @@ class AutoBatcher:
                         pipeline_id,
                     )
             except Exception:
-                logger.exception("Auto-Batcher: error processing pipeline %s", pipeline_id)
+                logger.exception(
+                    "Auto-Batcher: error processing pipeline %s", pipeline_id
+                )
 
     async def _claim_and_create_jobs(self, pipeline_id) -> int:
         """Claim pending items and create one job per item."""
@@ -101,13 +103,17 @@ class AutoBatcher:
                     pipeline_id,
                 )
                 # Mark all pending items for this pipeline as error
-                claimed = await conn.fetch(CLAIM_PENDING_ITEMS, pipeline_id, self._batch_size)
+                claimed = await conn.fetch(
+                    CLAIM_PENDING_ITEMS, pipeline_id, self._batch_size
+                )
                 for item in claimed:
                     await conn.execute(UPDATE_POOL_STATUS_ERROR, item["id"])
                 return 0
 
             pipeline_version = pipeline["version"]
-            claimed_items = await conn.fetch(CLAIM_PENDING_ITEMS, pipeline_id, self._batch_size)
+            claimed_items = await conn.fetch(
+                CLAIM_PENDING_ITEMS, pipeline_id, self._batch_size
+            )
 
             if not claimed_items:
                 return 0

@@ -263,7 +263,10 @@ class TestItemResultContract:
             output={"topic": "AI"},
             cached=False,
             usage=TokenUsage(
-                prompt_tokens=100, completion_tokens=50, total_tokens=150, cost_usd=0.001
+                prompt_tokens=100,
+                completion_tokens=50,
+                total_tokens=150,
+                cost_usd=0.001,
             ),
         )
         return item.model_dump(mode="json")
@@ -372,7 +375,13 @@ class TestBudgetStatusContract:
             is_exceeded=False,
         )
         data = bs.model_dump(mode="json")
-        for key in ("pipeline_id", "current_cost", "budget_limit", "pct_used", "is_exceeded"):
+        for key in (
+            "pipeline_id",
+            "current_cost",
+            "budget_limit",
+            "pct_used",
+            "is_exceeded",
+        ):
             assert key in data, f"BudgetStatus missing: {key}"
         assert isinstance(data["is_exceeded"], bool)
         assert isinstance(data["pct_used"], (int, float))

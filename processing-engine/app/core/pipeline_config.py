@@ -66,6 +66,7 @@ class CacheConfig(BaseModel):
 
 class PipelineConfig(BaseModel):
     """Full pipeline configuration loaded from YAML."""
+
     id: str
     name: str
     description: str = ""
@@ -118,8 +119,10 @@ def _normalize_yaml(raw: dict) -> dict:
 
     # Flat LLM → nested
     llm_flat_keys = {
-        "llm_provider": "provider", "llm_model": "model",
-        "llm_temperature": "temperature", "llm_max_tokens": "max_tokens",
+        "llm_provider": "provider",
+        "llm_model": "model",
+        "llm_temperature": "temperature",
+        "llm_max_tokens": "max_tokens",
         "llm_seed": None,  # not in LLMConfig, skip
     }
     if any(k in data for k in llm_flat_keys) and "llm" not in data:
@@ -183,6 +186,7 @@ def load_pipelines(directory: str | None = None) -> int:
             loaded += 1
         except Exception as e:
             import logging
+
             logging.getLogger(__name__).error("Failed to load pipeline %s: %s", f, e)
 
     return loaded

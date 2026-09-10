@@ -71,7 +71,9 @@ class RangeValidator:
             values = _extract_path(output, field_path)
             for val in values:
                 if isinstance(val, (int, float)) and not (min_val <= val <= max_val):
-                    errors.append(f"Range: {field_path} value {val} not in [{min_val}, {max_val}]")
+                    errors.append(
+                        f"Range: {field_path} value {val} not in [{min_val}, {max_val}]"
+                    )
 
         return errors
 

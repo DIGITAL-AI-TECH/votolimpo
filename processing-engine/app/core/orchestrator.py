@@ -43,21 +43,34 @@ async def submit_job(job_data: dict) -> str:
                 if row:
                     return row["id"]
 
-            await conn.execute("""
+            await conn.execute(
+                """
                 INSERT INTO processing_engine.jobs
                     (id, pipeline_id, status, priority, total_items, callback_url, idempotency_key)
                 VALUES ($1, $2, 'pending', $3, $4, $5, $6)
-            """, job_id, pipeline_id, priority, len(items), callback_url, idempotency_key)
+            """,
+                job_id,
+                pipeline_id,
+                priority,
+                len(items),
+                callback_url,
+                idempotency_key,
+            )
 
             for item in items:
-                await conn.execute("""
+                await conn.execute(
+                    """
                     INSERT INTO processing_engine.job_items
                         (id, job_id, content, content_type, source_url, metadata, status)
                     VALUES ($1, $2, $3, $4, $5, $6, 'pending')
-                """, item["item_id"], job_id, item["content"],
+                """,
+                    item["item_id"],
+                    job_id,
+                    item["content"],
                     item.get("content_type", "text/plain"),
                     item.get("source_url"),
-                    json.dumps(item.get("metadata", {})))
+                    json.dumps(item.get("metadata", {})),
+                )
 
     logger.info("Job submitted: %s (%d items)", job_id, len(items))
     return job_id
@@ -87,11 +100,14 @@ async def process_next_job():
         if not row:
             return None
 
-        await conn.execute("""
+        await conn.execute(
+            """
                 UPDATE processing_engine.jobs
                 SET status = 'processing', started_at = NOW(), updated_at = NOW()
                 WHERE id = $1
-            """, row["id"])
+            """,
+            row["id"],
+        )
 
     job_id = row["id"]
     pipeline_id = row["pipeline_id"]
@@ -121,7 +137,9 @@ async def _process_job_items(job_id: str, pipeline: PipelineConfig):
     ingestor = get_ingestor(pipeline.ingestor.type)
     dedup = get_dedup(pipeline.dedup.strategy)
     llm = get_llm_provider(pipeline.llm.provider)
-    validators = [(v.type, get_validator(v.type), v.config) for v in pipeline.validators]
+    validators = [
+        (v.type, get_validator(v.type), v.config) for v in pipeline.validators
+    ]
     post_processors = [
         (pp.type, get_post_processor(pp.type), pp.config)
         for pp in pipeline.post_processors
@@ -154,8 +172,18 @@ async def _process_job_items(job_id: str, pipeline: PipelineConfig):
     async def _process_one(item):
         async with sem:
             return await _process_single_item(
-                item, job_id, pipeline, ingestor, dedup, llm,
-                validators, post_processors, sink, system_prompt, output_schema, pool,
+                item,
+                job_id,
+                pipeline,
+                ingestor,
+                dedup,
+                llm,
+                validators,
+                post_processors,
+                sink,
+                system_prompt,
+                output_schema,
+                pool,
             )
 
     results = await asyncio.gather(*[_process_one(item) for item in items])
@@ -168,28 +196,53 @@ async def _process_job_items(job_id: str, pipeline: PipelineConfig):
     # Finalize job
     status = "completed" if failed == 0 else ("partial" if completed > 0 else "failed")
     async with pool.acquire() as conn:
-        await conn.execute("""
+        await conn.execute(
+            """
             UPDATE processing_engine.jobs
             SET status = $1, completed_items = $2, failed_items = $3,
                 total_cost_usd = $4, total_duration_ms = $5,
                 completed_at = NOW(), updated_at = NOW()
             WHERE id = $6
-        """, status, completed, failed, total_cost, total_duration, job_id)
+        """,
+            status,
+            completed,
+            failed,
+            total_cost,
+            total_duration,
+            job_id,
+        )
 
-    logger.info("Job %s finished: status=%s, completed=%d, failed=%d, cost=$%.4f",
-                job_id, status, completed, failed, total_cost)
+    logger.info(
+        "Job %s finished: status=%s, completed=%d, failed=%d, cost=$%.4f",
+        job_id,
+        status,
+        completed,
+        failed,
+        total_cost,
+    )
 
     # Callback if configured
     async with pool.acquire() as conn:
         row = await conn.fetchrow(
-            "SELECT callback_url FROM processing_engine.jobs WHERE id = $1", job_id)
+            "SELECT callback_url FROM processing_engine.jobs WHERE id = $1", job_id
+        )
         if row and row["callback_url"]:
             await _send_callback(row["callback_url"], job_id, status)
 
 
 async def _process_single_item(
-    item, job_id, pipeline, ingestor, dedup, llm,
-    validators, post_processors, sink, system_prompt, output_schema, pool,
+    item,
+    job_id,
+    pipeline,
+    ingestor,
+    dedup,
+    llm,
+    validators,
+    post_processors,
+    sink,
+    system_prompt,
+    output_schema,
+    pool,
 ) -> dict:
     """Process a single item through the pipeline. Returns stats dict.
 
@@ -217,38 +270,79 @@ async def _process_single_item(
             async with pool.acquire() as conn:
                 cached = await conn.fetchrow(
                     "SELECT output FROM processing_engine.cache WHERE content_hash = $1 AND pipeline_id = $2 AND expires_at > NOW()",
-                    content_hash, pipeline.id,
+                    content_hash,
+                    pipeline.id,
                 )
             if cached:
                 duration_ms = int((time.time() - t0) * 1000)
                 async with pool.acquire() as conn:
-                    await conn.execute("""
+                    await conn.execute(
+                        """
                         UPDATE processing_engine.job_items
                         SET status = 'completed', output = $1, cached = true,
                             duration_ms = $2, updated_at = NOW()
                         WHERE id = $3
-                    """, cached["output"], duration_ms, item_id)
-                    metadata = json.loads(item["metadata"]) if isinstance(item["metadata"], str) else (item["metadata"] or {})
+                    """,
+                        cached["output"],
+                        duration_ms,
+                        item_id,
+                    )
+                    metadata = (
+                        json.loads(item["metadata"])
+                        if isinstance(item["metadata"], str)
+                        else (item["metadata"] or {})
+                    )
                     metadata["source_url"] = item["source_url"]
-                    await sink.persist(json.loads(cached["output"]), metadata, pipeline.sink.config, conn)
-                    await _log_step(conn, job_id, item_id, "cache_hit", "completed", duration_ms=duration_ms)
-                return {"completed": 1, "failed": 0, "cost": 0.0, "duration": duration_ms}
+                    await sink.persist(
+                        json.loads(cached["output"]),
+                        metadata,
+                        pipeline.sink.config,
+                        conn,
+                    )
+                    await _log_step(
+                        conn,
+                        job_id,
+                        item_id,
+                        "cache_hit",
+                        "completed",
+                        duration_ms=duration_ms,
+                    )
+                return {
+                    "completed": 1,
+                    "failed": 0,
+                    "cost": 0.0,
+                    "duration": duration_ms,
+                }
 
         # Step 3: Dedup (short acquire for DB check)
         async with pool.acquire() as conn:
             dedup_result = await dedup.check(
-                clean_content, item["source_url"], pipeline.dedup.config, conn,
+                clean_content,
+                item["source_url"],
+                pipeline.dedup.config,
+                conn,
             )
         if dedup_result == "duplicate":
             duration_ms = int((time.time() - t0) * 1000)
             async with pool.acquire() as conn:
-                await conn.execute("""
+                await conn.execute(
+                    """
                     UPDATE processing_engine.job_items
                     SET status = 'completed', dedup_result = 'duplicate',
                         duration_ms = $1, updated_at = NOW()
                     WHERE id = $2
-                """, duration_ms, item_id)
-                await _log_step(conn, job_id, item_id, "dedup", "skipped", metadata={"result": "duplicate"})
+                """,
+                    duration_ms,
+                    item_id,
+                )
+                await _log_step(
+                    conn,
+                    job_id,
+                    item_id,
+                    "dedup",
+                    "skipped",
+                    metadata={"result": "duplicate"},
+                )
             return {"completed": 1, "failed": 0, "cost": 0.0, "duration": duration_ms}
 
         # Step 4: LLM Process (NO DB connection held — C2 fix)
@@ -257,17 +351,25 @@ async def _process_single_item(
             "temperature": pipeline.llm.temperature,
             "max_tokens": pipeline.llm.max_tokens,
         }
-        llm_result = await llm.process(clean_content, system_prompt, output_schema, llm_config)
+        llm_result = await llm.process(
+            clean_content, system_prompt, output_schema, llm_config
+        )
         output = llm_result["output"]
         cost += llm_result["cost_usd"]
 
         # Log LLM step (short acquire)
         async with pool.acquire() as conn:
-            await _log_step(conn, job_id, item_id, "llm", "completed",
-                            model=pipeline.llm.model,
-                            prompt_tokens=llm_result["usage"].get("prompt_tokens"),
-                            completion_tokens=llm_result["usage"].get("completion_tokens"),
-                            cost_usd=llm_result["cost_usd"])
+            await _log_step(
+                conn,
+                job_id,
+                item_id,
+                "llm",
+                "completed",
+                model=pipeline.llm.model,
+                prompt_tokens=llm_result["usage"].get("prompt_tokens"),
+                completion_tokens=llm_result["usage"].get("completion_tokens"),
+                cost_usd=llm_result["cost_usd"],
+            )
 
         # Step 5: Validate
         all_errors = []
@@ -279,10 +381,18 @@ async def _process_single_item(
         if all_errors:
             for attempt in range(pipeline.llm.max_retries):
                 async with pool.acquire() as conn:
-                    await _log_step(conn, job_id, item_id, "validation", "retry",
-                                    metadata={"errors": all_errors, "attempt": attempt + 1})
+                    await _log_step(
+                        conn,
+                        job_id,
+                        item_id,
+                        "validation",
+                        "retry",
+                        metadata={"errors": all_errors, "attempt": attempt + 1},
+                    )
                 # Retry LLM (NO DB connection held)
-                llm_result = await llm.process(clean_content, system_prompt, output_schema, llm_config)
+                llm_result = await llm.process(
+                    clean_content, system_prompt, output_schema, llm_config
+                )
                 output = llm_result["output"]
                 cost += llm_result["cost_usd"]
                 all_errors = []
@@ -295,66 +405,133 @@ async def _process_single_item(
             if all_errors:
                 duration_ms = int((time.time() - t0) * 1000)
                 async with pool.acquire() as conn:
-                    await conn.execute("""
+                    await conn.execute(
+                        """
                         UPDATE processing_engine.job_items
                         SET status = 'failed', validation_errors = $1,
                             cost_usd = $2, duration_ms = $3, updated_at = NOW()
                         WHERE id = $4
-                    """, json.dumps(all_errors), cost, duration_ms, item_id)
-                    await _log_step(conn, job_id, item_id, "validation", "failed",
-                                    metadata={"errors": all_errors})
-                return {"completed": 0, "failed": 1, "cost": cost, "duration": duration_ms}
+                    """,
+                        json.dumps(all_errors),
+                        cost,
+                        duration_ms,
+                        item_id,
+                    )
+                    await _log_step(
+                        conn,
+                        job_id,
+                        item_id,
+                        "validation",
+                        "failed",
+                        metadata={"errors": all_errors},
+                    )
+                return {
+                    "completed": 0,
+                    "failed": 1,
+                    "cost": cost,
+                    "duration": duration_ms,
+                }
 
         # Step 5.5: Post-process (sequential chain — output flows between processors)
-        metadata = json.loads(item["metadata"]) if isinstance(item["metadata"], str) else (item["metadata"] or {})
+        metadata = (
+            json.loads(item["metadata"])
+            if isinstance(item["metadata"], str)
+            else (item["metadata"] or {})
+        )
         metadata["source_url"] = item["source_url"]
         for pp_type, processor, pp_config in post_processors:
             try:
                 output = await processor.process(output, metadata, pool, pp_config)
             except Exception as pp_err:
-                logger.error("Post-processor %s failed for item %s: %s", pp_type, item_id, pp_err)
+                logger.error(
+                    "Post-processor %s failed for item %s: %s", pp_type, item_id, pp_err
+                )
                 duration_ms = int((time.time() - t0) * 1000)
                 async with pool.acquire() as conn:
-                    await conn.execute("""
+                    await conn.execute(
+                        """
                         UPDATE processing_engine.job_items
                         SET status = 'failed', error = $1, duration_ms = $2, updated_at = NOW()
                         WHERE id = $3
-                    """, f"PostProcessor {pp_type}: {pp_err}", duration_ms, item_id)
-                    await _log_step(conn, job_id, item_id, f"post_process:{pp_type}", "failed",
-                                    error_message=str(pp_err), duration_ms=duration_ms)
-                return {"completed": 0, "failed": 1, "cost": cost, "duration": duration_ms}
+                    """,
+                        f"PostProcessor {pp_type}: {pp_err}",
+                        duration_ms,
+                        item_id,
+                    )
+                    await _log_step(
+                        conn,
+                        job_id,
+                        item_id,
+                        f"post_process:{pp_type}",
+                        "failed",
+                        error_message=str(pp_err),
+                        duration_ms=duration_ms,
+                    )
+                return {
+                    "completed": 0,
+                    "failed": 1,
+                    "cost": cost,
+                    "duration": duration_ms,
+                }
 
         # Log post-processing completion
         async with pool.acquire() as conn:
-            await _log_step(conn, job_id, item_id, "post_process", "completed",
-                            metadata={"processors": [pp[0] for pp in post_processors]})
+            await _log_step(
+                conn,
+                job_id,
+                item_id,
+                "post_process",
+                "completed",
+                metadata={"processors": [pp[0] for pp in post_processors]},
+            )
 
         # Step 6: Persist via sink (short acquire)
         async with pool.acquire() as conn:
-            persist_result = await sink.persist(output, metadata, pipeline.sink.config, conn)
+            persist_result = await sink.persist(
+                output, metadata, pipeline.sink.config, conn
+            )
 
         # Cache the result
         if pipeline.cache.enabled:
             expires = datetime.now(UTC) + timedelta(hours=pipeline.cache.ttl_hours)
             async with pool.acquire() as conn:
-                await conn.execute("""
+                await conn.execute(
+                    """
                     INSERT INTO processing_engine.cache (content_hash, pipeline_id, output, expires_at)
                     VALUES ($1, $2, $3, $4)
                     ON CONFLICT (content_hash) DO UPDATE SET output = EXCLUDED.output, expires_at = EXCLUDED.expires_at
-                """, content_hash, pipeline.id, json.dumps(output), expires)
+                """,
+                    content_hash,
+                    pipeline.id,
+                    json.dumps(output),
+                    expires,
+                )
 
         duration_ms = int((time.time() - t0) * 1000)
         async with pool.acquire() as conn:
-            await conn.execute("""
+            await conn.execute(
+                """
                 UPDATE processing_engine.job_items
                 SET status = 'completed', output = $1, dedup_result = $2,
                     usage = $3, cost_usd = $4, duration_ms = $5, updated_at = NOW()
                 WHERE id = $6
-            """, json.dumps(output), dedup_result,
-                json.dumps(llm_result["usage"]), cost, duration_ms, item_id)
-            await _log_step(conn, job_id, item_id, "persist", "completed",
-                            duration_ms=duration_ms,
-                            metadata={"tables": persist_result.get("tables_written", [])})
+            """,
+                json.dumps(output),
+                dedup_result,
+                json.dumps(llm_result["usage"]),
+                cost,
+                duration_ms,
+                item_id,
+            )
+            await _log_step(
+                conn,
+                job_id,
+                item_id,
+                "persist",
+                "completed",
+                duration_ms=duration_ms,
+                metadata={"tables": persist_result.get("tables_written", [])},
+            )
 
         return {"completed": 1, "failed": 0, "cost": cost, "duration": duration_ms}
 
@@ -362,13 +539,25 @@ async def _process_single_item(
         duration_ms = int((time.time() - t0) * 1000)
         logger.exception("Failed to process item %s", item_id)
         async with pool.acquire() as conn:
-            await conn.execute("""
+            await conn.execute(
+                """
                 UPDATE processing_engine.job_items
                 SET status = 'failed', error = $1, duration_ms = $2, updated_at = NOW()
                 WHERE id = $3
-            """, str(e), duration_ms, item_id)
-            await _log_step(conn, job_id, item_id, "error", "failed",
-                            error_message=str(e), duration_ms=duration_ms)
+            """,
+                str(e),
+                duration_ms,
+                item_id,
+            )
+            await _log_step(
+                conn,
+                job_id,
+                item_id,
+                "error",
+                "failed",
+                error_message=str(e),
+                duration_ms=duration_ms,
+            )
         return {"completed": 0, "failed": 1, "cost": cost, "duration": duration_ms}
 
 
@@ -376,31 +565,53 @@ async def _fail_job(job_id: str, error: str):
     """Mark a job as failed."""
     pool = await get_pool()
     async with pool.acquire() as conn:
-        await conn.execute("""
+        await conn.execute(
+            """
             UPDATE processing_engine.jobs
             SET status = 'failed', completed_at = NOW(), updated_at = NOW()
             WHERE id = $1
-        """, job_id)
+        """,
+            job_id,
+        )
     logger.error("Job %s failed: %s", job_id, error)
 
 
 async def _log_step(
-    conn, job_id: str, item_id: str | None, step: str, status: str, *,
-    model: str | None = None, prompt_tokens: int | None = None,
-    completion_tokens: int | None = None, cost_usd: float | None = None,
-    duration_ms: int = 0, error_message: str | None = None,
+    conn,
+    job_id: str,
+    item_id: str | None,
+    step: str,
+    status: str,
+    *,
+    model: str | None = None,
+    prompt_tokens: int | None = None,
+    completion_tokens: int | None = None,
+    cost_usd: float | None = None,
+    duration_ms: int = 0,
+    error_message: str | None = None,
     metadata: dict | None = None,
 ):
     """Insert a processing log entry."""
-    await conn.execute("""
+    await conn.execute(
+        """
         INSERT INTO processing_engine.processing_logs
             (job_id, item_id, step, status, model_used,
              prompt_tokens, completion_tokens, cost_usd,
              duration_ms, error_message, metadata)
         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
-    """, job_id, item_id, step, status, model,
-        prompt_tokens, completion_tokens, cost_usd,
-        duration_ms, error_message, json.dumps(metadata or {}))
+    """,
+        job_id,
+        item_id,
+        step,
+        status,
+        model,
+        prompt_tokens,
+        completion_tokens,
+        cost_usd,
+        duration_ms,
+        error_message,
+        json.dumps(metadata or {}),
+    )
 
 
 def _validate_callback_url(url: str) -> bool:
@@ -431,6 +642,7 @@ async def _send_callback(url: str, job_id: str, status: str):
     import socket
 
     import httpx
+
     # DNS rebinding protection: resolve hostname and validate IP
     try:
         parsed_host = urlparse(url).hostname
@@ -438,7 +650,9 @@ async def _send_callback(url: str, job_id: str, status: str):
         for _, _, _, _, sockaddr in addrs:
             addr = ip_address(sockaddr[0])
             if not addr.is_global:
-                logger.warning("Callback blocked (resolved to non-global IP %s): %s", addr, url)
+                logger.warning(
+                    "Callback blocked (resolved to non-global IP %s): %s", addr, url
+                )
                 return
     except Exception as e:
         logger.warning("Callback DNS resolution failed for %s: %s", url, e)
@@ -446,7 +660,9 @@ async def _send_callback(url: str, job_id: str, status: str):
     try:
         headers = {"x-api-key": settings.api_key}
         async with httpx.AsyncClient(timeout=10, follow_redirects=False) as client:
-            await client.post(url, json={"job_id": job_id, "status": status}, headers=headers)
+            await client.post(
+                url, json={"job_id": job_id, "status": status}, headers=headers
+            )
         logger.info("Callback sent: %s → %s", job_id, url)
     except Exception as e:
         logger.warning("Callback failed for job %s: %s", job_id, e)

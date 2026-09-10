@@ -17,13 +17,19 @@ class RelationshipBuilder:
     """
 
     async def process(
-        self, output: dict, item_metadata: dict, pool: asyncpg.Pool, config: dict[str, Any],
+        self,
+        output: dict,
+        item_metadata: dict,
+        pool: asyncpg.Pool,
+        config: dict[str, Any],
     ) -> dict:
         relationship_table = validate_sql_identifier(
-            config.get("relationship_table", "votolimpo.relationships"), "relationship_table"
+            config.get("relationship_table", "votolimpo.relationships"),
+            "relationship_table",
         )
         evidence_table = validate_sql_identifier(
-            config.get("evidence_table", "votolimpo.relationship_evidence"), "evidence_table"
+            config.get("evidence_table", "votolimpo.relationship_evidence"),
+            "evidence_table",
         )
 
         # Build entity ID map from resolved entities
@@ -46,7 +52,8 @@ class RelationshipBuilder:
                 if not src_id or not tgt_id or not rel_type:
                     continue
 
-                row = await conn.fetchrow(f"""
+                row = await conn.fetchrow(
+                    f"""
                     INSERT INTO {relationship_table}
                         (source_id, target_id, source_type, target_type, type, weight)
                     VALUES ($1, $2, 'entity', 'entity', $3::votolimpo.relationship_type, 1)
@@ -54,16 +61,25 @@ class RelationshipBuilder:
                     DO UPDATE SET weight = {relationship_table}.weight + 1,
                                   last_seen_at = NOW(), updated_at = NOW()
                     RETURNING id
-                """, src_id, tgt_id, rel_type)
+                """,
+                    src_id,
+                    tgt_id,
+                    rel_type,
+                )
 
                 if row:
                     persisted_ids.append(row["id"])
                     if rel.get("evidence") and article_id:
-                        await conn.execute(f"""
+                        await conn.execute(
+                            f"""
                             INSERT INTO {evidence_table}
                                 (relationship_id, article_id, excerpt)
                             VALUES ($1, $2, $3)
-                        """, row["id"], article_id, rel["evidence"])
+                        """,
+                            row["id"],
+                            article_id,
+                            rel["evidence"],
+                        )
 
         output["persisted_relationship_ids"] = persisted_ids
         return output

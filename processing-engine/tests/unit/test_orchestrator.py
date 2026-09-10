@@ -125,7 +125,11 @@ class TestOrchestratorFullPipeline:
         with patch("app.services.orchestrator.get_instance") as mock_get:
 
             def side_effect(ptype, name):
-                return {"ingestor": mock_ingestor, "dedup": mock_dedup, "llm": mock_llm}[ptype]
+                return {
+                    "ingestor": mock_ingestor,
+                    "dedup": mock_dedup,
+                    "llm": mock_llm,
+                }[ptype]
 
             mock_get.side_effect = side_effect
 

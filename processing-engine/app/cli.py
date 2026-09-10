@@ -10,7 +10,9 @@ import httpx
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="Processing Engine CLI")
-    parser.add_argument("--base-url", default="http://localhost:8000", help="API base URL")
+    parser.add_argument(
+        "--base-url", default="http://localhost:8000", help="API base URL"
+    )
     parser.add_argument("--api-key", default="dev-key", help="API key")
 
     sub = parser.add_subparsers(dest="command")
@@ -54,7 +56,9 @@ async def _dispatch(args: argparse.Namespace) -> None:
             resp = await client.get(f"{base}/v1/pipelines")
             resp.raise_for_status()
             for p in resp.json():
-                print(f"  {p['id']}  {p['name']}  v{p['version']}  active={p['is_active']}")
+                print(
+                    f"  {p['id']}  {p['name']}  v{p['version']}  active={p['is_active']}"
+                )
 
         elif args.command == "create-pipeline":
             with open(args.file) as f:
@@ -108,7 +112,9 @@ async def _dispatch(args: argparse.Namespace) -> None:
             resp = await client.get(f"{base}/v1/costs")
             resp.raise_for_status()
             data = resp.json()
-            print(f"Total cost: ${data['total_cost_usd']:.4f} ({data['total_calls']} calls)")
+            print(
+                f"Total cost: ${data['total_cost_usd']:.4f} ({data['total_calls']} calls)"
+            )
             for item in data.get("breakdown", []):
                 print(
                     f"  {item['label']}: ${item['total_cost_usd']:.4f} ({item['total_calls']} calls)"
