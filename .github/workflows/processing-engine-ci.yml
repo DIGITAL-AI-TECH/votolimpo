@@ -69,9 +69,8 @@ jobs:
         with:
           python-version: "3.12"
       - run: pip install -e ".[dev]"
-      - run: |
-          alembic upgrade head
-          pytest tests/unit tests/contract -v --tb=short
+      - name: Run tests
+        run: pytest tests/unit tests/contract -v --tb=short
 
   # ── Job 3: Build + Push ─────────────────────────
   docker:
