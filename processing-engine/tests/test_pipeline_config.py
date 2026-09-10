@@ -11,6 +11,7 @@ from app.core.pipeline_config import (
     load_pipelines,
     get_pipeline,
     _registry,
+    _normalize_yaml,
 )
 
 
@@ -77,6 +78,103 @@ class TestLoadPipelines:
         assert len(p.validators) == 2
         assert p.sink.type == "postgresql"
         assert p.cache.ttl_hours == 168
+
+
+class TestNormalizeYaml:
+    """Test flat YAML → nested PipelineConfig translation."""
+
+    def test_auto_generates_id_from_name(self):
+        result = _normalize_yaml({"name": "My Pipeline"})
+        assert result["id"] == "my-pipeline"
+
+    def test_flat_ingestor(self):
+        result = _normalize_yaml({"name": "t", "ingestor_type": "html"})
+        assert result["ingestor"] == {"type": "html"}
+        assert "ingestor_type" not in result
+
+    def test_flat_dedup(self):
+        result = _normalize_yaml({
+            "name": "t",
+            "dedup_strategy": "composite",
+            "dedup_config": {"strategies": ["hash"]},
+        })
+        assert result["dedup"]["strategy"] == "composite"
+        assert result["dedup"]["config"]["strategies"] == ["hash"]
+
+    def test_flat_llm(self):
+        result = _normalize_yaml({
+            "name": "t",
+            "llm_provider": "openai",
+            "llm_model": "gpt-4.1-mini",
+            "llm_temperature": 0.1,
+        })
+        assert result["llm"]["provider"] == "openai"
+        assert result["llm"]["model"] == "gpt-4.1-mini"
+
+    def test_flat_sink(self):
+        result = _normalize_yaml({
+            "name": "t",
+            "sink_type": "postgresql",
+            "sink_config": {"table": "votolimpo.articles"},
+        })
+        assert result["sink"]["type"] == "postgresql"
+
+    def test_string_validators_expanded(self):
+        result = _normalize_yaml({
+            "name": "t",
+            "validators": ["schema", "grounding"],
+            "validator_config": {"grounding": {"min_overlap_ratio": 0.3}},
+        })
+        assert result["validators"][0] == {"type": "schema", "config": {}}
+        assert result["validators"][1]["type"] == "grounding"
+        assert result["validators"][1]["config"]["min_overlap_ratio"] == 0.3
+
+    def test_crons_name_handler_normalized(self):
+        result = _normalize_yaml({
+            "name": "t",
+            "crons": [
+                {"name": "recalc", "schedule": "0 3 * * *", "handler": "score.recalc"},
+            ],
+        })
+        assert result["crons"][0]["type"] == "recalc"
+        assert result["crons"][0]["config"]["handler"] == "score.recalc"
+
+    def test_nested_format_passes_through(self):
+        """Already-nested format should not be altered."""
+        data = {
+            "id": "my-pipe",
+            "name": "test",
+            "ingestor": {"type": "html"},
+            "validators": [{"type": "schema", "config": {}}],
+        }
+        result = _normalize_yaml(data)
+        assert result["ingestor"]["type"] == "html"
+        assert result["validators"][0]["type"] == "schema"
+
+
+class TestLoadRealYaml:
+    """Integration test: load the actual pipeline YAML."""
+
+    def test_loads_voto_limpo_yaml(self):
+        yaml_dir = Path(__file__).parent.parent / "pipelines"
+        if not yaml_dir.exists():
+            pytest.skip("pipelines/ directory not found")
+
+        count = load_pipelines(str(yaml_dir))
+        assert count >= 1, "Should load at least the voto-limpo pipeline"
+
+        # Verify the pipeline loaded correctly
+        p = get_pipeline("voto-limpo-news-analysis")
+        assert p is not None, "voto-limpo-news-analysis should be loadable"
+        assert p.name == "voto-limpo-news-analysis"
+        assert p.ingestor.type == "auto"
+        assert p.dedup.strategy == "composite"
+        assert p.llm.provider == "openai"
+        assert p.llm.model == "gpt-4.1-mini"
+        assert len(p.validators) == 3
+        assert len(p.post_processors) == 6
+        assert len(p.crons) == 5
+        assert p.sink.type == "postgresql"
 
 
 class TestGetPipeline:

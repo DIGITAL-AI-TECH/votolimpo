@@ -16,6 +16,7 @@ from ..plugins.dedup import get_dedup
 from ..plugins.llm import get_llm_provider, load_system_prompt, load_output_schema
 from ..plugins.validators import get_validator
 from ..plugins.sinks import get_sink
+from ..plugins.post_processors import get_post_processor
 from .pipeline_config import get_pipeline, PipelineConfig
 from .models import JobStatus
 
@@ -123,6 +124,10 @@ async def _process_job_items(job_id: str, pipeline: PipelineConfig):
     dedup = get_dedup(pipeline.dedup.strategy)
     llm = get_llm_provider(pipeline.llm.provider)
     validators = [(v.type, get_validator(v.type), v.config) for v in pipeline.validators]
+    post_processors = [
+        (pp.type, get_post_processor(pp.type), pp.config)
+        for pp in pipeline.post_processors
+    ]
     sink = get_sink(pipeline.sink.type)
 
     # Load prompts and schema
@@ -152,7 +157,7 @@ async def _process_job_items(job_id: str, pipeline: PipelineConfig):
         async with sem:
             return await _process_single_item(
                 item, job_id, pipeline, ingestor, dedup, llm,
-                validators, sink, system_prompt, output_schema, pool,
+                validators, post_processors, sink, system_prompt, output_schema, pool,
             )
 
     results = await asyncio.gather(*[_process_one(item) for item in items])
@@ -186,7 +191,7 @@ async def _process_job_items(job_id: str, pipeline: PipelineConfig):
 
 async def _process_single_item(
     item, job_id, pipeline, ingestor, dedup, llm,
-    validators, sink, system_prompt, output_schema, pool,
+    validators, post_processors, sink, system_prompt, output_schema, pool,
 ) -> dict:
     """Process a single item through the pipeline. Returns stats dict.
 
@@ -302,9 +307,31 @@ async def _process_single_item(
                                     metadata={"errors": all_errors})
                 return {"completed": 0, "failed": 1, "cost": cost, "duration": duration_ms}
 
-        # Step 6: Persist via sink (short acquire)
+        # Step 5.5: Post-process (sequential chain — output flows between processors)
         metadata = json.loads(item["metadata"]) if isinstance(item["metadata"], str) else (item["metadata"] or {})
         metadata["source_url"] = item["source_url"]
+        for pp_type, processor, pp_config in post_processors:
+            try:
+                output = await processor.process(output, metadata, pool, pp_config)
+            except Exception as pp_err:
+                logger.error("Post-processor %s failed for item %s: %s", pp_type, item_id, pp_err)
+                duration_ms = int((time.time() - t0) * 1000)
+                async with pool.acquire() as conn:
+                    await conn.execute("""
+                        UPDATE processing_engine.job_items
+                        SET status = 'failed', error = $1, duration_ms = $2, updated_at = NOW()
+                        WHERE id = $3
+                    """, f"PostProcessor {pp_type}: {pp_err}", duration_ms, item_id)
+                    await _log_step(conn, job_id, item_id, f"post_process:{pp_type}", "failed",
+                                    error_message=str(pp_err), duration_ms=duration_ms)
+                return {"completed": 0, "failed": 1, "cost": cost, "duration": duration_ms}
+
+        # Log post-processing completion
+        async with pool.acquire() as conn:
+            await _log_step(conn, job_id, item_id, "post_process", "completed",
+                            metadata={"processors": [pp[0] for pp in post_processors]})
+
+        # Step 6: Persist via sink (short acquire)
         async with pool.acquire() as conn:
             persist_result = await sink.persist(output, metadata, pipeline.sink.config, conn)
 
