@@ -43,13 +43,27 @@ async def close_pool():
 
 
 async def init_engine_schema(pool: asyncpg.Pool | None = None):
-    """Create the processing_engine schema and tables if not exist."""
+    """Ensure the processing_engine schema exists.
+
+    Only creates the schema itself — tables are managed by Alembic migrations.
+    If migrations haven't run yet, creates minimal tables as fallback.
+    """
     if pool is None:
         pool = await get_pool()
     async with pool.acquire() as conn:
-        await conn.execute("""
-            CREATE SCHEMA IF NOT EXISTS processing_engine;
+        await conn.execute("CREATE SCHEMA IF NOT EXISTS processing_engine")
 
+        # Check if tables already exist (created by Alembic)
+        row = await conn.fetchval("""
+            SELECT COUNT(*) FROM information_schema.tables
+            WHERE table_schema = 'processing_engine' AND table_name = 'jobs'
+        """)
+        if row > 0:
+            logger.info("Engine schema already initialized (tables exist)")
+            return
+
+        # Fallback: create tables if Alembic hasn't run
+        await conn.execute("""
             CREATE TABLE IF NOT EXISTS processing_engine.pipelines (
                 id TEXT PRIMARY KEY,
                 name TEXT NOT NULL,
@@ -130,4 +144,4 @@ async def init_engine_schema(pool: asyncpg.Pool | None = None):
             CREATE INDEX IF NOT EXISTS idx_cache_expires
                 ON processing_engine.cache (expires_at);
         """)
-    logger.info("Engine schema initialized")
+    logger.info("Engine schema initialized (fallback DDL)")
