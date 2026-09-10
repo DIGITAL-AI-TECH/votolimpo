@@ -195,7 +195,7 @@ jobs:
           IMAGE: ${{ env.IMAGE_NAME }}:${{ needs.docker.outputs.image_sha }}
         run: |
           set -e
-          STACK_SERVICE="votolimpo-pe_processing-engine"
+          STACK_SERVICE="processing-engine_api"
 
           echo "Pulling image: ${IMAGE}"
           docker pull "${IMAGE}"
