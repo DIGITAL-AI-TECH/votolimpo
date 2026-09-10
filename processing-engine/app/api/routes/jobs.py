@@ -143,6 +143,9 @@ async def get_job_result(job_id: str):
                 "dedup_result": item.get("dedup_result"),
                 "cost_usd": float(item["cost_usd"] or 0),
                 "duration_ms": item["duration_ms"] or 0,
+                "metadata": json.loads(item["metadata"])
+                if item.get("metadata")
+                else None,
                 "error": item["error"],
                 "validation_errors": json.loads(item["validation_errors"])
                 if item.get("validation_errors")

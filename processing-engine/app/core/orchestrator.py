@@ -655,17 +655,15 @@ async def _send_callback(url: str, job_id: str, status: str):
 
     import httpx
 
-    # DNS rebinding protection: resolve hostname and validate IP
+    # DNS resolution check — skip strict IP validation for hostnames.
+    # Inside Docker Swarm, public hostnames resolve to private Traefik
+    # overlay IPs (e.g. 10.0.x.x), which are safe and expected.
+    # The hostname-level SSRF check in _validate_callback_url already
+    # blocks localhost/link-local; requiring is_global here would break
+    # all Swarm-internal callbacks.
     try:
         parsed_host = urlparse(url).hostname
-        addrs = socket.getaddrinfo(parsed_host, None)
-        for _, _, _, _, sockaddr in addrs:
-            addr = ip_address(sockaddr[0])
-            if not addr.is_global:
-                logger.warning(
-                    "Callback blocked (resolved to non-global IP %s): %s", addr, url
-                )
-                return
+        socket.getaddrinfo(parsed_host, None)  # ensure DNS resolves
     except Exception as e:
         logger.warning("Callback DNS resolution failed for %s: %s", url, e)
         return
