@@ -69,8 +69,11 @@ class OpenAIProvider:
                 },
             }
         else:
-            # Force JSON output even without explicit schema to prevent plain text
+            # Force JSON output even without explicit schema to prevent plain text.
+            # OpenAI requires the word "json" in messages when using json_object mode.
             kwargs["response_format"] = {"type": "json_object"}
+            if "json" not in system_prompt.lower():
+                kwargs["messages"][0]["content"] += "\n\nRespond with valid JSON."
 
         response = await self.client.chat.completions.create(**kwargs)
         raw = response.choices[0].message.content
