@@ -1,142 +1,104 @@
-from __future__ import annotations
+"""Processing Engine — FastAPI application."""
 
 import asyncio
 import logging
-from collections.abc import AsyncIterator
-from contextlib import asynccontextmanager, suppress
+
+from contextlib import asynccontextmanager
 
 from fastapi import Depends, FastAPI
 
-from app.config import settings
-from app.db import close_pool, create_pool
+from .api.auth import verify_api_key
+from .config import settings
+from .storage.database import get_pool, close_pool, init_engine_schema
+from .core.pipeline_config import load_pipelines
+from .core.orchestrator import process_next_job
+from .cron import setup_cron_scheduler
 
 logger = logging.getLogger(__name__)
 
-logging.basicConfig(
-    level=getattr(logging, settings.LOG_LEVEL.upper(), logging.INFO),
-    format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
-)
-
+# Worker task handle
 _worker_task: asyncio.Task | None = None
-_auto_batcher = None
 
 
-async def _run_worker() -> None:
-    """Background worker loop that polls for pending jobs."""
-    from app.worker import Worker
-
-    worker = Worker(poll_interval=settings.WORKER_POLL_INTERVAL_SECONDS)
-    await worker.run()
+async def _worker_loop():
+    """Background worker that polls for pending jobs."""
+    logger.info("Worker loop started (poll_interval=%ds)", settings.worker_poll_interval)
+    while True:
+        try:
+            job_id = await process_next_job()
+            if job_id:
+                logger.info("Processed job: %s", job_id)
+                continue  # Immediately check for more
+            await asyncio.sleep(settings.worker_poll_interval)
+        except asyncio.CancelledError:
+            logger.info("Worker loop cancelled")
+            break
+        except Exception:
+            logger.exception("Worker loop error")
+            await asyncio.sleep(settings.worker_poll_interval)
 
 
 @asynccontextmanager
-async def lifespan(app: FastAPI) -> AsyncIterator[None]:
-    """FastAPI lifespan context manager.
+async def lifespan(app: FastAPI):
+    """Application lifespan: init DB, load pipelines, start worker + cron."""
+    global _worker_task
 
-    Startup:
-      - Creates the asyncpg connection pool.
-      - Starts the background worker if ENGINE_ROLE is 'worker' or 'both'.
+    # Init DB pool + schema
+    pool = await get_pool()
+    await init_engine_schema(pool)
+    logger.info("Database pool initialized")
 
-    Shutdown:
-      - Cancels the worker task (if running).
-      - Closes the connection pool.
-    """
-    global _worker_task, _auto_batcher
+    # Load pipeline configs
+    count = load_pipelines(settings.pipelines_dir)
+    logger.info("Loaded %d pipeline(s)", count)
 
-    # --- Startup ---
-    logger.info("Starting Processing Engine (role=%s)", settings.ENGINE_ROLE)
-    if settings.DATABASE_URL:
-        db_pool = await create_pool(dsn=settings.DATABASE_URL)
-    else:
-        db_pool = await create_pool(
-            host=settings.DB_HOST,
-            port=settings.DB_PORT,
-            user=settings.DB_USER,
-            password=settings.DB_PASSWORD,
-            database=settings.DB_NAME,
-        )
+    # Start worker if role includes it
+    if settings.engine_role in ("worker", "both"):
+        _worker_task = asyncio.create_task(_worker_loop())
 
-    if settings.ENGINE_ROLE in ("worker", "both"):
-        _worker_task = asyncio.create_task(_run_worker(), name="processing-worker")
-        logger.info("Background worker task created")
-
-    # Start Auto-Batcher if enabled and not API-only
-    if settings.BATCHER_ENABLED and settings.ENGINE_ROLE != "api":
-        from app.services.auto_batcher import AutoBatcher
-
-        _auto_batcher = AutoBatcher(
-            pool=db_pool,
-            poll_interval=settings.BATCHER_POLL_INTERVAL_SECONDS,
-            batch_size=settings.BATCHER_DEFAULT_BATCH_SIZE,
-        )
-        await _auto_batcher.start()
+    # Start cron scheduler
+    scheduler = setup_cron_scheduler()
+    scheduler.start()
+    logger.info("Cron scheduler started")
 
     yield
 
-    # --- Shutdown ---
-    logger.info("Shutting down Processing Engine")
-
-    if _auto_batcher is not None:
-        await _auto_batcher.stop()
-        _auto_batcher = None
-
-    if _worker_task is not None and not _worker_task.done():
+    # Shutdown
+    if _worker_task and not _worker_task.done():
         _worker_task.cancel()
-        with suppress(asyncio.CancelledError):
+        try:
             await _worker_task
-        _worker_task = None
+        except asyncio.CancelledError:
+            pass
 
+    scheduler.shutdown(wait=False)
     await close_pool()
-    logger.info("Shutdown complete")
+    logger.info("Processing Engine shut down")
 
 
 app = FastAPI(
     title="Processing Engine",
-    version=settings.APP_VERSION,
+    description="Agnostic, plugin-based processing engine",
+    version="0.1.0",
     lifespan=lifespan,
 )
 
-# ---------------------------------------------------------------------------
-# Routers — imported here so that circular imports are avoided while keeping
-# each router in its own module.
-# ---------------------------------------------------------------------------
-from app.api import health  # noqa: E402 — must come after app is defined
-from app.api.costs import router as costs_router  # noqa: E402
-from app.api.jobs import router as jobs_router  # noqa: E402
-from app.api.pipelines import router as pipelines_router  # noqa: E402
-from app.api.pool import router as pool_router  # noqa: E402
-from app.api.pricing import router as pricing_router  # noqa: E402
-from app.api.stats import router as stats_router  # noqa: E402
-from app.deps import verify_api_key  # noqa: E402
+# Import and register routes
+from .api.routes import jobs, pipelines, health  # noqa: E402
 
-app.include_router(health.router)
+app.include_router(health.router, tags=["health"])
 app.include_router(
-    pipelines_router,
-    prefix="/v1",
+    jobs.router, prefix="/v1", tags=["jobs"],
     dependencies=[Depends(verify_api_key)],
 )
 app.include_router(
-    jobs_router,
-    prefix="/v1",
+    pipelines.router, prefix="/v1", tags=["pipelines"],
     dependencies=[Depends(verify_api_key)],
 )
-app.include_router(
-    costs_router,
-    prefix="/v1",
-    dependencies=[Depends(verify_api_key)],
-)
-app.include_router(
-    pricing_router,
-    prefix="/v1",
-    dependencies=[Depends(verify_api_key)],
-)
-app.include_router(
-    stats_router,
-    prefix="/v1",
-    dependencies=[Depends(verify_api_key)],
-)
-app.include_router(
-    pool_router,
-    prefix="/v1",
-    dependencies=[Depends(verify_api_key)],
-)
+
+
+if __name__ == "__main__":
+    import uvicorn
+
+    logging.basicConfig(level=getattr(logging, settings.log_level.upper()))
+    uvicorn.run("app.main:app", host="0.0.0.0", port=8000, reload=True)

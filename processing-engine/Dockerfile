@@ -1,44 +1,34 @@
-# syntax=docker/dockerfile:1
-FROM python:3.12-slim AS builder
-
-WORKDIR /build
-
-# Extract dependencies from pyproject.toml and install ONLY those.
-# We do NOT install the package itself — avoids hatchling needing source
-# files and eliminates stub packages shadowing real code in site-packages.
-COPY pyproject.toml ./
-RUN python -c "\
-import tomllib, pathlib; \
-data = tomllib.load(open('pyproject.toml', 'rb')); \
-deps = data['project']['dependencies']; \
-pathlib.Path('requirements.txt').write_text('\n'.join(deps))" && \
-    pip install --no-cache-dir --prefix=/install -r requirements.txt
-
-FROM python:3.12-slim
+FROM python:3.12-slim AS base
 
 WORKDIR /app
 
-# Copy installed deps (NO stub packages — only third-party libraries)
-COPY --from=builder /install /usr/local
+# System deps
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    curl \
+    && rm -rf /var/lib/apt/lists/*
 
-# Copy application code
-COPY app/ ./app/
-COPY db_models/ ./db_models/
-COPY alembic/ ./alembic/
-COPY alembic.ini ./
-COPY entrypoint.sh ./
+# Python deps
+COPY pyproject.toml .
+RUN pip install --no-cache-dir .
 
-RUN chmod +x entrypoint.sh
+# App code
+COPY app/ app/
+COPY pipelines/ pipelines/
+COPY prompts/ prompts/
+COPY schemas/ schemas/
 
-ENV PYTHONUNBUFFERED=1 \
-    ENGINE_ROLE=both \
-    WORKER_POLL_INTERVAL_SECONDS=1.0 \
-    LOG_LEVEL=INFO
+# Non-root user
+RUN adduser --disabled-password --no-create-home appuser
+USER appuser
+
+ENV PE_PIPELINES_DIR=/app/pipelines \
+    PE_PROMPTS_DIR=/app/prompts \
+    PE_SCHEMAS_DIR=/app/schemas \
+    PE_LOG_LEVEL=info
 
 EXPOSE 8000
 
-# No HEALTHCHECK here — the docker-stack.yml defines the production health
-# check with appropriate start_period and retries for Swarm. Having two
-# conflicting health checks causes confusion during debugging.
+HEALTHCHECK --interval=30s --timeout=5s --retries=3 \
+    CMD curl -f http://localhost:8000/health || exit 1
 
-CMD ["./entrypoint.sh"]
+CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "1"]

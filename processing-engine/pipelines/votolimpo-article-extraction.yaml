@@ -1,0 +1,82 @@
+# VotoLimpo Article Extraction Pipeline
+# Extracts political entities, relationships, and severity from news articles.
+
+id: votolimpo-article-extraction
+name: VotoLimpo Article Extraction
+version: "1.0"
+
+ingestor:
+  type: html
+  config:
+    strip_scripts: true
+    strip_styles: true
+
+dedup:
+  strategy: composite
+  config:
+    hash_enabled: true
+    url_normalize: true
+    schema: votolimpo
+
+llm:
+  provider: openai
+  model: gpt-4.1-mini
+  temperature: 0.1
+  max_tokens: 4096
+  system_prompt_file: votolimpo-system.txt
+  output_schema_file: votolimpo-article-v1.json
+  max_retries: 1
+
+validators:
+  - type: json_schema
+    config: {}
+  - type: grounding
+    config:
+      check_fields:
+        - path: "politicians[].name"
+          strategy: last_name_in_text
+        - path: "entities[].name"
+          strategy: any_word_in_text
+  - type: range
+    config:
+      fields:
+        - "veracity_signals.source_reputation"
+        - "veracity_signals.narrative_consistency"
+        - "veracity_signals.documental_evidence"
+        - "veracity_signals.temporality"
+        - "veracity_signals.emotional_language"
+      min: 0.0
+      max: 1.0
+  - type: date
+    config:
+      fields:
+        - "published_date"
+      no_future: true
+
+sink:
+  type: postgresql
+  config:
+    database_url_env: PE_VOTOLIMPO_DATABASE_URL
+    table: votolimpo.articles
+    conflict_column: url_hash
+    column_mapping:
+      title: title
+      summary: summary
+      severity: severity
+      veracity_score: veracity_score
+      score_components: score_components
+      keywords: keywords
+      language: language
+      is_political: is_political
+    static_columns:
+      processing_status: completed
+    item_field_mapping:
+      source_url: source_url
+    jsonb_fallback: raw_output
+    type_casts:
+      severity: "votolimpo.severity_level"
+      processing_status: "votolimpo.processing_status"
+
+cache:
+  enabled: true
+  ttl_hours: 168  # 7 days
