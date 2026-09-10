@@ -286,9 +286,19 @@ class PostgreSQLSink:
         result["tables_written"].append(table)
 
 
+class NoneSink:
+    """No-op sink — results are stored in job_items but not persisted elsewhere."""
+
+    async def persist(
+        self, output: dict, item_metadata: dict, config: dict, conn: asyncpg.Connection
+    ) -> dict:
+        return {"tables_written": [], "article_id": None}
+
+
 # Registry
 SINKS: dict[str, type] = {
     "postgresql": PostgreSQLSink,
+    "none": NoneSink,
 }
 
 

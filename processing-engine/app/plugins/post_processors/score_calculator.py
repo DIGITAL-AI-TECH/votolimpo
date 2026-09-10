@@ -38,20 +38,23 @@ class ScoreCalculator:
 
         signals = output.get("veracity_signals", {})
 
-        # Get source reputation from DB
+        # Get source reputation from DB (best-effort — table may not exist in PE's DB)
         source_reputation = 0.50
         source_name = item_metadata.get("source_name")
         if source_name:
-            from . import validate_sql_identifier
+            try:
+                from . import validate_sql_identifier
 
-            validate_sql_identifier(sources_table, "sources_table")
-            async with pool.acquire() as conn:
-                row = await conn.fetchrow(
-                    f"SELECT reputation_score FROM {sources_table} WHERE name = $1",
-                    source_name,
-                )
-                if row:
-                    source_reputation = float(row["reputation_score"])
+                validate_sql_identifier(sources_table, "sources_table")
+                async with pool.acquire() as conn:
+                    row = await conn.fetchrow(
+                        f"SELECT reputation_score FROM {sources_table} WHERE name = $1",
+                        source_name,
+                    )
+                    if row:
+                        source_reputation = float(row["reputation_score"])
+            except Exception:
+                logger.debug("Source reputation table not available, using default 0.5")
 
         # Normalize signals
         sr = source_reputation

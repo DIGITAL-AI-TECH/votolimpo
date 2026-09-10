@@ -167,16 +167,12 @@ validator_config:
       "veracity_signals.temporality": [0.0, 1.0]
       "veracity_signals.emotional_language": [0.0, 1.0]
 
-# --- Post-Processors (novo!) ---
+# --- Post-Processors ---
+# score_calculator runs inside PE (no external DB needed)
+# entity_resolver, relationship_builder, milestone_detector, article_matcher,
+# cluster_updater disabled: they write to votolimpo.* tables in the NC database.
+# NC handles entity matching + enrichment via its callback webhook.
 post_processors:
-  - type: entity_resolver
-    config:
-      politician_table: votolimpo.politicians
-      entity_table: votolimpo.entities
-      fuzzy_threshold: 0.80
-      fuzzy_party_threshold: 0.70
-      entity_fuzzy_threshold: 0.85
-
   - type: score_calculator
     config:
       weights:
@@ -188,56 +184,11 @@ post_processors:
         emotional_language: 0.10
       output_field: veracity_score
 
-  - type: relationship_builder
-    config:
-      relationship_table: votolimpo.relationships
-      evidence_table: votolimpo.relationship_evidence
-
-  - type: milestone_detector
-    config:
-      milestone_table: votolimpo.milestones
-      confidence_threshold: 0.70
-      dedup_window_days: 7
-
-  - type: article_matcher
-    config:
-      match_table: votolimpo.article_matches
-      weights:
-        entity_overlap: 0.40
-        keyword_overlap: 0.35
-        temporal_proximity: 0.25
-      persist_threshold: 0.30
-      window_days: 30
-
-  - type: cluster_updater
-    config:
-      cluster_table: votolimpo.news_clusters
-      cluster_articles_table: votolimpo.cluster_articles
-      cluster_politicians_table: votolimpo.cluster_politicians
-      similarity_threshold: 0.50
-
 # --- Sink ---
-sink_type: postgresql
-sink_config:
-  table: votolimpo.articles
-  conflict_column: url_hash
-  column_mapping:
-    title: title
-    summary: summary
-    severity: severity
-    veracity_score: veracity_score
-    score_components: score_components
-    keywords: keywords
-    language: language
-    is_political: is_political
-  static_columns:
-    processing_status: completed
-  item_field_mapping:
-    source_url: source_url
-  jsonb_fallback: raw_output
-  type_casts:
-    severity: "votolimpo.severity_level"
-    processing_status: "votolimpo.processing_status"
+# Using "none" — NC fetches results via callback and writes to its own DB.
+# The PE stores all outputs in job_items.output (always).
+sink_type: none
+sink_config: {}
 
 # --- Crons (executados pelo worker deste pipeline) ---
 crons:
