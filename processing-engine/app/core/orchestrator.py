@@ -29,7 +29,8 @@ async def submit_job(job_data: dict) -> str:
     job_id = _uuid.UUID(job_data["job_id"])
     pipeline_id = _uuid.UUID(job_data["pipeline_id"])
     items = job_data["items"]
-    priority = str(job_data.get("priority", "normal"))
+    raw_priority = job_data.get("priority", "normal")
+    priority = raw_priority.value if hasattr(raw_priority, "value") else str(raw_priority)
     callback_url = job_data.get("callback_url")
     idempotency_key = job_data.get("idempotency_key")
 
