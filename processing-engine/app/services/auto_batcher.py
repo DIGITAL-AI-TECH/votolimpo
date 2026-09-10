@@ -126,7 +126,7 @@ class AutoBatcher:
                         INSERT_JOB,
                         pipeline_id,  # $1 pipeline_id
                         pipeline_version,  # $2 pipeline_version
-                        1,  # $3 items_total
+                        1,  # $3 total_items
                         None,  # $4 idempotency_key
                         pool_item["priority"],  # $5 priority
                         None,  # $6 metadata

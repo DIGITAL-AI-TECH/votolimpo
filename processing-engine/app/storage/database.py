@@ -65,7 +65,7 @@ async def init_engine_schema(pool: asyncpg.Pool | None = None):
         # Fallback: create tables if Alembic hasn't run
         await conn.execute("""
             CREATE TABLE IF NOT EXISTS processing_engine.pipelines (
-                id TEXT PRIMARY KEY,
+                id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
                 name TEXT NOT NULL,
                 version TEXT NOT NULL DEFAULT '1.0',
                 config JSONB NOT NULL,
@@ -74,8 +74,8 @@ async def init_engine_schema(pool: asyncpg.Pool | None = None):
             );
 
             CREATE TABLE IF NOT EXISTS processing_engine.jobs (
-                id TEXT PRIMARY KEY,
-                pipeline_id TEXT NOT NULL,
+                id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+                pipeline_id UUID NOT NULL,
                 status TEXT NOT NULL DEFAULT 'pending',
                 priority TEXT NOT NULL DEFAULT 'normal',
                 total_items INT NOT NULL DEFAULT 0,
@@ -95,8 +95,8 @@ async def init_engine_schema(pool: asyncpg.Pool | None = None):
                 ON processing_engine.jobs (status, priority DESC, created_at ASC);
 
             CREATE TABLE IF NOT EXISTS processing_engine.job_items (
-                id TEXT PRIMARY KEY,
-                job_id TEXT NOT NULL REFERENCES processing_engine.jobs(id),
+                id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+                job_id UUID NOT NULL REFERENCES processing_engine.jobs(id),
                 content TEXT NOT NULL,
                 content_type TEXT NOT NULL DEFAULT 'text/plain',
                 source_url TEXT,
@@ -119,8 +119,8 @@ async def init_engine_schema(pool: asyncpg.Pool | None = None):
 
             CREATE TABLE IF NOT EXISTS processing_engine.processing_logs (
                 id BIGSERIAL PRIMARY KEY,
-                job_id TEXT NOT NULL,
-                item_id TEXT,
+                job_id UUID NOT NULL,
+                item_id UUID,
                 step TEXT NOT NULL,
                 status TEXT NOT NULL,
                 model_used TEXT,
@@ -135,7 +135,7 @@ async def init_engine_schema(pool: asyncpg.Pool | None = None):
 
             CREATE TABLE IF NOT EXISTS processing_engine.cache (
                 content_hash TEXT PRIMARY KEY,
-                pipeline_id TEXT NOT NULL,
+                pipeline_id UUID NOT NULL,
                 output JSONB NOT NULL,
                 created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
                 expires_at TIMESTAMPTZ NOT NULL

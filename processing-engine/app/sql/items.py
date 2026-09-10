@@ -1,5 +1,5 @@
 INSERT_ITEM = """
-INSERT INTO processing_engine.items (
+INSERT INTO processing_engine.job_items (
     job_id, pipeline_id, source_url, content, content_type,
     status, metadata, url_hash, content_hash
 )
@@ -8,19 +8,19 @@ RETURNING *
 """
 
 SELECT_ITEMS_BY_JOB = """
-SELECT * FROM processing_engine.items WHERE job_id = $1 ORDER BY created_at
+SELECT * FROM processing_engine.job_items WHERE job_id = $1 ORDER BY created_at
 """
 
 SELECT_ITEM_BY_ID = """
-SELECT * FROM processing_engine.items WHERE id = $1
+SELECT * FROM processing_engine.job_items WHERE id = $1
 """
 
 UPDATE_ITEM_STATUS = """
-UPDATE processing_engine.items SET status = $2 WHERE id = $1
+UPDATE processing_engine.job_items SET status = $2 WHERE id = $1
 """
 
 UPDATE_ITEM_RESULT = """
-UPDATE processing_engine.items
+UPDATE processing_engine.job_items
 SET status = 'completed',
     output = $2::jsonb,
     dedup_result = $3,
@@ -34,19 +34,19 @@ WHERE id = $1
 """
 
 UPDATE_ITEM_FAILED = """
-UPDATE processing_engine.items
-SET status = 'failed', error_message = $2, duration_ms = $3
+UPDATE processing_engine.job_items
+SET status = 'failed', error = $2, duration_ms = $3
 WHERE id = $1
 """
 
 CHECK_URL_HASH = """
-SELECT id FROM processing_engine.items
+SELECT id FROM processing_engine.job_items
 WHERE url_hash = $1 AND pipeline_id = $2 AND status = 'completed'
 LIMIT 1
 """
 
 CHECK_CONTENT_HASH = """
-SELECT id FROM processing_engine.items
+SELECT id FROM processing_engine.job_items
 WHERE content_hash = $1 AND pipeline_id = $2 AND status = 'completed'
 LIMIT 1
 """
@@ -60,7 +60,7 @@ RETURNING *
 SELECT_LOGS_BY_JOB = """
 SELECT pl.*
 FROM processing_engine.processing_logs pl
-JOIN processing_engine.items i ON pl.item_id = i.id
+JOIN processing_engine.job_items i ON pl.item_id = i.id
 WHERE i.job_id = $1
 ORDER BY pl.created_at
 """
@@ -68,7 +68,7 @@ ORDER BY pl.created_at
 SELECT_LOGS_BY_JOB_AND_STEP = """
 SELECT pl.*
 FROM processing_engine.processing_logs pl
-JOIN processing_engine.items i ON pl.item_id = i.id
+JOIN processing_engine.job_items i ON pl.item_id = i.id
 WHERE i.job_id = $1 AND pl.step = $2
 ORDER BY pl.created_at
 """

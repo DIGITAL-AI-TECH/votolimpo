@@ -7,8 +7,8 @@ class Stats(BaseModel):
     period: str = "all"
     total_jobs: int = 0
     total_items: int = 0
-    items_completed: int = 0
-    items_failed: int = 0
+    completed_items: int = 0
+    failed_items: int = 0
     items_duplicate: int = 0
     success_rate: float = 0.0
     total_cost_usd: float = 0.0

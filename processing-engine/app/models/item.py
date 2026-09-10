@@ -39,4 +39,4 @@ class ItemResult(BaseModel):
     cached: bool = False
     usage: TokenUsage | None = None
     duration_ms: int | None = None
-    error_message: str | None = None
+    error: str | None = None

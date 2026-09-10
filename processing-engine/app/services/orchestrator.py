@@ -18,7 +18,7 @@ from app.sql.cache import INCREMENT_CACHE_HIT, SELECT_CACHE_HIT, UPSERT_CACHE
 logger = logging.getLogger(__name__)
 
 # Inline SQL to avoid circular dependency with parallel agent
-_UPDATE_ITEM_STATUS = "UPDATE processing_engine.items SET status = $2 WHERE id = $1"
+_UPDATE_ITEM_STATUS = "UPDATE processing_engine.job_items SET status = $2 WHERE id = $1"
 _INSERT_LOG = """
 INSERT INTO processing_engine.processing_logs (item_id, job_id, pipeline_id, step, status, duration_ms, error_message, metadata)
 VALUES ($1, $2, $3, $4, $5, $6, $7, $8::jsonb)

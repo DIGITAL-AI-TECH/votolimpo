@@ -91,7 +91,7 @@ async def _dispatch(args: argparse.Namespace) -> None:
             resp.raise_for_status()
             data = resp.json()
             print(
-                f"Job {data['id']}: {data['status']} ({data['items_completed']}/{data['items_total']} done)"
+                f"Job {data['id']}: {data['status']} ({data['completed_items']}/{data['total_items']} done)"
             )
 
         elif args.command == "result":

@@ -68,6 +68,9 @@ class OpenAIProvider:
                     "schema": output_schema,
                 },
             }
+        else:
+            # Force JSON output even without explicit schema to prevent plain text
+            kwargs["response_format"] = {"type": "json_object"}
 
         response = await self.client.chat.completions.create(**kwargs)
         raw = response.choices[0].message.content

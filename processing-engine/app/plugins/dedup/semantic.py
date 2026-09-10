@@ -9,7 +9,7 @@ class SemanticDedupStrategy:
     """Deduplicação semântica via pgvector (similaridade de cosseno).
 
     Embute o conteúdo usando o LLMProvider fornecido e consulta a tabela
-    processing_engine.items em busca de itens no mesmo pipeline cuja
+    processing_engine.job_items em busca de itens no mesmo pipeline cuja
     similaridade de cosseno seja maior ou igual ao threshold configurado.
 
     Parâmetros
@@ -40,7 +40,7 @@ class SemanticDedupStrategy:
         row = await conn.fetchrow(
             """
             SELECT id, 1 - (embedding <=> $2::vector) AS similarity
-            FROM processing_engine.items
+            FROM processing_engine.job_items
             WHERE pipeline_id = $1
               AND embedding IS NOT NULL
               AND status != 'failed'

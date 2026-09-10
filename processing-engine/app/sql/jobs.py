@@ -1,6 +1,6 @@
 INSERT_JOB = """
 INSERT INTO processing_engine.jobs (
-    pipeline_id, pipeline_version, status, items_total,
+    pipeline_id, pipeline_version, status, total_items,
     idempotency_key, priority, metadata,
     override_model, skip_dedup, skip_cache, dry_run, callback_url
 )
@@ -54,9 +54,9 @@ WHERE id = $1
 """
 
 INCREMENT_ITEMS_COMPLETED = """
-UPDATE processing_engine.jobs SET items_completed = items_completed + 1 WHERE id = $1
+UPDATE processing_engine.jobs SET completed_items = completed_items + 1 WHERE id = $1
 """
 
 INCREMENT_ITEMS_FAILED = """
-UPDATE processing_engine.jobs SET items_failed = items_failed + 1 WHERE id = $1
+UPDATE processing_engine.jobs SET failed_items = failed_items + 1 WHERE id = $1
 """

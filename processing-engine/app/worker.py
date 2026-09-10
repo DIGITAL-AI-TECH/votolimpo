@@ -34,27 +34,27 @@ RETURNING j.*
 _SELECT_PIPELINE = "SELECT * FROM processing_engine.pipelines WHERE id = $1"
 
 _SELECT_PENDING_ITEMS = """
-SELECT * FROM processing_engine.items
+SELECT * FROM processing_engine.job_items
 WHERE job_id = $1 AND status = 'pending'
 ORDER BY created_at
 """
 
 _UPDATE_ITEM_RESULT = """
-UPDATE processing_engine.items
+UPDATE processing_engine.job_items
 SET status = 'completed', output = $2::jsonb, dedup_result = $3, cached = $4,
     prompt_tokens = $5, completion_tokens = $6, total_tokens = $7, cost_usd = $8, duration_ms = $9
 WHERE id = $1
 """
 
 _UPDATE_ITEM_FAILED = """
-UPDATE processing_engine.items
-SET status = 'failed', error_message = $2, duration_ms = $3
+UPDATE processing_engine.job_items
+SET status = 'failed', error = $2, duration_ms = $3
 WHERE id = $1
 """
 
-_INCREMENT_COMPLETED = "UPDATE processing_engine.jobs SET items_completed = items_completed + 1 WHERE id = $1"
+_INCREMENT_COMPLETED = "UPDATE processing_engine.jobs SET completed_items = completed_items + 1 WHERE id = $1"
 _INCREMENT_FAILED = (
-    "UPDATE processing_engine.jobs SET items_failed = items_failed + 1 WHERE id = $1"
+    "UPDATE processing_engine.jobs SET failed_items = failed_items + 1 WHERE id = $1"
 )
 
 _FINALIZE_JOB = """
@@ -104,7 +104,7 @@ class Worker:
                 "Claimed job %s (pipeline=%s, items=%d)",
                 job["id"],
                 job["pipeline_id"],
-                job["items_total"],
+                job["total_items"],
             )
 
             try:
@@ -191,7 +191,7 @@ class Worker:
                         pass  # handled below
                     # Check item final status
                     updated_item = await counter_conn.fetchrow(
-                        "SELECT status FROM processing_engine.items WHERE id = $1",
+                        "SELECT status FROM processing_engine.job_items WHERE id = $1",
                         item["id"],
                     )
                     if updated_item and updated_item["status"] in (
@@ -212,9 +212,9 @@ class Worker:
             if updated_job is None:
                 return
             uj = dict(updated_job)
-            if uj["items_failed"] == 0:
+            if uj["failed_items"] == 0:
                 final_status = "completed"
-            elif uj["items_completed"] == 0:
+            elif uj["completed_items"] == 0:
                 final_status = "failed"
             else:
                 final_status = "partial"
@@ -223,8 +223,8 @@ class Worker:
                 "Job %s finished: %s (completed=%d, failed=%d)",
                 job["id"],
                 final_status,
-                uj["items_completed"],
-                uj["items_failed"],
+                uj["completed_items"],
+                uj["failed_items"],
             )
 
         # Send callback if configured
@@ -236,8 +236,8 @@ class Worker:
                 {
                     "job_id": str(job["id"]),
                     "status": final_status,
-                    "items_completed": uj["items_completed"],
-                    "items_failed": uj["items_failed"],
-                    "items_total": uj["items_total"],
+                    "completed_items": uj["completed_items"],
+                    "failed_items": uj["failed_items"],
+                    "total_items": uj["total_items"],
                 },
             )

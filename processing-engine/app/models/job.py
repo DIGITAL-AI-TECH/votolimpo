@@ -44,9 +44,9 @@ class Job(BaseModel):
     pipeline_id: uuid.UUID
     pipeline_version: int
     status: JobStatus
-    items_total: int
-    items_completed: int
-    items_failed: int
+    total_items: int
+    completed_items: int
+    failed_items: int
     idempotency_key: str | None = None
     error_message: str | None = None
     metadata: dict[str, Any] | None = None

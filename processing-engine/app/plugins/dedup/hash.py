@@ -13,7 +13,7 @@ def _sha256(text: str) -> str:
 class HashDedupStrategy:
     """Deduplication via SHA-256 hashes of URL and content.
 
-    Checks the processing_engine.items table for existing records with the
+    Checks the processing_engine.job_items table for existing records with the
     same url_hash or content_hash within the same pipeline.
 
     Returns DedupResult(is_duplicate=True, matched_item_id=...) if a duplicate
@@ -38,7 +38,7 @@ class HashDedupStrategy:
             row = await conn.fetchrow(
                 """
                 SELECT id
-                FROM processing_engine.items
+                FROM processing_engine.job_items
                 WHERE pipeline_id = $1
                   AND (url_hash = $2 OR content_hash = $3)
                   AND status != 'failed'
@@ -55,7 +55,7 @@ class HashDedupStrategy:
             row = await conn.fetchrow(
                 """
                 SELECT id
-                FROM processing_engine.items
+                FROM processing_engine.job_items
                 WHERE pipeline_id = $1
                   AND content_hash = $2
                   AND status != 'failed'
