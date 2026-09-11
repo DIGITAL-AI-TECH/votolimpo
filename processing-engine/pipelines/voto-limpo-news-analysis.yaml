@@ -97,6 +97,12 @@ output_schema:
         temporality: { type: number, minimum: 0.0, maximum: 1.0 }
         emotional_language: { type: number, minimum: 0.0, maximum: 1.0 }
     is_political: { type: boolean }
+    entity_names:
+      type: array
+      items: { type: string }
+      description: >
+        Nomes de entidades nao-politicas mencionadas (orgaos, partidos como
+        instituicao, empresas, tribunais). Ex: MPF, STF, PF, TCU, Petrobras.
 
 # --- Validators ---
 validators: [schema, grounding, range]
