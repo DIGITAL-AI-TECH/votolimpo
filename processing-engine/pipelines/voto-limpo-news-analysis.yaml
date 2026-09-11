@@ -2,8 +2,8 @@ id: a09099b0-147e-42ab-831b-7b3c1e46bdc1
 name: voto-limpo-news-analysis
 description: >
   Pipeline de analise de noticias politicas brasileiras. Extrai politicos,
-  severity, veracidade, entidades, relacionamentos e milestones usando
-  GPT-4.1-mini com structured output. Persiste no schema votolimpo.*.
+  severity, veracidade e keywords usando GPT-4.1-mini com structured output.
+  Persiste no schema votolimpo.*.
 
 # --- Ingestao ---
 ingestor_type: auto  # detecta HTML/text/JSON automaticamente
@@ -19,26 +19,18 @@ llm_provider: openai
 llm_model: gpt-4.1-mini
 llm_temperature: 0.1
 llm_seed: 42
-llm_max_tokens: 2000
+llm_max_tokens: 1200
 
 system_prompt: |
-  Voce e um analista de inteligencia politica brasileira especializado em
-  extrair dados estruturados de noticias.
+  Analista de inteligencia politica brasileira. Extraia dados estruturados de noticias.
 
-  REGRAS ANTI-ALUCINACAO:
-  R1. Extraia APENAS informacoes EXPLICITAMENTE presentes no texto.
-  R2. Se um campo nao puder ser determinado, use null.
-  R3. NAO infira relacoes de causalidade nao declaradas.
-  R4. NAO atribua intencoes a politicos sem citacao direta.
-  R5. Severity deve refletir o FATO, nao a manchete sensacionalista.
-  R6. confidence de milestones: 1.0 = fato consumado com fonte judicial,
-      0.9 = reportado por 2+ veiculos, 0.7 = reportado por 1 veiculo.
-  R7. Para cada politico, extraia o papel MAIS ESPECIFICO (investigated > mentioned).
-  R8. keywords: use termos que identificam o EVENTO, nao genericos.
-  R9. relationships: so inclua se o texto EXPLICITA a relacao.
-  R10. entities: inclua apenas entidades com papel relevante na noticia.
-  R11. is_political: false para noticias que MENCIONAM politicos mas cujo
-       tema central nao e politico (ex: politico em evento esportivo).
+  REGRAS:
+  1. Extraia APENAS informacoes EXPLICITAS no texto. Campos indeterminaveis = null.
+  2. NAO infira causalidade, intencoes ou relacoes nao declaradas.
+  3. Severity reflete o FATO, nao a manchete. Keywords identificam o EVENTO, nao termos genericos.
+  4. article_role do politico: use o papel MAIS ESPECIFICO (investigated > mentioned).
+  5. is_political: false se o tema central nao e politico, mesmo mencionando politicos.
+  6. source_reputation: 0.0-1.0 baseado na reputacao GERAL da fonte, nao da materia.
 
   Responda EXCLUSIVAMENTE com JSON valido no formato do schema.
 
@@ -60,11 +52,7 @@ output_schema:
     - summary
     - keywords
     - veracity_signals
-    - entities
-    - relationships
-    - milestones
     - is_political
-    - language
   additionalProperties: false
   properties:
     politicians:
@@ -108,50 +96,7 @@ output_schema:
         documental_evidence: { type: number, minimum: 0.0, maximum: 1.0 }
         temporality: { type: number, minimum: 0.0, maximum: 1.0 }
         emotional_language: { type: number, minimum: 0.0, maximum: 1.0 }
-    entities:
-      type: array
-      items:
-        type: object
-        required: [name, type, context]
-        additionalProperties: false
-        properties:
-          name: { type: string }
-          type:
-            type: string
-            enum: [person, organization, location, event, concept]
-          context: { type: string }
-    relationships:
-      type: array
-      items:
-        type: object
-        required: [source, target, type, evidence]
-        additionalProperties: false
-        properties:
-          source: { type: string }
-          target: { type: string }
-          type:
-            type: string
-            enum: [ally, opponent, party_member, family, business, legal, investigation]
-          evidence: { type: string }
-    milestones:
-      type: array
-      items:
-        type: object
-        required: [politician_name, type, title, description, date, confidence]
-        additionalProperties: false
-        properties:
-          politician_name: { type: string }
-          type:
-            type: string
-            enum: [inquiry, complaint, conviction, acquittal, arrest, impeachment, plea_deal, fine]
-          title: { type: string }
-          description: { type: string }
-          date: { type: string, pattern: "^\\d{4}-\\d{2}-\\d{2}$" }
-          confidence: { type: number, minimum: 0.0, maximum: 1.0 }
     is_political: { type: boolean }
-    language:
-      type: string
-      enum: [pt, en, es, other]
 
 # --- Validators ---
 validators: [schema, grounding, range]
@@ -168,10 +113,8 @@ validator_config:
       "veracity_signals.emotional_language": [0.0, 1.0]
 
 # --- Post-Processors ---
-# score_calculator runs inside PE (no external DB needed)
-# entity_resolver, relationship_builder, milestone_detector, article_matcher,
-# cluster_updater disabled: they write to votolimpo.* tables in the NC database.
-# NC handles entity matching + enrichment via its callback webhook.
+# score_calculator: pure math, no tokens. article_matcher + cluster_updater: SQL only.
+# entity_resolver, relationship_builder, milestone_detector: disabled (fields removed from schema).
 post_processors:
   - type: score_calculator
     config:
@@ -184,6 +127,23 @@ post_processors:
         emotional_language: 0.10
       output_field: veracity_score
 
+  - type: article_matcher
+    config:
+      match_table: votolimpo.article_matches
+      weights:
+        entity_overlap: 0.40
+        keyword_overlap: 0.35
+        temporal_proximity: 0.25
+      persist_threshold: 0.30
+      window_days: 30
+
+  - type: cluster_updater
+    config:
+      cluster_table: votolimpo.news_clusters
+      cluster_articles_table: votolimpo.cluster_articles
+      cluster_politicians_table: votolimpo.cluster_politicians
+      similarity_threshold: 0.50
+
 # --- Sink ---
 # Using "none" — NC fetches results via callback and writes to its own DB.
 # The PE stores all outputs in job_items.output (always).
@@ -191,26 +151,13 @@ sink_type: none
 sink_config: {}
 
 # --- Crons (executados pelo worker deste pipeline) ---
+# Crons removidos (handlers inexistentes — dead config detectada em audit 2026-09-11):
+#   recalculate_politician_scores, update_source_reputation,
+#   regenerate_content, deactivate_stale_clusters
 crons:
-  - name: recalculate_politician_scores
-    schedule: "0 3 * * *"  # 03:00 UTC diario
-    handler: score_calculator.recalculate_all
-
   - name: refresh_materialized_views
     schedule: "0 */6 * * *"  # cada 6h
     handler: mv_refresher.refresh_all
-
-  - name: update_source_reputation
-    schedule: "0 4 * * 0"  # domingo 04:00 UTC
-    handler: score_calculator.update_source_reputation
-
-  - name: regenerate_content
-    schedule: "0 5 * * 0"  # domingo 05:00 UTC
-    handler: content_generator.regenerate_all
-
-  - name: deactivate_stale_clusters
-    schedule: "0 4 * * *"  # 04:00 UTC diario
-    handler: cluster_updater.deactivate_stale
 
 # --- Limites ---
 max_concurrent: 5
