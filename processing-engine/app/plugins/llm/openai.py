@@ -47,7 +47,7 @@ class OpenAIProvider:
         model = config.get("model", self._DEFAULT_MODEL)
         temperature = config.get("temperature", 0.0)
         seed = config.get("seed", 42)
-        max_tokens = config.get("max_tokens", 4096)
+        max_tokens = config.get("max_tokens", 16384)
 
         # Ensure output_schema is a dict (asyncpg returns JSONB as string)
         schema = output_schema

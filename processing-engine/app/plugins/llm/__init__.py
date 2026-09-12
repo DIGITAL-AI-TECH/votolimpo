@@ -47,7 +47,7 @@ class OpenAIProvider:
     ) -> dict[str, Any]:
         model = config.get("model", "gpt-4.1-mini")
         temperature = config.get("temperature", 0.1)
-        max_tokens = config.get("max_tokens", 4096)
+        max_tokens = config.get("max_tokens", 16384)
 
         kwargs: dict[str, Any] = {
             "model": model,

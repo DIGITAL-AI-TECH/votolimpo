@@ -23,7 +23,7 @@ class LLMConfig(BaseModel):
     provider: str = "openai"
     model: str = "gpt-4.1-mini"
     temperature: float = 0.1
-    max_tokens: int = 4096
+    max_tokens: int = 16384
     max_retries: int = 1
     system_prompt_file: str | None = None
     output_schema_file: str | None = None

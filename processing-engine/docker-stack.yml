@@ -4,14 +4,14 @@ services:
   processing-engine:
     image: registry.digital-ai.tech/processing-engine:${IMAGE_TAG:-latest}
     environment:
-      PE_API_KEY: "${PE_API_KEY}"
-      PE_DATABASE_URL: "${PE_DATABASE_URL}"
-      PE_VOTOLIMPO_DATABASE_URL: "${PE_VOTOLIMPO_DATABASE_URL}"
-      PE_OPENAI_API_KEY: "${PE_OPENAI_API_KEY}"
-      PE_ENGINE_ROLE: "both"
-      PE_WORKER_CONCURRENCY: "8"
-      PE_WORKER_POLL_INTERVAL: "2"
-      PE_LOG_LEVEL: "info"
+      API_KEY: "${PE_API_KEY}"
+      DATABASE_URL: "${PE_DATABASE_URL}"
+      VOTOLIMPO_DATABASE_URL: "${PE_VOTOLIMPO_DATABASE_URL}"
+      OPENAI_API_KEY: "${PE_OPENAI_API_KEY}"
+      ENGINE_ROLE: "both"
+      WORKER_CONCURRENCY: "2"
+      WORKER_POLL_INTERVAL: "2"
+      LOG_LEVEL: "info"
     networks:
       - traefik-public
       - internal
