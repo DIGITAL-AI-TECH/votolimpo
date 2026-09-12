@@ -51,7 +51,9 @@ class PostgreSQLSink:
                 )
             target_url = os.environ.get(db_env)
             if target_url:
-                own_conn = await asyncpg.connect(target_url, timeout=10)
+                # asyncpg only accepts postgresql:// or postgres:// schemes
+                clean_url = target_url.replace("postgresql+asyncpg://", "postgresql://")
+                own_conn = await asyncpg.connect(clean_url, timeout=10)
                 conn = own_conn
 
         try:
