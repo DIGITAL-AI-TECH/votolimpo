@@ -46,7 +46,7 @@ ENV NEXT_TELEMETRY_DISABLED=1
 RUN addgroup --system --gid 1001 nodejs
 RUN adduser --system --uid 1001 nextjs
 
-# Copy public assets (may be empty)
+# Copy public assets (may be empty — .gitkeep ensures dir exists)
 COPY --from=builder /app/public ./public
 
 # Standalone output
