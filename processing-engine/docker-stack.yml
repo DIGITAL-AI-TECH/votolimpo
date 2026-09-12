@@ -9,8 +9,8 @@ services:
       PE_VOTOLIMPO_DATABASE_URL: "${PE_VOTOLIMPO_DATABASE_URL}"
       PE_OPENAI_API_KEY: "${PE_OPENAI_API_KEY}"
       PE_ENGINE_ROLE: "both"
-      PE_WORKER_CONCURRENCY: "2"
-      PE_WORKER_POLL_INTERVAL: "5"
+      PE_WORKER_CONCURRENCY: "8"
+      PE_WORKER_POLL_INTERVAL: "2"
       PE_LOG_LEVEL: "info"
     networks:
       - traefik-public
@@ -28,9 +28,9 @@ services:
         - "traefik.http.services.processing-engine.loadbalancer.server.port=8000"
       resources:
         limits:
-          memory: 512M
+          memory: 1G
         reservations:
-          memory: 256M
+          memory: 512M
       restart_policy:
         condition: on-failure
         delay: 10s

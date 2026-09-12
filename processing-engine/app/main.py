@@ -15,27 +15,29 @@ from .storage.database import close_pool, get_pool, init_engine_schema
 
 logger = logging.getLogger(__name__)
 
-# Worker task handle
-_worker_task: asyncio.Task | None = None
+# Worker task handles
+_worker_tasks: list[asyncio.Task] = []
 
 
-async def _worker_loop():
-    """Background worker that polls for pending jobs."""
+async def _worker_loop(worker_id: int):
+    """Background worker that polls for pending jobs (SKIP LOCKED safe)."""
     logger.info(
-        "Worker loop started (poll_interval=%ds)", settings.worker_poll_interval
+        "Worker %d started (poll_interval=%ds)",
+        worker_id,
+        settings.worker_poll_interval,
     )
     while True:
         try:
             job_id = await process_next_job()
             if job_id:
-                logger.info("Processed job: %s", job_id)
+                logger.info("Worker %d processed job: %s", worker_id, job_id)
                 continue  # Immediately check for more
             await asyncio.sleep(settings.worker_poll_interval)
         except asyncio.CancelledError:
-            logger.info("Worker loop cancelled")
+            logger.info("Worker %d cancelled", worker_id)
             break
         except Exception:
-            logger.exception("Worker loop error")
+            logger.exception("Worker %d loop error", worker_id)
             await asyncio.sleep(settings.worker_poll_interval)
 
 
@@ -53,9 +55,12 @@ async def lifespan(app: FastAPI):
     count = load_pipelines(settings.pipelines_dir)
     logger.info("Loaded %d pipeline(s)", count)
 
-    # Start worker if role includes it
+    # Start N concurrent workers (SKIP LOCKED ensures no double-processing)
     if settings.engine_role in ("worker", "both"):
-        _worker_task = asyncio.create_task(_worker_loop())
+        num_workers = max(1, settings.worker_concurrency)
+        for i in range(num_workers):
+            _worker_tasks.append(asyncio.create_task(_worker_loop(i)))
+        logger.info("Started %d worker(s)", num_workers)
 
     # Start cron scheduler
     scheduler = setup_cron_scheduler()
@@ -64,13 +69,16 @@ async def lifespan(app: FastAPI):
 
     yield
 
-    # Shutdown
-    if _worker_task and not _worker_task.done():
-        _worker_task.cancel()
+    # Shutdown all workers
+    for task in _worker_tasks:
+        if not task.done():
+            task.cancel()
+    for task in _worker_tasks:
         try:
-            await _worker_task
+            await task
         except asyncio.CancelledError:
             pass
+    _worker_tasks.clear()
 
     scheduler.shutdown(wait=False)
     await close_pool()

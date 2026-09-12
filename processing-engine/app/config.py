@@ -52,7 +52,7 @@ class Settings(BaseSettings):
     batcher_poll_interval_seconds: float = 5.0
     batcher_default_batch_size: int = 50
 
-    model_config = {"env_file": ".env"}
+    model_config = {"env_file": ".env", "env_prefix": "PE_"}
 
     @model_validator(mode="after")
     def _build_database_url(self) -> "Settings":
