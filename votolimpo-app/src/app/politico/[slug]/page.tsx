@@ -1,5 +1,6 @@
 import { notFound } from "next/navigation";
 import type { Metadata } from "next";
+import { unstable_noStore } from "next/cache";
 import {
   listEntities,
   getEntityArticles,
@@ -41,6 +42,7 @@ async function findEntityBySlug(slug: string) {
 }
 
 export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
+  unstable_noStore();
   const { slug } = await params;
   try {
     const entity = await findEntityBySlug(slug);
@@ -57,6 +59,7 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
 }
 
 export default async function PoliticoPage({ params }: PageProps) {
+  unstable_noStore();
   const { slug } = await params;
 
   let entity;

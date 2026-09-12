@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { unstable_noStore } from "next/cache";
 import { listEntities, entityToPolitician } from "@/lib/nc-api";
 import GraphVisualization from "@/components/GraphVisualization";
 import type { GraphData, GraphNode, GraphEdge } from "@/types";
@@ -12,6 +13,7 @@ export const dynamic = "force-dynamic";
 export const revalidate = 600;
 
 export default async function GrafoPage() {
+  unstable_noStore();
   let graphData: GraphData;
   let politicians = 0;
   let entities = 0;

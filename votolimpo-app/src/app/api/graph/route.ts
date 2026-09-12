@@ -1,10 +1,12 @@
 import { NextResponse } from "next/server";
+import { unstable_noStore } from "next/cache";
 import { listEntities, entityToPolitician } from "@/lib/nc-api";
 import type { GraphData, GraphNode, GraphEdge } from "@/types";
 
 export const dynamic = "force-dynamic";
 
 export async function GET() {
+  unstable_noStore();
   try {
     // Fetch candidates to build graph nodes
     // NC API doesn't have relationship/graph data yet,

@@ -1,9 +1,11 @@
 import { NextResponse } from "next/server";
+import { unstable_noStore } from "next/cache";
 import { listEntities, entityToPolitician } from "@/lib/nc-api";
 
 export const dynamic = "force-dynamic";
 
 export async function GET(request: Request) {
+  unstable_noStore();
   try {
     const { searchParams } = new URL(request.url);
     const page = parseInt(searchParams.get("page") || "1");

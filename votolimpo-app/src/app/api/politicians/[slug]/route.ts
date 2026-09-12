@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { unstable_noStore } from "next/cache";
 import {
   listEntities,
   getEntityArticles,
@@ -11,7 +12,10 @@ interface RouteParams {
   params: Promise<{ slug: string }>;
 }
 
+export const dynamic = "force-dynamic";
+
 export async function GET(_request: Request, { params }: RouteParams) {
+  unstable_noStore();
   try {
     const { slug } = await params;
 
