@@ -24,11 +24,11 @@ class RelationshipBuilder:
         config: dict[str, Any],
     ) -> dict:
         relationship_table = validate_sql_identifier(
-            config.get("relationship_table", "votolimpo.relationships"),
+            config.get("relationship_table", "voto_limpo.relationships"),
             "relationship_table",
         )
         evidence_table = validate_sql_identifier(
-            config.get("evidence_table", "votolimpo.relationship_evidence"),
+            config.get("evidence_table", "voto_limpo.relationship_evidence"),
             "evidence_table",
         )
 
@@ -56,7 +56,7 @@ class RelationshipBuilder:
                     f"""
                     INSERT INTO {relationship_table}
                         (source_id, target_id, source_type, target_type, type, weight)
-                    VALUES ($1, $2, 'entity', 'entity', $3::votolimpo.relationship_type, 1)
+                    VALUES ($1, $2, 'entity', 'entity', $3::voto_limpo.relationship_type, 1)
                     ON CONFLICT (source_id, target_id, source_type, target_type, type)
                     DO UPDATE SET weight = {relationship_table}.weight + 1,
                                   last_seen_at = NOW(), updated_at = NOW()

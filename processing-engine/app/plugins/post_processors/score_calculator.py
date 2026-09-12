@@ -34,7 +34,7 @@ class ScoreCalculator:
             },
         )
         output_field = config.get("output_field", "veracity_score")
-        sources_table = config.get("sources_table", "votolimpo.sources")
+        sources_table = config.get("sources_table", "voto_limpo.sources")
 
         signals = output.get("veracity_signals", {})
 

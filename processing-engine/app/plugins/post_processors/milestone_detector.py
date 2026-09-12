@@ -24,7 +24,7 @@ class MilestoneDetector:
         config: dict[str, Any],
     ) -> dict:
         milestone_table = validate_sql_identifier(
-            config.get("milestone_table", "votolimpo.milestones"), "milestone_table"
+            config.get("milestone_table", "voto_limpo.milestones"), "milestone_table"
         )
         confidence_threshold = config.get("confidence_threshold", 0.70)
         dedup_window_days = int(config.get("dedup_window_days", 7))
@@ -62,7 +62,7 @@ class MilestoneDetector:
                 existing = await conn.fetchrow(
                     f"""
                     SELECT id FROM {milestone_table}
-                    WHERE politician_id = $1 AND type = $2::votolimpo.milestone_type
+                    WHERE politician_id = $1 AND type = $2::voto_limpo.milestone_type
                       AND ABS(date - $3::date) <= $4
                 """,
                     politician_id,
@@ -78,7 +78,7 @@ class MilestoneDetector:
                     f"""
                     INSERT INTO {milestone_table}
                         (politician_id, article_id, type, title, description, date, confidence)
-                    VALUES ($1, $2, $3::votolimpo.milestone_type, $4, $5, $6, $7)
+                    VALUES ($1, $2, $3::voto_limpo.milestone_type, $4, $5, $6, $7)
                     RETURNING id
                 """,
                     politician_id,

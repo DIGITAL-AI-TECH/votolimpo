@@ -30,10 +30,10 @@ class EntityResolver:
         config: dict[str, Any],
     ) -> dict:
         politician_table = validate_sql_identifier(
-            config.get("politician_table", "votolimpo.politicians"), "politician_table"
+            config.get("politician_table", "voto_limpo.politicians"), "politician_table"
         )
         entity_table = validate_sql_identifier(
-            config.get("entity_table", "votolimpo.entities"), "entity_table"
+            config.get("entity_table", "voto_limpo.entities"), "entity_table"
         )
         fuzzy_threshold = config.get("fuzzy_threshold", 0.80)
         fuzzy_party_threshold = config.get("fuzzy_party_threshold", 0.70)
@@ -173,7 +173,7 @@ class EntityResolver:
         row = await conn.fetchrow(
             f"""
             SELECT id FROM {table}
-            WHERE normalized_name = $1 AND type = $2::votolimpo.entity_type
+            WHERE normalized_name = $1 AND type = $2::voto_limpo.entity_type
         """,
             norm,
             ent_type,
@@ -194,7 +194,7 @@ class EntityResolver:
             f"""
             SELECT id FROM {table}
             WHERE similarity(normalized_name, $1) > $2
-              AND type = $3::votolimpo.entity_type
+              AND type = $3::voto_limpo.entity_type
             ORDER BY similarity(normalized_name, $1) DESC LIMIT 1
         """,
             norm,
@@ -217,7 +217,7 @@ class EntityResolver:
         row = await conn.fetchrow(
             f"""
             INSERT INTO {table} (name, normalized_name, type, article_count)
-            VALUES ($1, $2, $3::votolimpo.entity_type, 1)
+            VALUES ($1, $2, $3::voto_limpo.entity_type, 1)
             RETURNING id
         """,
             clean_name,

@@ -25,7 +25,7 @@ class ArticleMatcher:
         config: dict[str, Any],
     ) -> dict:
         match_table = validate_sql_identifier(
-            config.get("match_table", "votolimpo.article_matches"), "match_table"
+            config.get("match_table", "voto_limpo.article_matches"), "match_table"
         )
         weights = config.get(
             "weights",
@@ -50,8 +50,8 @@ class ArticleMatcher:
                 """
                 SELECT a.keywords, a.published_at,
                        array_agg(pa.politician_id) as politician_ids
-                FROM votolimpo.articles a
-                LEFT JOIN votolimpo.politician_articles pa ON pa.article_id = a.id
+                FROM voto_limpo.articles a
+                LEFT JOIN voto_limpo.politician_articles pa ON pa.article_id = a.id
                 WHERE a.id = $1
                 GROUP BY a.id
             """,
@@ -72,8 +72,8 @@ class ArticleMatcher:
                 """
                 SELECT a.id, a.keywords, a.published_at,
                        array_agg(pa.politician_id) as politician_ids
-                FROM votolimpo.articles a
-                JOIN votolimpo.politician_articles pa ON pa.article_id = a.id
+                FROM voto_limpo.articles a
+                JOIN voto_limpo.politician_articles pa ON pa.article_id = a.id
                 WHERE a.id != $1 AND a.published_at >= NOW() - ($3 * INTERVAL '1 day')
                   AND pa.politician_id = ANY($2)
                 GROUP BY a.id
