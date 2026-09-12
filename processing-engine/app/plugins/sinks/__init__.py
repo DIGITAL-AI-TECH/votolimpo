@@ -37,7 +37,7 @@ class PostgreSQLSink:
     ) -> dict:
         """Persist output. Handles connection routing for separate target DBs."""
         # C4 fix: allow separate target DB (whitelist of allowed env vars)
-        ALLOWED_DB_ENVS = {"PE_VOTOLIMPO_DATABASE_URL", "PE_DATABASE_URL"}
+        ALLOWED_DB_ENVS = {"PE_VOTOLIMPO_DATABASE_URL", "PE_DATABASE_URL", "VOTOLIMPO_DATABASE_URL"}
         db_env = config.get("database_url_env")
         own_conn = None
         if db_env:
@@ -127,12 +127,24 @@ class PostgreSQLSink:
         # Type casts for enum/custom PostgreSQL types (e.g. {"severity": "voto_limpo.severity_level"})
         type_casts = config.get("type_casts", {})
 
-        # Map output fields → DB columns
+        # Columns that should be passed as native PostgreSQL arrays (not JSON strings)
+        array_columns = set(config.get("array_columns", []))
+
+        # Map output fields → DB columns (supports dotted paths like "veracity_signals.source_reputation")
         for output_key, db_col in mapping.items():
-            val = output.get(output_key)
+            val = output
+            for key in output_key.split("."):
+                if isinstance(val, dict):
+                    val = val.get(key)
+                else:
+                    val = None
+                    break
             if val is not None:
                 columns.append(db_col)
-                params.append(json.dumps(val) if isinstance(val, (dict, list)) else val)
+                if db_col in array_columns and isinstance(val, list):
+                    params.append(val)  # native PostgreSQL array
+                else:
+                    params.append(json.dumps(val) if isinstance(val, (dict, list)) else val)
                 cast = type_casts.get(db_col, "")
                 cast_suffix = f"::{cast}" if cast else ""
                 values.append(f"${len(params)}{cast_suffix}")
@@ -150,8 +162,10 @@ class PostgreSQLSink:
             val = item_metadata.get(item_key)
             if val is not None:
                 columns.append(db_col)
-                params.append(val)
-                values.append(f"${len(params)}")
+                params.append(str(val) if isinstance(val, (int, float)) else val)
+                cast = type_casts.get(db_col, "")
+                cast_suffix = f"::{cast}" if cast else ""
+                values.append(f"${len(params)}{cast_suffix}")
 
         # JSONB fallback column (full output as JSON)
         fallback_col = config.get("jsonb_fallback")

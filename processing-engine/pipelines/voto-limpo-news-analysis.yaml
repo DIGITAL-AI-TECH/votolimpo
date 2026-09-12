@@ -148,10 +148,36 @@ post_processors:
       similarity_threshold: 0.50
 
 # --- Sink ---
-# Using "none" — NC fetches results via callback and writes to its own DB.
-# The PE stores all outputs in job_items.output (always).
-sink_type: none
-sink_config: {}
+# Persist directly to votolimpo.articles via column_mapping UPSERT.
+# PE also stores all outputs in job_items.output (always).
+sink_type: postgresql
+sink_config:
+  database_url_env: VOTOLIMPO_DATABASE_URL
+  table: votolimpo.articles
+  conflict_column: url_hash
+  column_mapping:
+    summary: summary
+    severity: severity
+    keywords: keywords
+    veracity_score: veracity_score
+    is_political: is_political
+    "veracity_signals.source_reputation": source_reputation
+    "veracity_signals.multi_source": multi_source_score
+    "veracity_signals.narrative_consistency": narrative_consistency
+    "veracity_signals.documental_evidence": documental_evidence
+    "veracity_signals.temporality": temporality_score
+    "veracity_signals.emotional_language": emotional_language
+  static_columns:
+    processing_status: completed
+  item_field_mapping:
+    source_url: source_url
+    article_id: nc_article_id
+  jsonb_fallback: raw_output
+  type_casts:
+    severity: "votolimpo.severity_level"
+    processing_status: "votolimpo.processing_status"
+  array_columns:
+    - keywords
 
 # --- Crons (executados pelo worker deste pipeline) ---
 # Crons removidos (handlers inexistentes — dead config detectada em audit 2026-09-11):
