@@ -2,15 +2,15 @@ version: "3.8"
 
 services:
   app:
-    image: ghcr.io/digital-ai-tech/votolimpo-app:latest
+    image: registry.digital-ai.tech/votolimpo-app:${IMAGE_TAG:-latest}
     environment:
       - NODE_ENV=production
-      - NC_API_URL=http://news-collector_api:8000
+      - NC_API_URL=http://news-collector_news-collector-api:8000
       - NC_API_TOKEN=${NC_API_TOKEN}
       - NEXT_PUBLIC_APP_URL=https://votolimpo.com.br
     networks:
-      - traefik-public
-      - news-collector_default
+      - oraculusnet
+      - votolimpo-net
     deploy:
       replicas: 2
       update_config:
@@ -22,17 +22,21 @@ services:
         delay: 5s
         max_attempts: 3
       labels:
-        - traefik.enable=true
-        - traefik.docker.network=traefik-public
-        - traefik.http.routers.votolimpo.rule=Host(`votolimpo.com.br`) || Host(`www.votolimpo.com.br`)
-        - traefik.http.routers.votolimpo.entrypoints=websecure
-        - traefik.http.routers.votolimpo.tls.certresolver=letsencrypt
-        - traefik.http.services.votolimpo.loadbalancer.server.port=3000
+        - "traefik.enable=true"
+        - "traefik.docker.network=oraculusnet"
+        - "traefik.http.routers.votolimpo.rule=Host(`votolimpo.com.br`) || Host(`www.votolimpo.com.br`)"
+        - "traefik.http.routers.votolimpo.entrypoints=websecure"
+        - "traefik.http.routers.votolimpo.tls.certresolver=letsencryptresolver"
+        - "traefik.http.services.votolimpo.loadbalancer.server.port=3000"
+        # HTTP -> HTTPS redirect
+        - "traefik.http.routers.votolimpo-http.rule=Host(`votolimpo.com.br`) || Host(`www.votolimpo.com.br`)"
+        - "traefik.http.routers.votolimpo-http.entrypoints=web"
+        - "traefik.http.routers.votolimpo-http.middlewares=redirect-to-https"
         # Redirect www to non-www
-        - traefik.http.middlewares.votolimpo-www-redirect.redirectregex.regex=^https://www\.votolimpo\.com\.br/(.*)
-        - traefik.http.middlewares.votolimpo-www-redirect.redirectregex.replacement=https://votolimpo.com.br/$${1}
-        - traefik.http.middlewares.votolimpo-www-redirect.redirectregex.permanent=true
-        - traefik.http.routers.votolimpo.middlewares=votolimpo-www-redirect
+        - "traefik.http.middlewares.votolimpo-www-redirect.redirectregex.regex=^https://www\\.votolimpo\\.com\\.br/(.*)"
+        - "traefik.http.middlewares.votolimpo-www-redirect.redirectregex.replacement=https://votolimpo.com.br/$${1}"
+        - "traefik.http.middlewares.votolimpo-www-redirect.redirectregex.permanent=true"
+        - "traefik.http.routers.votolimpo.middlewares=votolimpo-www-redirect"
       resources:
         limits:
           memory: 256M
@@ -41,7 +45,7 @@ services:
           memory: 128M
 
 networks:
-  traefik-public:
+  oraculusnet:
     external: true
-  news-collector_default:
+  votolimpo-net:
     external: true

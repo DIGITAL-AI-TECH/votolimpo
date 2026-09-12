@@ -1,0 +1,210 @@
+name: "VotoLimpo App — Build, Push & Deploy"
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "votolimpo-app/**"
+      - ".github/workflows/votolimpo-app-ci.yml"
+  pull_request:
+    branches: [main]
+    paths:
+      - "votolimpo-app/**"
+      - ".github/workflows/votolimpo-app-ci.yml"
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  REGISTRY: registry.digital-ai.tech
+  IMAGE_NAME: registry.digital-ai.tech/votolimpo-app
+  N8N_NOTIFY_URL: https://webhook.digital-ai.tech/webhook/1c708636-864f-469d-8540-0dab5c145c7c
+
+jobs:
+  # ── Job 1: Build + Push ─────────────────────────────
+  docker:
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    outputs:
+      image_sha: ${{ steps.meta.outputs.image_sha }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Notify -- Pipeline Iniciado
+        env:
+          COMMIT_MSG: ${{ github.event.head_commit.message }}
+          ACTOR: ${{ github.actor }}
+          BRANCH: ${{ github.ref_name }}
+          SHA: ${{ github.sha }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          curl -sf -X POST "${N8N_NOTIFY_URL}" \
+            -H "Content-Type: application/json" \
+            -d "$(python3 -c "import json,os; print(json.dumps({
+              'status':'started','repo':'votolimpo-app',
+              'branch':os.environ['BRANCH'],'actor':os.environ['ACTOR'],
+              'commit_sha':os.environ['SHA'],'commit_message':os.environ['COMMIT_MSG'],
+              'run_url':os.environ['RUN_URL'],
+              'stage':'Pipeline CI/CD',
+              'message':'Pipeline iniciado — build da imagem Next.js'
+            }))")" || true
+
+      - name: Set image metadata
+        id: meta
+        run: echo "image_sha=${GITHUB_SHA::8}" >> "$GITHUB_OUTPUT"
+
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Login to private registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ secrets.REGISTRY_USER }}
+          password: ${{ secrets.REGISTRY_PASSWORD }}
+
+      - name: Build and push
+        uses: docker/build-push-action@v6
+        with:
+          context: votolimpo-app
+          push: true
+          tags: |
+            ${{ env.IMAGE_NAME }}:latest
+            ${{ env.IMAGE_NAME }}:${{ steps.meta.outputs.image_sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Notify -- Build OK
+        if: success()
+        env:
+          SHA: ${{ github.sha }}
+          ACTOR: ${{ github.actor }}
+          BRANCH: ${{ github.ref_name }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          curl -sf -X POST "${N8N_NOTIFY_URL}" \
+            -H "Content-Type: application/json" \
+            -d "$(python3 -c "import json,os; print(json.dumps({
+              'status':'info','repo':'votolimpo-app',
+              'branch':os.environ['BRANCH'],'actor':os.environ['ACTOR'],
+              'commit_sha':os.environ['SHA'],
+              'run_url':os.environ['RUN_URL'],
+              'stage':'Build Docker',
+              'message':'Imagem pushed: ${{ env.IMAGE_NAME }}:${{ steps.meta.outputs.image_sha }}'
+            }))")" || true
+
+      - name: Notify -- Build Falhou
+        if: failure()
+        env:
+          SHA: ${{ github.sha }}
+          ACTOR: ${{ github.actor }}
+          BRANCH: ${{ github.ref_name }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          curl -sf -X POST "${N8N_NOTIFY_URL}" \
+            -H "Content-Type: application/json" \
+            -d "$(python3 -c "import json,os; print(json.dumps({
+              'status':'failure','repo':'votolimpo-app',
+              'branch':os.environ['BRANCH'],'actor':os.environ['ACTOR'],
+              'commit_sha':os.environ['SHA'],
+              'run_url':os.environ['RUN_URL'],
+              'stage':'Build Docker',
+              'message':'Build da imagem falhou'
+            }))")" || true
+
+  # ── Job 2: Deploy via service update (self-hosted runner) ───
+  deploy:
+    name: Deploy — Swarm
+    runs-on: [self-hosted, swarm]
+    needs: docker
+    steps:
+      - name: Notify -- Deploy em Andamento
+        env:
+          SHA: ${{ github.sha }}
+          ACTOR: ${{ github.actor }}
+          BRANCH: ${{ github.ref_name }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          curl -sf -X POST "${N8N_NOTIFY_URL}" \
+            -H "Content-Type: application/json" \
+            -d "$(python3 -c "import json,os; print(json.dumps({
+              'status':'info','repo':'votolimpo-app',
+              'branch':os.environ['BRANCH'],'actor':os.environ['ACTOR'],
+              'commit_sha':os.environ['SHA'],
+              'run_url':os.environ['RUN_URL'],
+              'stage':'Deploy Swarm',
+              'message':'Atualizando service no Docker Swarm...'
+            }))")" || true
+
+      - name: Login no registry
+        run: echo "${{ secrets.REGISTRY_PASSWORD }}" | docker login ${{ env.REGISTRY }} -u "${{ secrets.REGISTRY_USER }}" --password-stdin
+
+      - name: Pull e update service
+        env:
+          IMAGE: ${{ env.IMAGE_NAME }}:${{ needs.docker.outputs.image_sha }}
+        run: |
+          set -e
+          STACK_SERVICE="votolimpo-app_app"
+
+          echo "Pulling image: ${IMAGE}"
+          docker pull "${IMAGE}"
+
+          echo "Updating service: ${STACK_SERVICE}"
+          docker service update \
+            --image "${IMAGE}" \
+            --with-registry-auth \
+            "${STACK_SERVICE}"
+
+          echo "Waiting for convergence..."
+          timeout 120 bash -c "
+            while true; do
+              STATE=\$(docker service ps ${STACK_SERVICE} \
+                --filter 'desired-state=running' \
+                --format '{{.CurrentState}}' | head -1)
+              echo \"State: \${STATE}\"
+              if [[ \"\${STATE}\" == Running* ]]; then
+                echo 'Service converged successfully.'
+                break
+              fi
+              sleep 5
+            done
+          "
+
+      - name: Notify -- Deploy Concluido
+        if: success()
+        env:
+          COMMIT_MSG: ${{ github.event.head_commit.message }}
+          SHA: ${{ github.sha }}
+          ACTOR: ${{ github.actor }}
+          BRANCH: ${{ github.ref_name }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          curl -sf -X POST "${N8N_NOTIFY_URL}" \
+            -H "Content-Type: application/json" \
+            -d "$(python3 -c "import json,os; print(json.dumps({
+              'status':'success','repo':'votolimpo-app',
+              'branch':os.environ['BRANCH'],'actor':os.environ['ACTOR'],
+              'commit_sha':os.environ['SHA'],'commit_message':os.environ['COMMIT_MSG'],
+              'run_url':os.environ['RUN_URL'],
+              'message':'Deploy concluido: https://votolimpo.com.br'
+            }))")" || true
+
+      - name: Notify -- Deploy Falhou
+        if: failure()
+        env:
+          SHA: ${{ github.sha }}
+          ACTOR: ${{ github.actor }}
+          BRANCH: ${{ github.ref_name }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          curl -sf -X POST "${N8N_NOTIFY_URL}" \
+            -H "Content-Type: application/json" \
+            -d "$(python3 -c "import json,os; print(json.dumps({
+              'status':'failure','repo':'votolimpo-app',
+              'branch':os.environ['BRANCH'],'actor':os.environ['ACTOR'],
+              'commit_sha':os.environ['SHA'],
+              'run_url':os.environ['RUN_URL'],
+              'stage':'Deploy Swarm',
+              'message':'Deploy falhou no Docker Swarm'
+            }))")" || true
