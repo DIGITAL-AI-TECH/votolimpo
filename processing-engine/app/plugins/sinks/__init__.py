@@ -37,7 +37,11 @@ class PostgreSQLSink:
     ) -> dict:
         """Persist output. Handles connection routing for separate target DBs."""
         # C4 fix: allow separate target DB (whitelist of allowed env vars)
-        ALLOWED_DB_ENVS = {"PE_VOTOLIMPO_DATABASE_URL", "PE_DATABASE_URL", "VOTOLIMPO_DATABASE_URL"}
+        ALLOWED_DB_ENVS = {
+            "PE_VOTOLIMPO_DATABASE_URL",
+            "PE_DATABASE_URL",
+            "VOTOLIMPO_DATABASE_URL",
+        }
         db_env = config.get("database_url_env")
         own_conn = None
         if db_env:
@@ -144,7 +148,9 @@ class PostgreSQLSink:
                 if db_col in array_columns and isinstance(val, list):
                     params.append(val)  # native PostgreSQL array
                 else:
-                    params.append(json.dumps(val) if isinstance(val, (dict, list)) else val)
+                    params.append(
+                        json.dumps(val) if isinstance(val, (dict, list)) else val
+                    )
                 cast = type_casts.get(db_col, "")
                 cast_suffix = f"::{cast}" if cast else ""
                 values.append(f"${len(params)}{cast_suffix}")
