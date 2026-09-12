@@ -150,7 +150,7 @@ async def _process_job_items(job_id: str, pipeline: PipelineConfig):
     ]
     sink = get_sink(pipeline.sink.type)
 
-    # Load prompts and schema
+    # Load prompts and schema (file-based takes priority, inline YAML as fallback)
     system_prompt = ""
     output_schema = None
     if pipeline.llm.system_prompt_file:
@@ -158,12 +158,16 @@ async def _process_job_items(job_id: str, pipeline: PipelineConfig):
             system_prompt = load_system_prompt(pipeline.llm.system_prompt_file)
         except FileNotFoundError:
             logger.error("System prompt not found: %s", pipeline.llm.system_prompt_file)
+    elif pipeline.system_prompt:
+        system_prompt = pipeline.system_prompt
 
     if pipeline.llm.output_schema_file:
         try:
             output_schema = load_output_schema(pipeline.llm.output_schema_file)
         except FileNotFoundError:
             logger.error("Output schema not found: %s", pipeline.llm.output_schema_file)
+    elif pipeline.output_schema:
+        output_schema = pipeline.output_schema
 
     completed = 0
     failed = 0
@@ -355,13 +359,33 @@ async def _process_single_item(
             return {"completed": 1, "failed": 0, "cost": 0.0, "duration": duration_ms}
 
         # Step 4: LLM Process (NO DB connection held — C2 fix)
+        # Apply user_prompt_template if defined (inline YAML)
+        user_content = clean_content
+        if pipeline.user_prompt_template:
+            metadata = (
+                json.loads(item["metadata"])
+                if isinstance(item["metadata"], str)
+                else (item["metadata"] or {})
+            )
+            template_vars = {
+                "content": clean_content,
+                "title": metadata.get("title", ""),
+                "source_name": metadata.get("source_name", ""),
+                "published_date": metadata.get("published_date", ""),
+            }
+            try:
+                user_content = pipeline.user_prompt_template.format(**template_vars)
+            except KeyError as e:
+                logger.warning("Template var missing %s, using raw content", e)
+                user_content = clean_content
+
         llm_config = {
             "model": pipeline.llm.model,
             "temperature": pipeline.llm.temperature,
             "max_tokens": pipeline.llm.max_tokens,
         }
         llm_result = await llm.process(
-            clean_content, system_prompt, output_schema, llm_config
+            user_content, system_prompt, output_schema, llm_config
         )
         output = llm_result["output"]
         cost += llm_result["cost_usd"]
@@ -400,7 +424,7 @@ async def _process_single_item(
                     )
                 # Retry LLM (NO DB connection held)
                 llm_result = await llm.process(
-                    clean_content, system_prompt, output_schema, llm_config
+                    user_content, system_prompt, output_schema, llm_config
                 )
                 output = llm_result["output"]
                 cost += llm_result["cost_usd"]

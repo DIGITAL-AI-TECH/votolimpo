@@ -53,6 +53,7 @@ output_schema:
     - keywords
     - veracity_signals
     - is_political
+    - entity_names
   additionalProperties: false
   properties:
     politicians:
@@ -63,19 +64,18 @@ output_schema:
         additionalProperties: false
         properties:
           name: { type: string }
-          party: { type: [string, "null"] }
-          state: { type: [string, "null"] }
-          role: { type: [string, "null"] }
+          party: { type: ["string", "null"] }
+          state: { type: ["string", "null"] }
+          role: { type: ["string", "null"] }
           article_role:
             type: string
             enum: [protagonist, mentioned, investigated, witness, victim, other]
-          relevance_score: { type: number, minimum: 0.0, maximum: 1.0 }
+          relevance_score: { type: number }
     severity:
       type: string
       enum: [low, medium, high, critical]
     summary:
       type: string
-      maxLength: 300
     keywords:
       type: array
       items: { type: string }
@@ -90,19 +90,16 @@ output_schema:
         - emotional_language
       additionalProperties: false
       properties:
-        source_reputation: { type: number, minimum: 0.0, maximum: 1.0 }
-        multi_source: { type: number, minimum: 0.0, maximum: 1.0 }
-        narrative_consistency: { type: number, minimum: 0.0, maximum: 1.0 }
-        documental_evidence: { type: number, minimum: 0.0, maximum: 1.0 }
-        temporality: { type: number, minimum: 0.0, maximum: 1.0 }
-        emotional_language: { type: number, minimum: 0.0, maximum: 1.0 }
+        source_reputation: { type: number }
+        multi_source: { type: number }
+        narrative_consistency: { type: number }
+        documental_evidence: { type: number }
+        temporality: { type: number }
+        emotional_language: { type: number }
     is_political: { type: boolean }
     entity_names:
       type: array
       items: { type: string }
-      description: >
-        Nomes de entidades nao-politicas mencionadas (orgaos, partidos como
-        instituicao, empresas, tribunais). Ex: MPF, STF, PF, TCU, Petrobras.
 
 # --- Validators ---
 validators: [schema, grounding, range]
