@@ -1,7 +1,18 @@
 import { NextResponse } from "next/server";
-import { getStats } from "@/lib/mock-data";
+import { getGlobalStats, ncStatsToStats } from "@/lib/nc-api";
+
+export const dynamic = "force-dynamic";
 
 export async function GET() {
-  const stats = getStats();
-  return NextResponse.json(stats);
+  try {
+    const ncStats = await getGlobalStats();
+    const stats = ncStatsToStats(ncStats);
+    return NextResponse.json(stats);
+  } catch (error) {
+    console.error("[api/stats] NC API error:", error);
+    return NextResponse.json(
+      { error: "Failed to fetch stats" },
+      { status: 502 }
+    );
+  }
 }

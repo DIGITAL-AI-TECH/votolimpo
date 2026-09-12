@@ -1,19 +1,54 @@
 import Link from "next/link";
-import { POLITICIANS, ARTICLES, getStats } from "@/lib/mock-data";
+import {
+  getGlobalStats,
+  listEntities,
+  listArticles,
+  ncStatsToStats,
+  entityToPolitician,
+  ncArticleToArticle,
+} from "@/lib/nc-api";
 import PoliticianCard from "@/components/PoliticianCard";
 import ArticleCard from "@/components/ArticleCard";
 import SearchBar from "@/components/SearchBar";
+import type { Politician, Article, Stats } from "@/types";
 
-export default function HomePage() {
-  const stats = getStats();
+export const dynamic = "force-dynamic";
+export const revalidate = 120;
 
-  // Top 10 por score (mais baixo = mais problemático → ranking de transparência do mais transparente para menos)
-  const top10 = [...POLITICIANS].sort((a, b) => b.score - a.score).slice(0, 10);
+export default async function HomePage() {
+  let stats: Stats;
+  let top10: Politician[];
+  let recentArticles: Article[];
 
-  // Artigos mais recentes
-  const recentArticles = [...ARTICLES]
-    .sort((a, b) => new Date(b.publishedAt).getTime() - new Date(a.publishedAt).getTime())
-    .slice(0, 6);
+  try {
+    const [ncStats, entities, articlesRes] = await Promise.all([
+      getGlobalStats(),
+      listEntities({ type: "candidate", active: true, limit: 50 }),
+      listArticles({ status: "processed", page_size: 6 }),
+    ]);
+
+    stats = ncStatsToStats(ncStats);
+
+    // Sort by name for now (score will come from processing later)
+    top10 = entities
+      .map((e) => entityToPolitician(e))
+      .sort((a, b) => a.name.localeCompare(b.name))
+      .slice(0, 10);
+
+    recentArticles = articlesRes.items.map(ncArticleToArticle);
+  } catch (error) {
+    console.error("[HomePage] NC API error:", error);
+    stats = {
+      totalPoliticians: 0,
+      totalArticles: 0,
+      totalEntities: 0,
+      totalRelationships: 0,
+      avgScore: 0,
+      criticalCount: 0,
+    };
+    top10 = [];
+    recentArticles = [];
+  }
 
   return (
     <div className="min-h-screen">
@@ -32,28 +67,28 @@ export default function HomePage() {
           </div>
 
           <h1 className="text-4xl font-bold tracking-tight text-[#FAFAFA] sm:text-5xl md:text-6xl">
-            Transparência política{" "}
+            Transparencia politica{" "}
             <span className="text-emerald-400">ao alcance</span>
             <br />
             de todos
           </h1>
 
           <p className="mt-6 text-lg text-[#6B7280] max-w-2xl mx-auto leading-relaxed">
-            Acompanhe o histórico de processos, vínculos empresariais e o índice de
-            transparência dos políticos brasileiros. Dados públicos, verificados e acessíveis.
+            Acompanhe o historico de processos, vinculos empresariais e o indice de
+            transparencia dos politicos brasileiros. Dados publicos, verificados e acessiveis.
           </p>
 
           {/* Search */}
           <div className="mt-10 mx-auto max-w-xl">
-            <SearchBar placeholder="Buscar político por nome, partido ou estado..." />
+            <SearchBar placeholder="Buscar politico por nome, partido ou estado..." />
           </div>
 
           {/* Quick stats */}
           <div className="mt-10 flex flex-wrap items-center justify-center gap-6 md:gap-10">
             {[
-              { value: stats.totalPoliticians, label: "Políticos monitorados" },
-              { value: stats.totalArticles, label: "Artigos indexados" },
-              { value: stats.totalRelationships, label: "Vínculos mapeados" },
+              { value: stats.totalPoliticians.toLocaleString("pt-BR"), label: "Politicos monitorados" },
+              { value: stats.totalArticles.toLocaleString("pt-BR"), label: "Artigos indexados" },
+              { value: stats.totalRelationships.toLocaleString("pt-BR"), label: "Fontes mapeadas" },
             ].map((stat) => (
               <div key={stat.label} className="text-center">
                 <p className="font-mono text-3xl font-bold text-[#FAFAFA]">
@@ -71,9 +106,9 @@ export default function HomePage() {
         <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
           <div className="mb-8 flex items-center justify-between">
             <div>
-              <h2 className="text-2xl font-bold text-[#FAFAFA]">Top 10 Transparência</h2>
+              <h2 className="text-2xl font-bold text-[#FAFAFA]">Candidatos em Destaque</h2>
               <p className="mt-1 text-sm text-[#6B7280]">
-                Políticos com maior índice de transparência baseado em dados públicos
+                Candidatos com maior cobertura midiática baseada em dados publicos
               </p>
             </div>
             <Link
@@ -87,15 +122,21 @@ export default function HomePage() {
             </Link>
           </div>
 
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-            {top10.map((politician, index) => (
-              <PoliticianCard
-                key={politician.id}
-                politician={politician}
-                rank={index + 1}
-              />
-            ))}
-          </div>
+          {top10.length > 0 ? (
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+              {top10.map((politician, index) => (
+                <PoliticianCard
+                  key={politician.id}
+                  politician={politician}
+                  rank={index + 1}
+                />
+              ))}
+            </div>
+          ) : (
+            <div className="rounded-xl border border-[#2E2E2E] bg-[#141414] p-12 text-center">
+              <p className="text-[#6B7280]">Carregando dados de candidatos...</p>
+            </div>
+          )}
         </div>
       </section>
 
@@ -104,9 +145,9 @@ export default function HomePage() {
         <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
           <div className="mb-8 flex items-center justify-between">
             <div>
-              <h2 className="text-2xl font-bold text-[#FAFAFA]">Notícias Recentes</h2>
+              <h2 className="text-2xl font-bold text-[#FAFAFA]">Noticias Recentes</h2>
               <p className="mt-1 text-sm text-[#6B7280]">
-                Últimas reportagens sobre política e transparência
+                Ultimas reportagens sobre politica e transparencia
               </p>
             </div>
             <Link
@@ -120,11 +161,17 @@ export default function HomePage() {
             </Link>
           </div>
 
-          <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
-            {recentArticles.map((article) => (
-              <ArticleCard key={article.id} article={article} />
-            ))}
-          </div>
+          {recentArticles.length > 0 ? (
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
+              {recentArticles.map((article) => (
+                <ArticleCard key={article.id} article={article} />
+              ))}
+            </div>
+          ) : (
+            <div className="rounded-xl border border-[#2E2E2E] bg-[#141414] p-12 text-center">
+              <p className="text-[#6B7280]">Artigos estao sendo processados...</p>
+            </div>
+          )}
         </div>
       </section>
 
@@ -133,10 +180,10 @@ export default function HomePage() {
         <div className="mx-auto max-w-4xl px-4 text-center sm:px-6 lg:px-8">
           <div className="rounded-2xl border border-[#2E2E2E] bg-[#141414] p-8 md:p-12">
             <h2 className="text-2xl font-bold text-[#FAFAFA] md:text-3xl">
-              Explore os vínculos políticos
+              Explore os vinculos politicos
             </h2>
             <p className="mt-4 text-[#6B7280]">
-              Visualize em tempo real as conexões entre políticos e entidades no grafo interativo
+              Visualize em tempo real as conexoes entre politicos e entidades no grafo interativo
             </p>
             <div className="mt-8 flex flex-col items-center justify-center gap-4 sm:flex-row">
               <Link
@@ -146,7 +193,7 @@ export default function HomePage() {
                 <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
                 </svg>
-                Ver grafo de vínculos
+                Ver grafo de vinculos
               </Link>
               <Link
                 href="/ranking"

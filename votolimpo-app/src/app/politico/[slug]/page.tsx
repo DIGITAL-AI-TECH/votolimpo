@@ -1,13 +1,12 @@
 import { notFound } from "next/navigation";
 import type { Metadata } from "next";
 import {
-  POLITICIANS,
-  getPoliticianBySlug,
-  getArticlesForPolitician,
-  getMilestonesForPolitician,
-  getRelationshipsForPolitician,
-} from "@/lib/mock-data";
-import { ENTITIES } from "@/lib/mock-data";
+  listEntities,
+  getEntityArticles,
+  getEntityStats,
+  entityToPolitician,
+  ncArticleToArticle,
+} from "@/lib/nc-api";
 import ScoreBadge from "@/components/ScoreBadge";
 import SeverityBadge from "@/components/SeverityBadge";
 import ShareButton from "@/components/ShareButton";
@@ -17,69 +16,96 @@ interface PageProps {
   params: Promise<{ slug: string }>;
 }
 
-export async function generateStaticParams() {
-  return POLITICIANS.map((p) => ({ slug: p.slug }));
+async function findEntityBySlug(slug: string) {
+  // Try searching by first word of slug to narrow results, then match exact slug
+  const firstWord = slug.split("-")[0];
+
+  const entities = await listEntities({
+    search: firstWord,
+    type: "candidate",
+    active: true,
+    limit: 100,
+  });
+
+  const match = entities.find((e) => e.slug === slug);
+  if (match) return match;
+
+  // Fallback: fetch all candidates if search missed (slug might not match name)
+  const allEntities = await listEntities({
+    type: "candidate",
+    active: true,
+    limit: 500,
+  });
+
+  return allEntities.find((e) => e.slug === slug);
 }
 
 export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
   const { slug } = await params;
-  const politician = getPoliticianBySlug(slug);
-  if (!politician) return { title: "Não encontrado" };
+  try {
+    const entity = await findEntityBySlug(slug);
+    if (!entity) return { title: "Nao encontrado" };
 
-  return {
-    title: politician.name,
-    description: `Perfil de ${politician.name} — ${politician.party} · ${politician.uf}. Índice de transparência: ${politician.score}/100.`,
-  };
+    const politician = entityToPolitician(entity);
+    return {
+      title: politician.name,
+      description: `Perfil de ${politician.name} — ${politician.party} · ${politician.uf}.`,
+    };
+  } catch {
+    return { title: "Erro" };
+  }
 }
 
 export default async function PoliticoPage({ params }: PageProps) {
   const { slug } = await params;
-  const politician = getPoliticianBySlug(slug);
 
-  if (!politician) notFound();
+  let entity;
+  try {
+    entity = await findEntityBySlug(slug);
+  } catch (error) {
+    console.error("[PoliticoPage] NC API error:", error);
+    notFound();
+  }
 
-  const articles = getArticlesForPolitician(politician.id);
-  const milestones = getMilestonesForPolitician(politician.id);
-  const relationships = getRelationshipsForPolitician(politician.id);
-  const timelineItems = buildTimelineItems(articles, milestones);
+  if (!entity) notFound();
 
-  const relatedEntities = relationships.map((r) => {
-    const entity = ENTITIES.find((e) => e.id === r.entityId);
-    return { relationship: r, entity };
-  });
+  let articles;
+  let statsRes;
+
+  try {
+    [articles, statsRes] = await Promise.all([
+      getEntityArticles(entity.id, { page_size: 50 }),
+      getEntityStats(entity.id),
+    ]);
+  } catch (error) {
+    console.error("[PoliticoPage] NC API error fetching details:", error);
+    articles = { items: [], total: 0, page: 1, page_size: 50, pages: 1 };
+    statsRes = null;
+  }
+
+  const politician = entityToPolitician(
+    entity,
+    statsRes?.articles.total ?? 0
+  );
+
+  const frontendArticles = articles.items.map(ncArticleToArticle);
+  const timelineItems = buildTimelineItems(frontendArticles, []);
 
   function getScoreLabel(score: number): string {
     if (score >= 80) return "Excelente";
     if (score >= 60) return "Bom";
     if (score >= 40) return "Regular";
     if (score >= 20) return "Preocupante";
-    return "Crítico";
+    return "Critico";
   }
 
   function getScoreDescription(score: number): string {
-    if (score >= 80) return "Este político apresenta alta transparência nos dados disponíveis.";
-    if (score >= 60) return "Este político apresenta boa transparência com poucas ocorrências relevantes.";
-    if (score >= 40) return "Este político apresenta transparência regular com algumas ocorrências relevantes.";
-    if (score >= 20) return "Este político apresenta baixa transparência com múltiplas ocorrências graves.";
-    return "Este político apresenta índice crítico com graves ocorrências documentadas.";
+    if (score >= 80) return "Este candidato apresenta alta transparencia nos dados disponiveis.";
+    if (score >= 60) return "Este candidato apresenta boa transparencia com poucas ocorrencias relevantes.";
+    if (score >= 40) return "Este candidato apresenta transparencia regular com algumas ocorrencias relevantes.";
+    if (score >= 20) return "Este candidato apresenta baixa transparencia com multiplas ocorrencias graves.";
+    return "Este candidato apresenta indice critico com graves ocorrencias documentadas.";
   }
-
-  const entityTypeLabel: Record<string, string> = {
-    company: "Empresa",
-    organization: "Organização",
-    government: "Governo",
-    ngo: "ONG",
-    media: "Mídia",
-  };
-
-  const relTypeLabel: Record<string, string> = {
-    donation: "Doação",
-    contract: "Contrato",
-    board_member: "Conselho",
-    investigation: "Investigação",
-    business_partner: "Parceria",
-    family: "Família",
-  };
 
   return (
     <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
@@ -148,11 +174,20 @@ export default async function PoliticoPage({ params }: PageProps) {
                 </span>
                 <span className="inline-flex items-center gap-1">
                   <div className="h-3 w-3 rounded-full border-2 border-red-500 bg-red-500/10" />
-                  Ocorrência jurídica
+                  Ocorrencia juridica
                 </span>
               </div>
             </div>
-            <Timeline items={timelineItems} />
+            {timelineItems.length > 0 ? (
+              <Timeline items={timelineItems} />
+            ) : (
+              <div className="rounded-xl border border-[#2E2E2E] bg-[#141414] p-8 text-center">
+                <p className="text-[#6B7280]">
+                  Nenhum artigo encontrado ainda para este candidato.
+                  Os artigos estao sendo processados e vinculados automaticamente.
+                </p>
+              </div>
+            )}
           </div>
         </div>
 
@@ -161,7 +196,7 @@ export default async function PoliticoPage({ params }: PageProps) {
           {/* Score breakdown */}
           <div className="rounded-xl border border-[#2E2E2E] bg-[#141414] p-5">
             <h3 className="text-sm font-semibold text-[#FAFAFA] mb-4">
-              Índice de Transparência
+              Indice de Transparencia
             </h3>
 
             <div className="text-center mb-4">
@@ -200,7 +235,7 @@ export default async function PoliticoPage({ params }: PageProps) {
 
           {/* Stats */}
           <div className="rounded-xl border border-[#2E2E2E] bg-[#141414] p-5">
-            <h3 className="text-sm font-semibold text-[#FAFAFA] mb-4">Estatísticas</h3>
+            <h3 className="text-sm font-semibold text-[#FAFAFA] mb-4">Estatisticas</h3>
             <div className="space-y-3">
               <div className="flex items-center justify-between">
                 <span className="text-xs text-[#6B7280]">Artigos indexados</span>
@@ -208,69 +243,28 @@ export default async function PoliticoPage({ params }: PageProps) {
                   {politician.articleCount}
                 </span>
               </div>
+              {statsRes && (
+                <>
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs text-[#6B7280]">Fontes ativas</span>
+                    <span className="font-mono text-sm font-bold text-[#FAFAFA]">
+                      {statsRes.sources.active}
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs text-[#6B7280]">Artigos (ultimos 7 dias)</span>
+                    <span className="font-mono text-sm font-bold text-[#FAFAFA]">
+                      {statsRes.articles.last_7d}
+                    </span>
+                  </div>
+                </>
+              )}
               <div className="flex items-center justify-between">
-                <span className="text-xs text-[#6B7280]">Ocorrências jurídicas</span>
-                <span className="font-mono text-sm font-bold text-[#FAFAFA]">
-                  {politician.milestoneCount}
-                </span>
-              </div>
-              <div className="flex items-center justify-between">
-                <span className="text-xs text-[#6B7280]">Vínculos mapeados</span>
-                <span className="font-mono text-sm font-bold text-[#FAFAFA]">
-                  {relationships.length}
-                </span>
-              </div>
-              <div className="flex items-center justify-between">
-                <span className="text-xs text-[#6B7280]">Severidade máxima</span>
+                <span className="text-xs text-[#6B7280]">Severidade maxima</span>
                 <SeverityBadge severity={politician.maxSeverity} size="sm" />
               </div>
             </div>
           </div>
-
-          {/* Related Entities */}
-          {relatedEntities.length > 0 && (
-            <div className="rounded-xl border border-[#2E2E2E] bg-[#141414] p-5">
-              <h3 className="text-sm font-semibold text-[#FAFAFA] mb-4">
-                Vínculos ({relatedEntities.length})
-              </h3>
-              <div className="space-y-3">
-                {relatedEntities.map(({ relationship, entity }) =>
-                  entity ? (
-                    <div key={relationship.id} className="rounded-lg bg-[#0A0A0A] p-3">
-                      <div className="flex items-start justify-between gap-2">
-                        <div className="min-w-0 flex-1">
-                          <p className="text-xs font-medium text-[#FAFAFA] leading-snug">
-                            {entity.name}
-                          </p>
-                          <p className="mt-0.5 text-xs text-[#6B7280]">
-                            {entityTypeLabel[entity.type]}
-                          </p>
-                        </div>
-                        <span className="flex-shrink-0 rounded bg-[#242424] px-1.5 py-0.5 text-xs text-[#6B7280]">
-                          {relTypeLabel[relationship.type]}
-                        </span>
-                      </div>
-                      <p className="mt-2 text-xs text-[#6B7280] leading-relaxed line-clamp-2">
-                        {relationship.description}
-                      </p>
-                    </div>
-                  ) : null
-                )}
-              </div>
-
-              <div className="mt-4 pt-4 border-t border-[#2E2E2E]">
-                <a
-                  href="/grafo"
-                  className="inline-flex items-center gap-1.5 text-xs text-emerald-400 hover:text-emerald-300 transition-colors"
-                >
-                  Ver no grafo de vínculos
-                  <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                  </svg>
-                </a>
-              </div>
-            </div>
-          )}
         </div>
       </div>
     </div>

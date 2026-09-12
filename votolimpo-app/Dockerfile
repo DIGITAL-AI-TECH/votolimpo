@@ -28,6 +28,11 @@ COPY . .
 ENV NEXT_TELEMETRY_DISABLED=1
 ENV NODE_ENV=production
 
+# Provide dummy env vars for build-time fetch (server components with revalidate)
+# These will be overridden at runtime by real env vars in Docker stack
+ENV NC_API_URL=http://localhost:9999
+ENV NC_API_TOKEN=build-placeholder
+
 RUN pnpm build
 
 # Stage 3: runner
@@ -41,7 +46,7 @@ ENV NEXT_TELEMETRY_DISABLED=1
 RUN addgroup --system --gid 1001 nodejs
 RUN adduser --system --uid 1001 nextjs
 
-# Copy public assets
+# Copy public assets (may be empty)
 COPY --from=builder /app/public ./public
 
 # Standalone output
