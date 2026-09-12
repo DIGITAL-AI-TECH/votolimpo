@@ -2,7 +2,7 @@ name: Deploy Processing Engine
 
 on:
   push:
-    branches: [master]
+    branches: [main]
     paths: ['processing-engine/**']
   workflow_dispatch:
 
