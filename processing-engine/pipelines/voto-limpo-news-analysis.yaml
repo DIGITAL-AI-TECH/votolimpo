@@ -19,7 +19,7 @@ llm_provider: openai
 llm_model: gpt-4.1-mini
 llm_temperature: 0.1
 llm_seed: 42
-llm_max_tokens: 4000
+llm_max_tokens: 16384
 
 system_prompt: |
   Analista de inteligencia politica brasileira. Extraia dados estruturados de noticias.
