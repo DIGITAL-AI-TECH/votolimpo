@@ -41,6 +41,8 @@ class ProcessingJob(BaseModel):
     priority: JobPriority = JobPriority.normal
     callback_url: str | None = None
     idempotency_key: str | None = None
+    skip_cache: bool = False
+    skip_dedup: bool = False
 
 
 class ItemResult(BaseModel):

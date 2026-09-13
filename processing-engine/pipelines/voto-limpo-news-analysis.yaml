@@ -212,6 +212,6 @@ crons:
 max_concurrent: 5
 rate_limit_rpm: 60
 max_retries: 2
-cache_ttl_hours: 720
+cache_ttl_hours: 0  # disabled temporarily to force reprocessing with new prompt
 budget_limit_usd: 10.0
 budget_period: month
