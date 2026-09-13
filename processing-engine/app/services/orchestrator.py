@@ -68,6 +68,15 @@ class Orchestrator:
             conn, item_id, "ingest", self._ingest, raw_content, content_type, pipeline
         )
 
+        if not ingested:
+            result["duration_ms"] = int((time.monotonic() - total_start) * 1000)
+            await conn.execute(_UPDATE_ITEM_STATUS, item_id, "failed")
+            await self._log(
+                conn, item_id, "ingest", "failed", result["duration_ms"],
+                meta={"error": "Ingestor returned empty content"},
+            )
+            raise ValueError("Ingestor returned empty content — cannot process item")
+
         # --- 2. DEDUP ---
         if not skip_dedup:
             await conn.execute(_UPDATE_ITEM_STATUS, item_id, "deduplicating")

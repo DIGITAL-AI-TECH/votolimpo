@@ -276,6 +276,8 @@ async def _process_single_item(
 
         # Step 1: Ingest (no DB needed)
         clean_content = await ingestor.ingest(item["content"], pipeline.ingestor.config)
+        if not clean_content:
+            raise ValueError("Ingestor returned empty content — cannot process item")
         content_hash = hashlib.sha256(clean_content.encode()).hexdigest()
 
         # Step 2: Cache check (short acquire)
