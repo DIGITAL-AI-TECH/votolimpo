@@ -1,7 +1,33 @@
 version: "3.8"
 
 services:
-  processing-engine:
+  pe-postgres:
+    image: pgvector/pgvector:pg16
+    command:
+      - "postgres"
+      - "-c"
+      - "max_connections=200"
+    environment:
+      POSTGRES_PASSWORD: "vnBnBsOrtrLtx-DbYlO5VpyOGx94XHhe"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    networks:
+      - pe-net
+    deploy:
+      replicas: 1
+      placement:
+        constraints:
+          - node.hostname == oraculus-server-2
+      resources:
+        limits:
+          memory: 2G
+        reservations:
+          memory: 512M
+      restart_policy:
+        condition: on-failure
+        delay: 5s
+
+  api:
     image: registry.digital-ai.tech/processing-engine:${IMAGE_TAG:-latest}
     environment:
       API_KEY: "${PE_API_KEY}"
@@ -13,8 +39,8 @@ services:
       WORKER_POLL_INTERVAL: "2"
       LOG_LEVEL: "info"
     networks:
-      - traefik-public
-      - internal
+      - oraculusnet
+      - pe-net
     deploy:
       replicas: 1
       labels:
@@ -26,6 +52,7 @@ services:
         - "traefik.http.routers.processing-engine-http.entrypoints=web"
         - "traefik.http.routers.processing-engine-http.middlewares=redirect-to-https"
         - "traefik.http.services.processing-engine.loadbalancer.server.port=8000"
+        - "traefik.docker.network=oraculusnet"
       resources:
         limits:
           memory: 1G
@@ -37,7 +64,12 @@ services:
         max_attempts: 3
 
 networks:
-  traefik-public:
+  oraculusnet:
     external: true
-  internal:
+  pe-net:
     driver: overlay
+
+volumes:
+  pgdata:
+    external: true
+    name: processing-engine_pgdata
