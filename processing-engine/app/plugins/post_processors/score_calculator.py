@@ -38,8 +38,11 @@ class ScoreCalculator:
 
         signals = output.get("veracity_signals", {})
 
-        # Get source reputation from DB (best-effort — table may not exist in PE's DB)
-        source_reputation = 0.50
+        # Use LLM-assessed source_reputation as baseline
+        llm_source_reputation = _clamp(signals.get("source_reputation", 0.5))
+
+        # Try to get source reputation from DB (overrides LLM if available)
+        source_reputation = llm_source_reputation
         source_name = item_metadata.get("source_name")
         if source_name:
             try:
@@ -51,10 +54,17 @@ class ScoreCalculator:
                         f"SELECT reputation_score FROM {sources_table} WHERE name = $1",
                         source_name,
                     )
-                    if row:
+                    if row and row["reputation_score"] is not None:
                         source_reputation = float(row["reputation_score"])
+                        logger.debug(
+                            "Source reputation from DB for '%s': %.2f (LLM was %.2f)",
+                            source_name, source_reputation, llm_source_reputation,
+                        )
             except Exception:
-                logger.debug("Source reputation table not available, using default 0.5")
+                logger.debug(
+                    "Source reputation table not available, using LLM value %.2f",
+                    llm_source_reputation,
+                )
 
         # Normalize signals
         sr = source_reputation

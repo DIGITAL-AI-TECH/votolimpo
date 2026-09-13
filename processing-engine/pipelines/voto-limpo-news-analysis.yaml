@@ -30,7 +30,25 @@ system_prompt: |
   3. Severity reflete o FATO, nao a manchete. Keywords identificam o EVENTO, nao termos genericos.
   4. article_role do politico: use o papel MAIS ESPECIFICO (investigated > mentioned).
   5. is_political: false se o tema central nao e politico, mesmo mencionando politicos.
-  6. source_reputation: 0.0-1.0 baseado na reputacao GERAL da fonte, nao da materia.
+  6. Avalie CADA artigo INDIVIDUALMENTE. Nunca reutilize scores de artigos anteriores.
+
+  SINAIS DE VERACIDADE (0.0 a 1.0 cada — avalie COM BASE NO CONTEUDO do artigo):
+  - source_reputation: reputacao da fonte jornalistica. Folha/Estadao/G1/BBC/Reuters = 0.7-0.9. Blog/portal desconhecido = 0.2-0.4. Se a fonte nao for identificavel, use 0.3.
+  - multi_source: o artigo cita ou referencia OUTRAS fontes/veiculos/documentos oficiais? 0.0 = fonte unica sem referencias. 0.5 = menciona "segundo fontes" generico. 0.8-1.0 = cita documentos oficiais, outras materias, relatorios.
+  - narrative_consistency: a narrativa e coerente internamente? 0.8-1.0 = sem contradicoes, logica clara. 0.3-0.5 = tem lacunas ou saltos logicos. 0.0-0.2 = contradiz a si mesmo.
+  - documental_evidence: ha evidencia documental? 0.8-1.0 = cita numeros de processo, documentos oficiais, dados concretos. 0.4-0.6 = referencias vagas a documentos. 0.0-0.2 = puramente baseado em declaracoes.
+  - temporality: precisao temporal. 0.8-1.0 = datas exatas, linha do tempo clara. 0.4-0.6 = "recentemente", "nos ultimos dias". 0.0-0.2 = sem nenhuma referencia temporal.
+  - emotional_language: 1.0 = linguagem jornalistica neutra e factual. 0.5 = alguma parcialidade mas ainda informativo. 0.0 = altamente sensacionalista, clickbait, linguagem emocional.
+
+  SEVERITY (avalie com base no CONTEUDO FACTUAL, nao na manchete):
+  - low: mencao casual, citacao em contexto positivo/neutro, fato administrativo rotineiro
+  - medium: investigacao preliminar, denuncia sem desdobramento, polemica sem acao judicial
+  - high: acao judicial formal, CPI, cassacao, condenacao em primeira instancia
+  - critical: prisao, condenacao definitiva, escandalo de grande repercussao nacional
+
+  KEYWORDS: identifique 3-8 palavras-chave do EVENTO especifico (nao termos genericos como "politica" ou "brasil").
+
+  SUMMARY: resumo factual de 1-3 frases do conteudo da noticia. Maximo 500 caracteres.
 
   Responda EXCLUSIVAMENTE com JSON valido no formato do schema.
 
@@ -160,6 +178,7 @@ sink_config:
     severity: severity
     keywords: keywords
     veracity_score: veracity_score
+    score_components: score_components
     is_political: is_political
     "veracity_signals.source_reputation": source_reputation
     "veracity_signals.multi_source": multi_source_score
@@ -176,6 +195,7 @@ sink_config:
   type_casts:
     severity: "votolimpo.severity_level"
     processing_status: "votolimpo.processing_status"
+    score_components: jsonb
   array_columns:
     - keywords
 
