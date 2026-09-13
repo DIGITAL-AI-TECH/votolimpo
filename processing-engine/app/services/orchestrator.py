@@ -94,7 +94,9 @@ class Orchestrator:
 
         # --- CACHE CHECK (after dedup, before LLM) ---
         content_hash = hashlib.sha256(ingested.encode("utf-8")).hexdigest()
-        if not skip_cache:
+        # Also skip cache when pipeline has cache_ttl_hours == 0 (disabled)
+        effective_skip_cache = skip_cache or pipeline.get("cache_ttl_hours", 720) == 0
+        if not effective_skip_cache:
             cache_start = time.monotonic()
             cache_hit = await conn.fetchrow(
                 SELECT_CACHE_HIT, content_hash, pipeline["id"]
@@ -114,8 +116,14 @@ class Orchestrator:
                 return result
             await self._log(conn, item_id, "cache", "miss", cache_duration)
         else:
+            # Delete existing cache entry so future runs also reprocess from scratch
+            await conn.execute(
+                "DELETE FROM processing_engine.cache_entries WHERE content_hash = $1 AND pipeline_id = $2",
+                content_hash, pipeline["id"],
+            )
+            reason = "skip_cache=true" if skip_cache else "cache_ttl_hours=0"
             await self._log(
-                conn, item_id, "cache", "skipped", 0, meta={"reason": "skip_cache=true"}
+                conn, item_id, "cache", "skipped", 0, meta={"reason": reason}
             )
 
         # --- 3. PROCESS (LLM) ---

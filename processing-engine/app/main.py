@@ -11,7 +11,7 @@ from .config import settings
 from .core.orchestrator import process_next_job
 from .core.pipeline_config import load_pipelines
 from .cron import setup_cron_scheduler
-from .storage.database import close_pool, get_pool, init_engine_schema
+from .storage.database import close_pool, get_pool, init_engine_schema, init_votolimpo_schema
 
 logger = logging.getLogger(__name__)
 
@@ -49,6 +49,7 @@ async def lifespan(app: FastAPI):
     # Init DB pool + schema
     pool = await get_pool()
     await init_engine_schema(pool)
+    await init_votolimpo_schema()
     logger.info("Database pool initialized")
 
     # Load pipeline configs

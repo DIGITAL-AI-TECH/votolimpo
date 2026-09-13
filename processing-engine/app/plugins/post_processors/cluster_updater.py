@@ -45,7 +45,7 @@ class ClusterUpdater:
             matches = await conn.fetch(
                 """
                 SELECT article_a_id, article_b_id
-                FROM voto_limpo.article_matches
+                FROM votolimpo.article_matches
                 WHERE (article_a_id = $1 OR article_b_id = $1) AND similarity >= $2
             """,
                 article_id,
@@ -93,9 +93,9 @@ class ClusterUpdater:
                 f"""
                 UPDATE {cluster_table} SET
                     article_count = (SELECT COUNT(*) FROM {cluster_articles_table} WHERE cluster_id = $1),
-                    first_article = (SELECT MIN(a.published_at) FROM voto_limpo.articles a
+                    first_article = (SELECT MIN(a.published_at) FROM votolimpo.articles a
                         JOIN {cluster_articles_table} ca ON ca.article_id = a.id WHERE ca.cluster_id = $1),
-                    last_article = (SELECT MAX(a.published_at) FROM voto_limpo.articles a
+                    last_article = (SELECT MAX(a.published_at) FROM votolimpo.articles a
                         JOIN {cluster_articles_table} ca ON ca.article_id = a.id WHERE ca.cluster_id = $1),
                     updated_at = NOW()
                 WHERE id = $1
@@ -107,7 +107,7 @@ class ClusterUpdater:
             pols = await conn.fetch(
                 f"""
                 SELECT pa.politician_id, COUNT(*) as cnt
-                FROM voto_limpo.politician_articles pa
+                FROM votolimpo.politician_articles pa
                 JOIN {cluster_articles_table} ca ON ca.article_id = pa.article_id
                 WHERE ca.cluster_id = $1 GROUP BY pa.politician_id
             """,

@@ -111,6 +111,8 @@ class AutoBatcher:
                 return 0
 
             pipeline_version = pipeline["version"]
+            # If pipeline has cache disabled (ttl=0), force skip_cache on all jobs
+            pipeline_skip_cache = pipeline.get("cache_ttl_hours", 720) == 0
             claimed_items = await conn.fetch(
                 CLAIM_PENDING_ITEMS, pipeline_id, self._batch_size
             )
@@ -132,7 +134,7 @@ class AutoBatcher:
                         None,  # $6 metadata
                         None,  # $7 override_model
                         False,  # $8 skip_dedup
-                        False,  # $9 skip_cache
+                        pipeline_skip_cache,  # $9 skip_cache — respects pipeline cache_ttl_hours
                         False,  # $10 dry_run
                         None,  # $11 callback_url
                     )
