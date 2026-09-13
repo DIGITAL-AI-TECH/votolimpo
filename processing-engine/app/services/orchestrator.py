@@ -119,7 +119,8 @@ class Orchestrator:
             # Delete existing cache entry so future runs also reprocess from scratch
             await conn.execute(
                 "DELETE FROM processing_engine.cache_entries WHERE content_hash = $1 AND pipeline_id = $2",
-                content_hash, pipeline["id"],
+                content_hash,
+                pipeline["id"],
             )
             reason = "skip_cache=true" if skip_cache else "cache_ttl_hours=0"
             await self._log(

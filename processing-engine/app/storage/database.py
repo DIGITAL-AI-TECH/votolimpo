@@ -177,7 +177,10 @@ async def init_votolimpo_schema():
             ("severity_level", "'low','medium','high','critical'"),
             ("article_role", "'subject','mentioned','related'"),
             ("entity_type", "'company','organization','lobby','ngo'"),
-            ("relationship_type", "'business','political','family','legal','financial'"),
+            (
+                "relationship_type",
+                "'business','political','family','legal','financial'",
+            ),
             (
                 "milestone_type",
                 "'inquiry','complaint','conviction','acquittal','arrest','impeachment','plea_deal','fine'",
