@@ -61,6 +61,97 @@ API key obrigatória em todos os endpoints (exceto /health). Sem injeção SQL �
 5. `/speckit.implement` — execução guiada
 6. QA Gate — code-reviewer + sentinel + devops + PM
 
+## Pipeline VotoLimpo — Arquitetura E2E
+
+### Fluxo Completo
+
+```
+News Collector (NC)                    Processing Engine (PE)
+───────────────────                    ────────────────────
+1. Coleta artigos (Crawl4/RSS)
+2. Armazena em news_collector.articles
+3. Envia batch ao PE via HTTP ──────►  4. Recebe items no pipeline
+                                       5. Dedup (content hash)
+                                       6. LLM Analysis (gpt-4.1-mini):
+                                          - veracity_score (0.0-1.0)
+                                          - veracity_signals (6 componentes)
+                                          - politicians (name, party, role)
+                                          - keywords, summary, severity
+                                       7. Validate (JSON Schema)
+                                       8. Sink PostgreSQL:
+                                          - votolimpo.articles (upsert)
+                                          - votolimpo.article_matches
+                                          - votolimpo.news_clusters
+9. NC lê processing_output ◄────────  (webhook callback ou polling)
+10. Backend extrai campos PE:
+    - score = veracity_score × 10
+    - score_breakdown = signals × 10
+    - politicians = lista de nomes
+    - llm_output = processing_output
+11. Frontend consome via API REST
+```
+
+### Bancos de Dados
+
+| Banco | Usado por | Schema | Conteúdo |
+|-------|-----------|--------|----------|
+| `processing_engine` | PE | `processing_engine` | Jobs, items, costs, pipelines, cache, llm_call_log |
+| `news_collector` | NC | `news_collector` | Sources, articles, entities, schedules, pe_jobs |
+| `votolimpo` | PE (sink) | `votolimpo` | Artigos analisados, article_matches, news_clusters |
+
+**Host compartilhado**: `pe-postgres:5432` (Docker Swarm overlay network `pe-net`)
+
+### Schema Naming (REGRA CRÍTICA)
+
+O schema do sink VotoLimpo é `votolimpo` (SEM underscore). O nome antigo `voto_limpo` (com underscore) estava incorreto e foi corrigido em 2026-09-13. NUNCA usar `voto_limpo` em código novo.
+
+### Conversão de Scores (REGRA CRÍTICA)
+
+PE produz scores no range **0.0 a 1.0**. O frontend espera range **0 a 10**. A conversão acontece no backend do NC (`populate_from_processing_output()`), multiplicando por 10 e arredondando para 1 casa decimal. NUNCA alterar o range do PE.
+
+### Pipeline ID
+
+O pipeline VotoLimpo está registrado como `voto-limpo-news-analysis` com ID `a09099b0-147e-42ab-831b-7b3c1e46bdc1`. Este ID é configurado no NC via env var `PROCESSING_ENGINE_PIPELINE_ID`.
+
+## Dependências Externas e Credenciais
+
+### OpenAI API Key (CRÍTICA)
+
+O PE depende de uma OpenAI API key válida para processar items via LLM. Sem ela, TODOS os jobs falham com HTTP 401.
+
+| Item | Valor |
+|------|-------|
+| Env var no PE | `OPENAI_API_KEY` |
+| Fonte de verdade | `/cortex/secrets/projects/processing-engine.env` |
+| Onde configurar | Portainer → Stack 345 → Environment variables |
+| Modelo default | `gpt-4.1-mini` |
+
+**Regra**: Ao atualizar a key no Cortex, SEMPRE atualizar também no Portainer (stack 345). Key expirada = pipeline 100% parado.
+
+### Infraestrutura (Docker Swarm)
+
+| Componente | Stack ID | Endpoint | URL Pública |
+|------------|----------|----------|-------------|
+| Processing Engine | 345 | 4 (Contabo) | `https://processing-engine.digital-ai.tech` |
+| News Collector | 347 | 4 (Contabo) | `https://api.news-collector.digital-ai.tech` |
+| pe-postgres | (dentro do stack 345) | — | Interno via `pe-net` |
+
+### Autenticação entre serviços
+
+| De → Para | Header | Env var (origem) |
+|-----------|--------|------------------|
+| Cliente → PE | `x-api-key` | `PE_API_KEY` |
+| Cliente → NC | `Authorization: Bearer` | `NC_API_TOKEN` |
+| NC → PE | `x-api-key` | `PROCESSING_ENGINE_TOKEN` (no NC) |
+
+## CI/CD
+
+- **Repo**: `DIGITAL-AI-TECH/votolimpo` (path: `processing-engine/`)
+- **Trigger**: Push to `main` com mudanças em `processing-engine/**`
+- **Steps**: Notify → Lint (ruff) → Test (pytest) → Build (Docker) → Deploy (Portainer API)
+- **Registry**: `registry.digital-ai.tech/processing-engine`
+- **Notificações**: Discord via n8n webhook
+
 ## Governance
 
 - Constitution supersede todas as decisões de design
@@ -68,4 +159,4 @@ API key obrigatória em todos os endpoints (exceto /health). Sem injeção SQL �
 - Princípio V (Stack Mínima) só pode ser violado com justificativa escrita aprovada pelo owner
 - Amendments requerem: documentação, justificativa, migração
 
-**Version**: 1.0.0 | **Ratified**: 2026-09-06 | **Last Amended**: 2026-09-06
+**Version**: 1.1.0 | **Ratified**: 2026-09-06 | **Last Amended**: 2026-09-13
