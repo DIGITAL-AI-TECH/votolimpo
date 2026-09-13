@@ -180,6 +180,8 @@ sink_config:
     veracity_score: veracity_score
     score_components: score_components
     is_political: is_political
+    # LLM returns veracity_signals; score_calculator copies them to score_components.
+    # Map from veracity_signals (LLM output, preserved through post-processors).
     "veracity_signals.source_reputation": source_reputation
     "veracity_signals.multi_source": multi_source_score
     "veracity_signals.narrative_consistency": narrative_consistency
@@ -213,6 +215,13 @@ crons:
 max_concurrent: 5
 rate_limit_rpm: 60
 max_retries: 2
-cache_ttl_hours: 0  # disabled temporarily to force reprocessing with new prompt
 budget_limit_usd: 10.0
 budget_period: month
+
+# --- Cache ---
+# Disabled: force fresh LLM processing for every article.
+# Old 'cache_ttl_hours: 0' in root was ignored — the orchestrator checks
+# pipeline.cache.enabled (CacheConfig object), not the root field.
+cache:
+  enabled: false
+  ttl_hours: 0
