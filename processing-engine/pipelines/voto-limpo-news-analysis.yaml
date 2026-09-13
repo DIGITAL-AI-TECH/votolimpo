@@ -9,10 +9,11 @@ description: >
 ingestor_type: auto  # detecta HTML/text/JSON automaticamente
 
 # --- Dedup ---
-dedup_strategy: composite  # hash + semantic
-dedup_config:
-  strategies: [hash, semantic]
-  semantic_threshold: 0.92
+# Temporarily disabled: dedup uses processing_engine.cache table which has
+# stale entries from previous runs with broken schema. Re-enable composite
+# after clearing stale cache: dedup_strategy: composite
+dedup_strategy: none
+dedup_config: {}
 
 # --- LLM ---
 llm_provider: openai

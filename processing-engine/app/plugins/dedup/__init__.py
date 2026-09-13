@@ -75,9 +75,23 @@ class CompositeDedup:
         return "new"
 
 
+class NoneDedup:
+    """No-op dedup — always returns 'new'."""
+
+    async def check(
+        self,
+        content: str,
+        source_url: str | None,
+        config: dict,
+        conn: asyncpg.Connection,
+    ) -> str:
+        return "new"
+
+
 DEDUP_STRATEGIES: dict[str, type] = {
     "hash": HashDedup,
     "composite": CompositeDedup,
+    "none": NoneDedup,
 }
 
 
