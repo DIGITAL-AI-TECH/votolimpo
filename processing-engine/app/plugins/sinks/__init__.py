@@ -116,7 +116,7 @@ class PostgreSQLSink:
         if conflict_column == "url_hash" and "url_hash" not in [
             v for v in mapping.values()
         ]:
-            source_url = item_metadata.get("source_url", "")
+            source_url = item_metadata.get("source_url") or ""
             url_hash = hashlib.sha256(source_url.encode()).hexdigest()
             columns.append("url_hash")
             params.append(url_hash)
