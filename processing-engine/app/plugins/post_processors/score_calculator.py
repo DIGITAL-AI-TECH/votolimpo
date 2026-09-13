@@ -58,7 +58,9 @@ class ScoreCalculator:
                         source_reputation = float(row["reputation_score"])
                         logger.debug(
                             "Source reputation from DB for '%s': %.2f (LLM was %.2f)",
-                            source_name, source_reputation, llm_source_reputation,
+                            source_name,
+                            source_reputation,
+                            llm_source_reputation,
                         )
             except Exception:
                 logger.debug(
