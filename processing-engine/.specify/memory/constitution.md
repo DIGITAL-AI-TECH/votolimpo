@@ -136,7 +136,7 @@ Complexidade minima necessaria. Sem over-engineering.
 | Camada | Tecnologia | Justificativa |
 |--------|-----------|---------------|
 | Frontend | Next.js 15 | SSR, React, ecosystem |
-| Banco | PostgreSQL 16 | ENUMs, pg_trgm, JSONB, views |
+| Banco | PostgreSQL 16 (`pe-postgres` Docker, NAO Supabase) | ENUMs, pg_trgm, JSONB, views |
 | Coleta | Firecrawl (self-hosted) | Crawl4Prospect da Digital AI |
 | Processamento | GPT-4.1-mini | Custo/qualidade otimo |
 | Deploy | Docker Swarm + Traefik | Infra existente Digital AI |
@@ -168,13 +168,36 @@ Todo componente e testavel de forma isolada.
 
 ## Stack & Constraints
 
-**Repositorio**: `github.com/DIGITAL-AI-TECH/votolimpo` (publico)
+**Repositorios**:
+- `github.com/DIGITAL-AI-TECH/votolimpo` (publico) — Processing Engine + Frontend Next.js
+- `github.com/DIGITAL-AI-TECH/news-collector` — Collector (intake) + UI admin
 **Branch model**: `main` (producao) ← `feature/*` | `fix/*`
 **Dominio**: `votolimpo.com.br` (Cloudflare Pages + DNS)
-**Banco**: PostgreSQL 16 — 16 tabelas + ENUMs + views materialized
 **LLM**: OpenAI GPT-4.1-mini (structured JSON output)
 **Coleta**: Firecrawl via Crawl4Prospect (`crawl4prospect.digital-ai.tech`)
 **Deploy**: Docker Swarm (`digital-ai.tech` cluster) + Traefik
+
+### Banco de Dados (NON-NEGOTIABLE)
+
+**UNICO banco**: PostgreSQL 16 via container `pe-postgres:5432` (Docker Swarm overlay).
+**NAO existe Supabase, banco externo ou banco AWS neste projeto.**
+
+Tres databases na mesma instancia:
+
+| Database | Schema | Proposito | Quem usa |
+|----------|--------|-----------|----------|
+| `processing_engine` | public | Job queue, pipelines, custos | PE (API + Worker) |
+| `votolimpo` | voto_limpo | Artigos processados, politicos, scores (sink output) | PE (sink writes) + Frontend |
+| `news_collector` | news_collector | Sources, entities, articles, jobs, schedules | News Collector (FastAPI) |
+
+**Connection strings** (env vars no Portainer stack 345):
+- `DATABASE_URL` = `postgresql+asyncpg://postgres:<pwd>@pe-postgres:5432/processing_engine`
+- `VOTOLIMPO_DATABASE_URL` = `postgresql://postgres:<pwd>@pe-postgres:5432/votolimpo`
+
+**NC** (Portainer stack 347) conecta no mesmo `pe-postgres`:
+- `DATABASE_URL` = `postgresql+asyncpg://postgres:<pwd>@pe-postgres:5432/news_collector`
+
+**Credenciais**: `/cortex/secrets/projects/votolimpo.env`
 
 ### Limites operacionais
 
@@ -236,4 +259,4 @@ conformidade com os principios aqui definidos.
 - O gate de review (engineering-quality-gate) verifica testes,
   seguranca e conformidade com esta constitution.
 
-**Version**: 1.0.0 | **Ratified**: 2026-09-06 | **Last Amended**: 2026-09-06
+**Version**: 1.1.0 | **Ratified**: 2026-09-06 | **Last Amended**: 2026-09-13
