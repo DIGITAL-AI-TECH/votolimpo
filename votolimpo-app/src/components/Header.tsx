@@ -9,6 +9,7 @@ const NAV_LINKS = [
   { href: "/ranking", label: "Ranking" },
   { href: "/busca", label: "Busca" },
   { href: "/grafo", label: "Grafo" },
+  { href: "/como-funciona", label: "Como Funciona" },
 ];
 
 const Header: FC = () => {

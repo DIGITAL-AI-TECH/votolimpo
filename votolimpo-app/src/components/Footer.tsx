@@ -56,6 +56,7 @@ const Footer: FC<FooterProps> = ({ stats }) => {
             <Link href="/ranking" className="text-xs text-[#6B7280] hover:text-[#FAFAFA] transition-colors">Ranking</Link>
             <Link href="/busca" className="text-xs text-[#6B7280] hover:text-[#FAFAFA] transition-colors">Busca</Link>
             <Link href="/grafo" className="text-xs text-[#6B7280] hover:text-[#FAFAFA] transition-colors">Grafo</Link>
+            <Link href="/como-funciona" className="text-xs text-[#6B7280] hover:text-[#FAFAFA] transition-colors">Como Funciona</Link>
           </nav>
 
           <p className="text-xs text-[#6B7280]">
