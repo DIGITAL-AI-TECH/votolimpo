@@ -13,6 +13,8 @@ import ArticleCard from "@/components/ArticleCard";
 import SearchBar from "@/components/SearchBar";
 import type { Politician, Article, Stats } from "@/types";
 
+export const dynamic = "force-dynamic";
+
 export const metadata: Metadata = {
   title: "Voto Limpo — Transparencia Politica Brasileira",
   description:

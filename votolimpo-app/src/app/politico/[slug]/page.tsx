@@ -8,6 +8,8 @@ import {
   ncArticleToArticle,
   type NCEntityScore,
 } from "@/lib/nc-api";
+export const dynamic = "force-dynamic";
+
 import ScoreBadge from "@/components/ScoreBadge";
 import SeverityBadge from "@/components/SeverityBadge";
 import ShareButton from "@/components/ShareButton";

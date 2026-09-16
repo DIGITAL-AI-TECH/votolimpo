@@ -3,6 +3,8 @@ import { listEntities, entityToPolitician } from "@/lib/nc-api";
 import GraphVisualization from "@/components/GraphVisualization";
 import type { GraphData, GraphNode, GraphEdge } from "@/types";
 
+export const dynamic = "force-dynamic";
+
 export const metadata: Metadata = {
   title: "Mapa de Partidos",
   description: "Visualizacao dos candidatos agrupados por partido",
