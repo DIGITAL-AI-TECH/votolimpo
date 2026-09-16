@@ -5,31 +5,61 @@ import Footer from "@/components/Footer";
 import { getGlobalStats, ncStatsToStats } from "@/lib/nc-api";
 
 export const metadata: Metadata = {
+  metadataBase: new URL("https://votolimpo.com.br"),
   title: {
     default: "Voto Limpo — Transparencia Politica",
     template: "%s | Voto Limpo",
   },
   description:
     "Plataforma de transparencia politica brasileira. Acompanhe o historico, vinculos e indice de transparencia dos politicos do Brasil.",
-  keywords: ["transparencia", "politica", "Brasil", "corrupcao", "eleicoes", "democracia"],
-  authors: [{ name: "Voto Limpo" }],
+  keywords: [
+    "transparencia",
+    "politica",
+    "Brasil",
+    "corrupcao",
+    "eleicoes",
+    "democracia",
+    "candidatos",
+    "vereador",
+    "deputado",
+    "senador",
+    "governador",
+    "presidente",
+  ],
+  authors: [{ name: "Voto Limpo", url: "https://votolimpo.com.br" }],
+  creator: "Voto Limpo",
+  publisher: "Voto Limpo",
+  alternates: {
+    canonical: "https://votolimpo.com.br",
+  },
   openGraph: {
     type: "website",
     locale: "pt_BR",
     url: "https://votolimpo.com.br",
     siteName: "Voto Limpo",
     title: "Voto Limpo — Transparencia Politica",
-    description: "Acompanhe o historico e vinculos dos politicos brasileiros com transparencia e dados verificados.",
+    description:
+      "Acompanhe o historico e vinculos dos politicos brasileiros com transparencia e dados verificados.",
   },
   twitter: {
     card: "summary_large_image",
+    site: "@votolimpo",
+    creator: "@votolimpo",
     title: "Voto Limpo — Transparencia Politica",
     description: "Acompanhe o historico e vinculos dos politicos brasileiros.",
   },
   robots: {
     index: true,
     follow: true,
+    googleBot: {
+      index: true,
+      follow: true,
+      "max-video-preview": -1,
+      "max-image-preview": "large",
+      "max-snippet": -1,
+    },
   },
+  category: "politics",
 };
 
 export const dynamic = "force-dynamic";
