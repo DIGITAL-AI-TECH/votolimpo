@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { listEntities, entityToPolitician } from "@/lib/nc-api";
+import { listEntities, countEntities, entityToPolitician } from "@/lib/nc-api";
 
 export async function GET(request: Request) {
   try {
@@ -10,29 +10,35 @@ export async function GET(request: Request) {
     const uf = searchParams.get("uf") || undefined;
     const search = searchParams.get("search") || undefined;
 
-    // NC API uses skip/limit pagination
     const skip = (page - 1) * pageSize;
 
-    const entities = await listEntities({
-      type: "candidate",
-      search,
-      active: true,
-      skip,
-      limit: pageSize,
-    });
+    const [entities, total] = await Promise.all([
+      listEntities({
+        type: "candidate",
+        search,
+        active: true,
+        party,
+        state: uf,
+        skip,
+        limit: pageSize,
+      }),
+      countEntities({
+        type: "candidate",
+        active: true,
+        search,
+        party,
+        state: uf,
+      }),
+    ]);
 
-    let politicians = entities.map((e) => entityToPolitician(e));
-
-    // Client-side filter by party/uf since NC API doesn't support these filters directly
-    if (party) politicians = politicians.filter((p) => p.party === party);
-    if (uf) politicians = politicians.filter((p) => p.uf === uf);
+    const politicians = entities.map((e) => entityToPolitician(e));
 
     return NextResponse.json({
       data: politicians,
-      total: politicians.length,
+      total,
       page,
       pageSize,
-      totalPages: Math.ceil(politicians.length / pageSize),
+      totalPages: Math.ceil(total / pageSize),
     });
   } catch (error) {
     console.error("[api/politicians] NC API error:", error);

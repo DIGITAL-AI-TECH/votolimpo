@@ -5,20 +5,29 @@ import {
   entityToPolitician,
   type NCEntityWithScore,
 } from "@/lib/nc-api";
-import type { SortField, SortOrder, Politician } from "@/types";
+import type { Politician } from "@/types";
 
 export async function GET(request: Request) {
   try {
     const { searchParams } = new URL(request.url);
     const page = Math.max(1, parseInt(searchParams.get("page") || "1") || 1);
     const pageSize = Math.min(100, Math.max(1, parseInt(searchParams.get("pageSize") || "20") || 20));
-    const sortBy = (searchParams.get("sortBy") || "name") as SortField;
-    const sortOrder = (searchParams.get("sortOrder") || "asc") as SortOrder;
+    const sortBy = searchParams.get("sortBy") || "name";
+    const sortOrder = searchParams.get("sortOrder") || "asc";
     const searchQuery = searchParams.get("search") || undefined;
+    const party = searchParams.get("party") || undefined;
+    const uf = searchParams.get("uf") || undefined;
 
-    // NOTE: The NC backend does not support filtering by party or uf.
-    // Party/UF filters are intentionally not forwarded to the backend —
-    // see spec OUT-OF-SCOPE: "Filtros partido/UF server-side no ranking".
+    // Map frontend sort fields to backend order_by params
+    const orderByMap: Record<string, string> = {
+      name: "name",
+      party: "party",
+      uf: "state",
+      articleCount: "article_count",
+    };
+    const order_by = orderByMap[sortBy] || "name";
+    // score ordering requires article_count as proxy (scores are computed per-entity)
+    const effectiveOrderBy = sortBy === "score" ? "article_count" : order_by;
 
     const skip = (page - 1) * pageSize;
 
@@ -30,16 +39,21 @@ export async function GET(request: Request) {
         skip,
         limit: pageSize,
         search: searchQuery,
+        party,
+        state: uf,
+        order_by: effectiveOrderBy,
+        order_dir: sortOrder,
       }),
       countEntities({
         type: "candidate",
         active: true,
         search: searchQuery,
+        party,
+        state: uf,
       }),
     ]);
 
     // Map entities to Politician objects
-    // score is loaded individually on /politico/[slug] to avoid N+1
     const politicians: Politician[] = entities.map((e) => {
       const enriched = e as unknown as NCEntityWithScore;
       return entityToPolitician(enriched, {
@@ -48,32 +62,6 @@ export async function GET(request: Request) {
         max_severity: "info",
         article_count: enriched.article_count ?? 0,
       });
-    });
-
-    // Client-side sort within the current page
-    // (sort server-side is OUT-OF-SCOPE — NC backend has no order_by param)
-    politicians.sort((a, b) => {
-      let comparison = 0;
-      switch (sortBy) {
-        case "name":
-          comparison = a.name.localeCompare(b.name);
-          break;
-        case "score":
-          comparison = a.score - b.score;
-          break;
-        case "articleCount":
-          comparison = a.articleCount - b.articleCount;
-          break;
-        case "party":
-          comparison = a.party.localeCompare(b.party);
-          break;
-        case "uf":
-          comparison = a.uf.localeCompare(b.uf);
-          break;
-        default:
-          comparison = a.name.localeCompare(b.name);
-      }
-      return sortOrder === "desc" ? -comparison : comparison;
     });
 
     return NextResponse.json({

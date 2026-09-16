@@ -1,4 +1,5 @@
 import { notFound } from "next/navigation";
+import Link from "next/link";
 import type { Metadata } from "next";
 import {
   getEntityBySlug,
@@ -32,7 +33,7 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
       article_count: entityData.article_count,
     } as NCEntityScore);
     const title = politician.name;
-    const description = `Perfil completo de ${politician.name} — ${politician.party} · ${politician.uf}. Consulte o historico, vinculos e o indice de transparencia no Voto Limpo.`;
+    const description = `Perfil completo de ${politician.name} — ${politician.party} · ${politician.uf}. Consulte o histórico, vínculos e o índice de transparência no Voto Limpo.`;
     return {
       title,
       description,
@@ -102,7 +103,7 @@ export default async function PoliticoPage({ params }: PageProps) {
     if (score >= 60) return "Bom";
     if (score >= 40) return "Regular";
     if (score >= 20) return "Preocupante";
-    return "Critico";
+    return "Crítico";
   }
 
   const canonicalUrl = `https://votolimpo.com.br/politico/${politician.slug}`;
@@ -117,28 +118,28 @@ export default async function PoliticoPage({ params }: PageProps) {
       "@type": "Organization",
       name: politician.party,
     },
-    description: `${politician.name} — ${politician.party} · ${politician.uf}. Indice de transparencia: ${politician.score}/100.`,
+    description: `${politician.name} — ${politician.party} · ${politician.uf}. Índice de transparência: ${politician.score}/100.`,
     ...(politician.photoUrl ? { image: politician.photoUrl } : {}),
   };
 
   function getScoreDescription(score: number): string {
-    if (score >= 80) return "Este candidato apresenta alta transparencia nos dados disponiveis.";
-    if (score >= 60) return "Este candidato apresenta boa transparencia com poucas ocorrencias relevantes.";
-    if (score >= 40) return "Este candidato apresenta transparencia regular com algumas ocorrencias relevantes.";
-    if (score >= 20) return "Este candidato apresenta baixa transparencia com multiplas ocorrencias graves.";
-    return "Este candidato apresenta indice critico com graves ocorrencias documentadas.";
+    if (score >= 80) return "Este candidato apresenta alta transparência nos dados disponíveis.";
+    if (score >= 60) return "Este candidato apresenta boa transparência com poucas ocorrências relevantes.";
+    if (score >= 40) return "Este candidato apresenta transparência regular com algumas ocorrências relevantes.";
+    if (score >= 20) return "Este candidato apresenta baixa transparência com múltiplas ocorrências graves.";
+    return "Este candidato apresenta índice crítico com graves ocorrências documentadas.";
   }
 
   return (
     <>
       <script
         type="application/ld+json"
-        dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd).replace(/</g, '\\u003c') }}
       />
     <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
       {/* Back button */}
       <div className="mb-6">
-        <a
+        <Link
           href="/ranking"
           className="inline-flex items-center gap-2 text-sm text-[#6B7280] hover:text-[#FAFAFA] transition-colors"
         >
@@ -146,7 +147,7 @@ export default async function PoliticoPage({ params }: PageProps) {
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
           </svg>
           Voltar ao ranking
-        </a>
+        </Link>
       </div>
 
       <div className="grid grid-cols-1 gap-8 lg:grid-cols-3">
@@ -201,7 +202,7 @@ export default async function PoliticoPage({ params }: PageProps) {
                 </span>
                 <span className="inline-flex items-center gap-1">
                   <div className="h-3 w-3 rounded-full border-2 border-red-500 bg-red-500/10" />
-                  Ocorrencia juridica
+                  Ocorrência jurídica
                 </span>
               </div>
             </div>
@@ -211,7 +212,7 @@ export default async function PoliticoPage({ params }: PageProps) {
               <div className="rounded-xl border border-[#2E2E2E] bg-[#141414] p-8 text-center">
                 <p className="text-[#6B7280]">
                   Nenhum artigo encontrado ainda para este candidato.
-                  Os artigos estao sendo processados e vinculados automaticamente.
+                  Os artigos estão sendo processados e vinculados automaticamente.
                 </p>
               </div>
             )}
@@ -223,7 +224,7 @@ export default async function PoliticoPage({ params }: PageProps) {
           {/* Score breakdown */}
           <div className="rounded-xl border border-[#2E2E2E] bg-[#141414] p-5">
             <h3 className="text-sm font-semibold text-[#FAFAFA] mb-4">
-              Indice de Transparencia
+              Índice de Transparência
             </h3>
 
             <div className="text-center mb-4">
@@ -262,7 +263,7 @@ export default async function PoliticoPage({ params }: PageProps) {
 
           {/* Stats */}
           <div className="rounded-xl border border-[#2E2E2E] bg-[#141414] p-5">
-            <h3 className="text-sm font-semibold text-[#FAFAFA] mb-4">Estatisticas</h3>
+            <h3 className="text-sm font-semibold text-[#FAFAFA] mb-4">Estatísticas</h3>
             <div className="space-y-3">
               <div className="flex items-center justify-between">
                 <span className="text-xs text-[#6B7280]">Artigos indexados</span>
@@ -279,7 +280,7 @@ export default async function PoliticoPage({ params }: PageProps) {
                     </span>
                   </div>
                   <div className="flex items-center justify-between">
-                    <span className="text-xs text-[#6B7280]">Artigos (ultimos 7 dias)</span>
+                    <span className="text-xs text-[#6B7280]">Artigos (últimos 7 dias)</span>
                     <span className="font-mono text-sm font-bold text-[#FAFAFA]">
                       {statsRes.articles.last_7d}
                     </span>
@@ -287,7 +288,7 @@ export default async function PoliticoPage({ params }: PageProps) {
                 </>
               )}
               <div className="flex items-center justify-between">
-                <span className="text-xs text-[#6B7280]">Severidade maxima</span>
+                <span className="text-xs text-[#6B7280]">Severidade máxima</span>
                 <SeverityBadge severity={politician.maxSeverity} size="sm" />
               </div>
             </div>

@@ -217,9 +217,9 @@ function Flowchart() {
 
         {/* Row 1: Coleta */}
         <rect x="20" y="20" width="860" height="90" rx="14" fill="url(#g1)" stroke="#10B981" strokeWidth="1" strokeOpacity="0.25" />
-        <text x="40" y="48" fill="#10B981" fontSize="11" fontWeight="600" fontFamily="ui-monospace, monospace">ETAPA 1 — COLETA DE NOTICIAS</text>
+        <text x="40" y="48" fill="#10B981" fontSize="11" fontWeight="600" fontFamily="ui-monospace, monospace">ETAPA 1 — COLETA DE NOTÍCIAS</text>
         <rect x="40" y="58" width="120" height="38" rx="10" fill="#141414" stroke="#2E2E2E" strokeWidth="1" />
-        <text x="100" y="82" fill="#9CA3AF" fontSize="11" textAnchor="middle">Sites de Noticia</text>
+        <text x="100" y="82" fill="#9CA3AF" fontSize="11" textAnchor="middle">Sites de Notícia</text>
         <rect x="180" y="58" width="120" height="38" rx="10" fill="#141414" stroke="#2E2E2E" strokeWidth="1" />
         <text x="240" y="82" fill="#9CA3AF" fontSize="11" textAnchor="middle">Google News</text>
         <rect x="320" y="58" width="100" height="38" rx="10" fill="#141414" stroke="#2E2E2E" strokeWidth="1" />
@@ -227,7 +227,7 @@ function Flowchart() {
         <rect x="450" y="58" width="140" height="38" rx="10" fill="#141414" stroke="#2E2E2E" strokeWidth="1" />
         <text x="520" y="82" fill="#9CA3AF" fontSize="11" textAnchor="middle">Crawler Inteligente</text>
         <rect x="620" y="58" width="120" height="38" rx="10" fill="#141414" stroke="#2E2E2E" strokeWidth="1" />
-        <text x="680" y="82" fill="#9CA3AF" fontSize="11" textAnchor="middle">Deduplicacao</text>
+        <text x="680" y="82" fill="#9CA3AF" fontSize="11" textAnchor="middle">Deduplicação</text>
         <rect x="770" y="58" width="90" height="38" rx="10" fill="#064E3B" stroke="#10B981" strokeWidth="1" />
         <text x="815" y="82" fill="#34D399" fontSize="11" textAnchor="middle" fontWeight="600">Artigos</text>
         {/* Arrows */}
@@ -242,16 +242,16 @@ function Flowchart() {
 
         {/* Row 2: Analise IA */}
         <rect x="20" y="145" width="860" height="120" rx="14" fill="url(#g2)" stroke="#8B5CF6" strokeWidth="1" strokeOpacity="0.25" />
-        <text x="40" y="173" fill="#8B5CF6" fontSize="11" fontWeight="600" fontFamily="ui-monospace, monospace">ETAPA 2 — ANALISE POR INTELIGENCIA ARTIFICIAL</text>
+        <text x="40" y="173" fill="#8B5CF6" fontSize="11" fontWeight="600" fontFamily="ui-monospace, monospace">ETAPA 2 — ANÁLISE POR INTELIGÊNCIA ARTIFICIAL</text>
         <rect x="40" y="185" width="150" height="60" rx="10" fill="#1E1B2E" stroke="#4C1D95" strokeWidth="1" />
-        <text x="115" y="210" fill="#A78BFA" fontSize="11" textAnchor="middle" fontWeight="500">Classificacao</text>
-        <text x="115" y="227" fill="#7C3AED" fontSize="9" textAnchor="middle">Politico / Nao-politico</text>
+        <text x="115" y="210" fill="#A78BFA" fontSize="11" textAnchor="middle" fontWeight="500">Classificação</text>
+        <text x="115" y="227" fill="#7C3AED" fontSize="9" textAnchor="middle">Político / Não-político</text>
         <rect x="210" y="185" width="140" height="60" rx="10" fill="#1E1B2E" stroke="#4C1D95" strokeWidth="1" />
         <text x="280" y="210" fill="#A78BFA" fontSize="11" textAnchor="middle" fontWeight="500">Sentimento</text>
         <text x="280" y="227" fill="#7C3AED" fontSize="9" textAnchor="middle">Positivo / Negativo / Neutro</text>
         <rect x="370" y="185" width="140" height="60" rx="10" fill="#1E1B2E" stroke="#4C1D95" strokeWidth="1" />
         <text x="440" y="210" fill="#A78BFA" fontSize="11" textAnchor="middle" fontWeight="500">Gravidade</text>
-        <text x="440" y="227" fill="#7C3AED" fontSize="9" textAnchor="middle">Baixa / Media / Alta / Critica</text>
+        <text x="440" y="227" fill="#7C3AED" fontSize="9" textAnchor="middle">Baixa / Média / Alta / Crítica</text>
         <rect x="530" y="185" width="140" height="60" rx="10" fill="#1E1B2E" stroke="#4C1D95" strokeWidth="1" />
         <text x="600" y="210" fill="#A78BFA" fontSize="11" textAnchor="middle" fontWeight="500">Veracidade</text>
         <text x="600" y="227" fill="#7C3AED" fontSize="9" textAnchor="middle">Score 0 a 10</text>
@@ -264,34 +264,34 @@ function Flowchart() {
 
         {/* Row 3: Enriquecimento */}
         <rect x="20" y="300" width="860" height="90" rx="14" fill="url(#g3)" stroke="#F59E0B" strokeWidth="1" strokeOpacity="0.25" />
-        <text x="40" y="328" fill="#F59E0B" fontSize="11" fontWeight="600" fontFamily="ui-monospace, monospace">ETAPA 3 — ENRIQUECIMENTO E VINCULACAO</text>
+        <text x="40" y="328" fill="#F59E0B" fontSize="11" fontWeight="600" fontFamily="ui-monospace, monospace">ETAPA 3 — ENRIQUECIMENTO E VINCULAÇÃO</text>
         <rect x="40" y="338" width="180" height="38" rx="10" fill="#1C1500" stroke="#854D0E" strokeWidth="1" />
-        <text x="130" y="362" fill="#FBBF24" fontSize="11" textAnchor="middle">Vinculacao a Candidatos</text>
+        <text x="130" y="362" fill="#FBBF24" fontSize="11" textAnchor="middle">Vinculação a Candidatos</text>
         <rect x="240" y="338" width="160" height="38" rx="10" fill="#1C1500" stroke="#854D0E" strokeWidth="1" />
         <text x="320" y="362" fill="#FBBF24" fontSize="11" textAnchor="middle">Agrupamento (Clusters)</text>
         <rect x="420" y="338" width="180" height="38" rx="10" fill="#1C1500" stroke="#854D0E" strokeWidth="1" />
         <text x="510" y="362" fill="#FBBF24" fontSize="11" textAnchor="middle">Dados TSE (Partidos, UF)</text>
         <rect x="620" y="338" width="240" height="38" rx="10" fill="#1C1500" stroke="#854D0E" strokeWidth="1" />
-        <text x="740" y="362" fill="#FBBF24" fontSize="11" textAnchor="middle">Indices e Estatisticas Agregadas</text>
+        <text x="740" y="362" fill="#FBBF24" fontSize="11" textAnchor="middle">Índices e Estatísticas Agregadas</text>
 
         {/* Connector */}
         <line x1="450" y1="390" x2="450" y2="420" stroke="#4B5563" strokeWidth="1.5" markerEnd="url(#ah)" strokeDasharray="4 3" />
 
         {/* Row 4: Visualizacao */}
         <rect x="20" y="425" width="860" height="80" rx="14" fill="url(#g4)" stroke="#3B82F6" strokeWidth="1" strokeOpacity="0.25" />
-        <text x="40" y="453" fill="#3B82F6" fontSize="11" fontWeight="600" fontFamily="ui-monospace, monospace">ETAPA 4 — VISUALIZACAO NO VOTOLIMPO.COM.BR</text>
+        <text x="40" y="453" fill="#3B82F6" fontSize="11" fontWeight="600" fontFamily="ui-monospace, monospace">ETAPA 4 — VISUALIZAÇÃO NO VOTOLIMPO.COM.BR</text>
         <rect x="40" y="462" width="130" height="32" rx="8" fill="#172554" stroke="#1E40AF" strokeWidth="1" />
-        <text x="105" y="483" fill="#60A5FA" fontSize="11" textAnchor="middle">Pagina Inicial</text>
+        <text x="105" y="483" fill="#60A5FA" fontSize="11" textAnchor="middle">Página Inicial</text>
         <rect x="190" y="462" width="130" height="32" rx="8" fill="#172554" stroke="#1E40AF" strokeWidth="1" />
         <text x="255" y="483" fill="#60A5FA" fontSize="11" textAnchor="middle">Ranking</text>
         <rect x="340" y="462" width="130" height="32" rx="8" fill="#172554" stroke="#1E40AF" strokeWidth="1" />
-        <text x="405" y="483" fill="#60A5FA" fontSize="11" textAnchor="middle">Perfil do Politico</text>
+        <text x="405" y="483" fill="#60A5FA" fontSize="11" textAnchor="middle">Perfil do Político</text>
         <rect x="490" y="462" width="130" height="32" rx="8" fill="#172554" stroke="#1E40AF" strokeWidth="1" />
         <text x="555" y="483" fill="#60A5FA" fontSize="11" textAnchor="middle">Busca</text>
         <rect x="640" y="462" width="120" height="32" rx="8" fill="#172554" stroke="#1E40AF" strokeWidth="1" />
         <text x="700" y="483" fill="#60A5FA" fontSize="11" textAnchor="middle">Grafo</text>
         <rect x="780" y="462" width="80" height="32" rx="8" fill="#172554" stroke="#1E40AF" strokeWidth="1" />
-        <text x="820" y="483" fill="#60A5FA" fontSize="11" textAnchor="middle">Graficos</text>
+        <text x="820" y="483" fill="#60A5FA" fontSize="11" textAnchor="middle">Gráficos</text>
       </svg>
     </div>
   );
@@ -302,96 +302,96 @@ function Flowchart() {
 const STEPS: StepData[] = [
   {
     number: 1,
-    title: "Coleta Automatica de Noticias",
+    title: "Coleta Automática de Notícias",
     subtitle: "News Collector",
     color: "bg-accent/10 text-accent-400",
     iconPath: ICONS.globe,
     description:
-      "O sistema varre automaticamente centenas de fontes de noticias na internet, buscando materias sobre os candidatos e entidades monitoradas. A coleta pode ser agendada ou disparada manualmente.",
+      "O sistema varre automaticamente centenas de fontes de notícias na internet, buscando matérias sobre os candidatos e entidades monitoradas. A coleta pode ser agendada ou disparada manualmente.",
     details: [
-      "Fontes configuradas por entidade: sites de noticias, Google News, feeds RSS",
-      "Crawler inteligente extrai titulo, texto completo, autor e data de publicacao",
-      "Deduplicacao automatica impede que a mesma noticia entre duas vezes",
-      "Controle de velocidade por dominio evita sobrecarregar os sites de origem",
+      "Fontes configuradas por entidade: sites de notícias, Google News, feeds RSS",
+      "Crawler inteligente extrai título, texto completo, autor e data de publicação",
+      "Deduplicação automática impede que a mesma notícia entre duas vezes",
+      "Controle de velocidade por domínio evita sobrecarregar os sites de origem",
       "Circuit breaker: se um site estiver fora do ar, o sistema para de tentar temporariamente e retoma quando volta",
     ],
     outputs: [
       "Artigos brutos com texto completo",
-      "Metadados: dominio de origem, autor, data de publicacao",
-      "Hash unico de URL para evitar duplicatas",
+      "Metadados: domínio de origem, autor, data de publicação",
+      "Hash único de URL para evitar duplicatas",
       "Registro do job de coleta (encontrados, novos, duplicados)",
     ],
   },
   {
     number: 2,
-    title: "Analise por Inteligencia Artificial",
+    title: "Análise por Inteligência Artificial",
     subtitle: "Processing Engine (PE)",
     color: "bg-purple-500/10 text-purple-400",
     iconPath: ICONS.brain,
     description:
-      "Cada artigo coletado e enviado para o Motor de Processamento, que usa modelos de IA (LLM) para analisar o conteudo em multiplas dimensoes. E aqui que os scores e classificacoes sao gerados.",
+      "Cada artigo coletado é enviado para o Motor de Processamento, que usa modelos de IA (LLM) para analisar o conteúdo em múltiplas dimensões. É aqui que os scores e classificações são gerados.",
     details: [
-      "O artigo e enviado em lote para o PE via API segura com autenticacao",
-      "A IA le o texto completo e gera analises simultaneas em multiplas dimensoes",
-      "Sentimento: avalia se o tom da noticia e positivo, negativo ou neutro",
-      "Gravidade: classifica o impacto potencial (baixa, media, alta, critica)",
-      "Veracidade: score de 0 a 10 indicando consistencia e confiabilidade",
-      "Classificacao politica: identifica se a noticia tem cunho politico",
-      "Extracao de entidades: identifica quais politicos sao mencionados no texto",
-      "Resumo automatico: gera um resumo conciso com os pontos principais",
+      "O artigo é enviado em lote para o PE via API segura com autenticação",
+      "A IA lê o texto completo e gera análises simultâneas em múltiplas dimensões",
+      "Sentimento: avalia se o tom da notícia é positivo, negativo ou neutro",
+      "Gravidade: classifica o impacto potencial (baixa, média, alta, crítica)",
+      "Veracidade: score de 0 a 10 indicando consistência e confiabilidade",
+      "Classificação política: identifica se a notícia tem cunho político",
+      "Extração de entidades: identifica quais políticos são mencionados no texto",
+      "Resumo automático: gera um resumo conciso com os pontos principais",
     ],
     outputs: [
       "Sentimento (positivo / negativo / neutro)",
-      "Gravidade (baixa / media / alta / critica)",
+      "Gravidade (baixa / média / alta / crítica)",
       "Score de veracidade (0 a 10)",
-      "Classificacao politica (sim / nao)",
-      "Lista de politicos mencionados",
-      "Keywords extraidas automaticamente",
-      "Resumo automatico do artigo",
+      "Classificação política (sim / não)",
+      "Lista de políticos mencionados",
+      "Keywords extraídas automaticamente",
+      "Resumo automático do artigo",
     ],
   },
   {
     number: 3,
-    title: "Enriquecimento e Vinculacao",
+    title: "Enriquecimento e Vinculação",
     subtitle: "Entity Matching + Clusters",
     color: "bg-yellow-500/10 text-yellow-400",
     iconPath: ICONS.layers,
     description:
-      "Os artigos analisados sao vinculados aos candidatos cadastrados no sistema e agrupados por assunto. Dados do TSE complementam as informacoes de cada entidade.",
+      "Os artigos analisados são vinculados aos candidatos cadastrados no sistema e agrupados por assunto. Dados do TSE complementam as informações de cada entidade.",
     details: [
       "Entity Matcher: cruza nomes mencionados nos artigos com candidatos cadastrados",
-      "Aliases: variantes de nome (apelidos, nomes parciais) tambem sao reconhecidas",
-      "Clusters: artigos sobre o mesmo assunto sao agrupados automaticamente",
-      "Dados do TSE sao importados: partido, estado, cargo, numero de urna, foto",
-      "Estatisticas agregadas: total de mencoes por candidato, tendencias ao longo do tempo",
+      "Aliases: variantes de nome (apelidos, nomes parciais) também são reconhecidas",
+      "Clusters: artigos sobre o mesmo assunto são agrupados automaticamente",
+      "Dados do TSE são importados: partido, estado, cargo, número de urna, foto",
+      "Estatísticas agregadas: total de menções por candidato, tendências ao longo do tempo",
     ],
     outputs: [
-      "Artigos vinculados a entidades especificas (candidatos, partidos)",
-      "Clusters tematicos — agrupamento por assunto",
+      "Artigos vinculados a entidades específicas (candidatos, partidos)",
+      "Clusters temáticos — agrupamento por assunto",
       "Perfil enriquecido de cada candidato com dados eleitorais do TSE",
-      "Contagem de mencoes e distribuicoes por entidade e periodo",
+      "Contagem de menções e distribuições por entidade e período",
     ],
   },
   {
     number: 4,
-    title: "Visualizacao no VotoLimpo.com.br",
-    subtitle: "Frontend Publico",
+    title: "Visualização no VotoLimpo.com.br",
+    subtitle: "Frontend Público",
     color: "bg-blue-500/10 text-blue-400",
     iconPath: ICONS.chart,
     description:
-      "Todas as informacoes sao apresentadas aqui, neste site, de forma visual e acessivel: ranking de politicos, perfis individuais, busca de artigos, grafo de conexoes e graficos interativos.",
+      "Todas as informações são apresentadas aqui, neste site, de forma visual e acessível: ranking de políticos, perfis individuais, busca de artigos, grafo de conexões e gráficos interativos.",
     details: [
-      "Pagina inicial: visao geral com destaques, noticias recentes e top politicos",
-      "Ranking: classificacao dos politicos por volume de noticias e indicadores",
-      "Perfil do politico: historico completo de noticias, scores e dados eleitorais",
-      "Busca: filtragem por texto, sentimento, gravidade, entidade e periodo",
-      "Grafo: visualizacao interativa de conexoes entre politicos e temas",
-      "Tudo atualizado automaticamente conforme novas coletas sao processadas",
+      "Página inicial: visão geral com destaques, notícias recentes e top políticos",
+      "Ranking: classificação dos políticos por volume de notícias e indicadores",
+      "Perfil do político: histórico completo de notícias, scores e dados eleitorais",
+      "Busca: filtragem por texto, sentimento, gravidade, entidade e período",
+      "Grafo: visualização interativa de conexões entre políticos e temas",
+      "Tudo atualizado automaticamente conforme novas coletas são processadas",
     ],
     outputs: [
-      "Painel publico em tempo real no votolimpo.com.br",
-      "Perfis individuais por candidato com graficos e historico",
-      "Busca e filtragem acessiveis a qualquer cidadao",
+      "Painel público em tempo real no votolimpo.com.br",
+      "Perfis individuais por candidato com gráficos e histórico",
+      "Busca e filtragem acessíveis a qualquer cidadão",
     ],
   },
 ];
@@ -401,74 +401,74 @@ const METRICS: MetricData[] = [
     label: "Sentimento",
     color: "bg-purple-500/10 text-purple-400",
     iconPath: ICONS.trending,
-    description: "A IA avalia o tom geral do artigo em relacao ao assunto e as pessoas mencionadas. Nao e sobre \"bom ou ruim\", mas sobre a carga emocional do texto.",
+    description: "A IA avalia o tom geral do artigo em relação ao assunto e às pessoas mencionadas. Não é sobre \"bom ou ruim\", mas sobre a carga emocional do texto.",
     values: ["Positivo", "Negativo", "Neutro"],
   },
   {
     label: "Gravidade (Severity)",
     color: "bg-yellow-500/10 text-yellow-400",
     iconPath: ICONS.alert,
-    description: "Indica o potencial impacto da noticia. Uma denuncia de corrupcao tende a ser \"critica\", enquanto uma agenda de campanha e \"baixa\".",
-    values: ["Baixa", "Media", "Alta", "Critica"],
+    description: "Indica o potencial impacto da notícia. Uma denúncia de corrupção tende a ser \"crítica\", enquanto uma agenda de campanha é \"baixa\".",
+    values: ["Baixa", "Média", "Alta", "Crítica"],
   },
   {
     label: "Veracidade (Score 0-10)",
     color: "bg-blue-500/10 text-blue-400",
     iconPath: ICONS.shield,
-    description: "Score de 0 a 10 que avalia a consistencia, fontes citadas e indicadores de confiabilidade do artigo. Quanto maior, mais confiavel parece o conteudo.",
-    values: ["0-3: Baixa confianca", "4-6: Moderada", "7-10: Alta confianca"],
+    description: "Score de 0 a 10 que avalia a consistência, fontes citadas e indicadores de confiabilidade do artigo. Quanto maior, mais confiável parece o conteúdo.",
+    values: ["0-3: Baixa confiança", "4-6: Moderada", "7-10: Alta confiança"],
   },
   {
-    label: "Classificacao Politica",
+    label: "Classificação Política",
     color: "bg-accent/10 text-accent-400",
     iconPath: ICONS.users,
-    description: "A IA identifica se o artigo tem conteudo politico (menciona candidatos, partidos, eleicoes) ou se e uma noticia sem cunho politico.",
-    values: ["Politico", "Nao-politico"],
+    description: "A IA identifica se o artigo tem conteúdo político (menciona candidatos, partidos, eleições) ou se é uma notícia sem cunho político.",
+    values: ["Político", "Não-político"],
   },
   {
-    label: "Keywords Extraidas",
+    label: "Keywords Extraídas",
     color: "bg-rose-500/10 text-rose-400",
     iconPath: ICONS.search,
     description: "Palavras-chave automaticamente identificadas pela IA que representam os temas centrais do artigo. Usadas para busca e agrupamento.",
-    values: ["Temas", "Pessoas", "Locais", "Organizacoes"],
+    values: ["Temas", "Pessoas", "Locais", "Organizações"],
   },
   {
-    label: "Resumo Automatico",
+    label: "Resumo Automático",
     color: "bg-cyan-500/10 text-cyan-400",
     iconPath: ICONS.newspaper,
-    description: "A IA gera um resumo conciso de cada artigo, destacando os pontos principais. Util para triagem rapida sem precisar ler o texto completo.",
-    values: ["1-3 paragrafos", "Pontos principais", "Contexto"],
+    description: "A IA gera um resumo conciso de cada artigo, destacando os pontos principais. Útil para triagem rápida sem precisar ler o texto completo.",
+    values: ["1-3 parágrafos", "Pontos principais", "Contexto"],
   },
 ];
 
 const FAQ: FaqData[] = [
   {
-    question: "De onde vem as noticias?",
-    answer: "As noticias sao coletadas de fontes configuradas no sistema: portais de noticias, Google News e feeds RSS. Cada entidade monitorada (candidato, partido) tem suas proprias fontes. O crawler acessa essas paginas, extrai o conteudo e salva no banco de dados automaticamente.",
+    question: "De onde vêm as notícias?",
+    answer: "As notícias são coletadas de fontes configuradas no sistema: portais de notícias, Google News e feeds RSS. Cada entidade monitorada (candidato, partido) tem suas próprias fontes. O crawler acessa essas páginas, extrai o conteúdo e salva no banco de dados automaticamente.",
   },
   {
-    question: "Como o score de veracidade e calculado?",
-    answer: "O score de veracidade (0 a 10) e gerado pela IA analisando multiplos sinais: presenca de fontes citadas, consistencia factual, linguagem utilizada, presenca de dados verificaveis, entre outros. Cada sinal contribui para o score final. Nao e uma verificacao de fatos definitiva, mas um indicador de confiabilidade baseado em padroes textuais.",
+    question: "Como o score de veracidade é calculado?",
+    answer: "O score de veracidade (0 a 10) é gerado pela IA analisando múltiplos sinais: presença de fontes citadas, consistência factual, linguagem utilizada, presença de dados verificáveis, entre outros. Cada sinal contribui para o score final. Não é uma verificação de fatos definitiva, mas um indicador de confiabilidade baseado em padrões textuais.",
   },
   {
-    question: "Qual a diferenca entre sentimento e gravidade?",
-    answer: "Sentimento mede o tom emocional do texto (positivo, negativo, neutro) — como a noticia \"soa\". Gravidade mede o potencial impacto da informacao (baixa a critica) — quao seria e a noticia. Uma noticia pode ter sentimento negativo mas gravidade baixa (ex: critica leve), ou sentimento neutro mas gravidade critica (ex: relatorio objetivo sobre corrupcao).",
+    question: "Qual a diferença entre sentimento e gravidade?",
+    answer: "Sentimento mede o tom emocional do texto (positivo, negativo, neutro) — como a notícia \"soa\". Gravidade mede o potencial impacto da informação (baixa a crítica) — quão séria é a notícia. Uma notícia pode ter sentimento negativo mas gravidade baixa (ex: crítica leve), ou sentimento neutro mas gravidade crítica (ex: relatório objetivo sobre corrupção).",
   },
   {
-    question: "O que sao os Clusters?",
-    answer: "Clusters sao agrupamentos automaticos de artigos que tratam do mesmo assunto. Se 10 portais noticiaram o mesmo evento, esses artigos serao agrupados em um unico cluster, facilitando a analise comparativa e evitando duplicidade na leitura.",
+    question: "O que são os Clusters?",
+    answer: "Clusters são agrupamentos automáticos de artigos que tratam do mesmo assunto. Se 10 portais noticiaram o mesmo evento, esses artigos serão agrupados em um único cluster, facilitando a análise comparativa e evitando duplicidade na leitura.",
   },
   {
-    question: "Com que frequencia as noticias sao coletadas?",
-    answer: "A frequencia e configuravel por agendamento. Pode ser a cada hora, diariamente, ou em qualquer intervalo definido. Coletas manuais tambem podem ser disparadas a qualquer momento pela equipe de operacao.",
+    question: "Com que frequência as notícias são coletadas?",
+    answer: "A frequência é configurável por agendamento. Pode ser a cada hora, diariamente, ou em qualquer intervalo definido. Coletas manuais também podem ser disparadas a qualquer momento pela equipe de operação.",
   },
   {
-    question: "O que acontece se um site de noticias estiver fora do ar?",
-    answer: "O sistema possui um Circuit Breaker por dominio: se muitas requisicoes falharem seguidas, ele para de tentar acessar aquele site por um periodo configuravel. Quando o site volta ao normal, o sistema retoma automaticamente. Isso protege tanto o nosso sistema quanto o site de destino.",
+    question: "O que acontece se um site de notícias estiver fora do ar?",
+    answer: "O sistema possui um Circuit Breaker por domínio: se muitas requisições falharem seguidas, ele para de tentar acessar aquele site por um período configurável. Quando o site volta ao normal, o sistema retoma automaticamente. Isso protege tanto o nosso sistema quanto o site de destino.",
   },
   {
-    question: "Os dados sao confiaveis?",
-    answer: "Os dados de noticias sao publicos e verificaveis. Os scores gerados pela IA sao indicadores automaticos — eles nao substituem a leitura critica do conteudo, mas servem como ferramenta de triagem e classificacao. Dados eleitorais vem diretamente do TSE (Tribunal Superior Eleitoral).",
+    question: "Os dados são confiáveis?",
+    answer: "Os dados de notícias são públicos e verificáveis. Os scores gerados pela IA são indicadores automáticos — eles não substituem a leitura crítica do conteúdo, mas servem como ferramenta de triagem e classificação. Dados eleitorais vêm diretamente do TSE (Tribunal Superior Eleitoral).",
   },
 ];
 
@@ -487,8 +487,8 @@ export default function ComoFuncionaPage() {
           Como Funciona o <span className="text-accent">VotoLimpo</span>
         </h1>
         <p className="text-muted max-w-2xl mx-auto leading-relaxed">
-          Da coleta automatica de noticias ate a geracao de scores e graficos — entenda cada
-          etapa do pipeline e como cada metrica e calculada.
+          Da coleta automática de notícias até a geração de scores e gráficos — entenda cada
+          etapa do pipeline e como cada métrica é calculada.
         </p>
       </div>
 
@@ -502,7 +502,7 @@ export default function ComoFuncionaPage() {
           Pipeline Passo a Passo
         </h2>
         <p className="text-sm text-muted mb-6">
-          Clique em cada etapa para ver os detalhes de como funciona e o que e gerado.
+          Clique em cada etapa para ver os detalhes de como funciona e o que é gerado.
         </p>
         <div>
           {STEPS.map((step, i) => (
@@ -518,10 +518,10 @@ export default function ComoFuncionaPage() {
       <section>
         <h2 className="text-lg font-semibold text-foreground mb-2 flex items-center gap-2">
           <Icon path={ICONS.chart} className="text-muted h-5 w-5" />
-          Metricas e Scores Explicados
+          Métricas e Scores Explicados
         </h2>
         <p className="text-sm text-muted mb-6">
-          Cada artigo processado recebe as seguintes metricas, todas geradas pela Inteligencia Artificial:
+          Cada artigo processado recebe as seguintes métricas, todas geradas pela Inteligência Artificial:
         </p>
         <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
           {METRICS.map((m) => (
@@ -534,17 +534,17 @@ export default function ComoFuncionaPage() {
       <section className="rounded-2xl border border-surface-300 bg-surface/50 p-6">
         <h2 className="text-lg font-semibold text-foreground mb-4 flex items-center gap-2">
           <Icon path={ICONS.refresh} className="text-muted h-5 w-5" />
-          Resiliencia do Sistema
+          Resiliência do Sistema
         </h2>
         <p className="text-sm text-muted mb-5">
-          O sistema foi construido para funcionar de forma autonoma e se recuperar de falhas automaticamente:
+          O sistema foi construído para funcionar de forma autônoma e se recuperar de falhas automaticamente:
         </p>
         <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
           {[
-            { icon: ICONS.refresh, title: "Reenvio Automatico", desc: "Se a IA nao responder, o artigo e reenviado automaticamente apos alguns minutos" },
-            { icon: ICONS.shield, title: "Circuit Breaker", desc: "Sites com problemas sao pausados temporariamente para nao sobrecarregar o sistema" },
-            { icon: ICONS.clock, title: "Polling de Fallback", desc: "Se o callback nao chegar, o sistema busca os resultados ativamente no servico de IA" },
-            { icon: ICONS.filter, title: "Deduplicacao", desc: "Mesma noticia de fontes diferentes e detectada e nao entra duas vezes no sistema" },
+            { icon: ICONS.refresh, title: "Reenvio Automático", desc: "Se a IA não responder, o artigo é reenviado automaticamente após alguns minutos" },
+            { icon: ICONS.shield, title: "Circuit Breaker", desc: "Sites com problemas são pausados temporariamente para não sobrecarregar o sistema" },
+            { icon: ICONS.clock, title: "Polling de Fallback", desc: "Se o callback não chegar, o sistema busca os resultados ativamente no serviço de IA" },
+            { icon: ICONS.filter, title: "Deduplicação", desc: "Mesma notícia de fontes diferentes é detectada e não entra duas vezes no sistema" },
           ].map((f) => (
             <div key={f.title} className="p-4 rounded-xl bg-surface border border-surface-300">
               <div className="flex items-center gap-2 mb-2 text-foreground/80">

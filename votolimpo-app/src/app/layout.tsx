@@ -9,16 +9,16 @@ export const dynamic = "force-dynamic";
 export const metadata: Metadata = {
   metadataBase: new URL("https://votolimpo.com.br"),
   title: {
-    default: "Voto Limpo — Transparencia Politica",
+    default: "Voto Limpo — Transparência Política",
     template: "%s | Voto Limpo",
   },
   description:
-    "Plataforma de transparencia politica brasileira. Acompanhe o historico, vinculos e indice de transparencia dos politicos do Brasil.",
+    "Plataforma de transparência política brasileira. Acompanhe o histórico, vínculos e índice de transparência dos políticos do Brasil.",
   keywords: [
-    "transparencia",
-    "politica",
+    "transparência",
+    "política",
     "Brasil",
-    "corrupcao",
+    "corrupção",
     "eleicoes",
     "democracia",
     "candidatos",
@@ -39,15 +39,15 @@ export const metadata: Metadata = {
     locale: "pt_BR",
     url: "https://votolimpo.com.br",
     siteName: "Voto Limpo",
-    title: "Voto Limpo — Transparencia Politica",
+    title: "Voto Limpo — Transparência Política",
     description:
-      "Acompanhe o historico e vinculos dos politicos brasileiros com transparencia e dados verificados.",
+      "Acompanhe o histórico e vínculos dos políticos brasileiros com transparência e dados verificados.",
     images: [
       {
         url: "/opengraph-image",
         width: 1200,
         height: 630,
-        alt: "Voto Limpo — Transparencia Politica Brasileira",
+        alt: "Voto Limpo — Transparência Política Brasileira",
       },
     ],
   },
@@ -55,8 +55,8 @@ export const metadata: Metadata = {
     card: "summary_large_image",
     site: "@votolimpo",
     creator: "@votolimpo",
-    title: "Voto Limpo — Transparencia Politica",
-    description: "Acompanhe o historico e vinculos dos politicos brasileiros.",
+    title: "Voto Limpo — Transparência Política",
+    description: "Acompanhe o histórico e vínculos dos políticos brasileiros.",
   },
   robots: {
     index: true,

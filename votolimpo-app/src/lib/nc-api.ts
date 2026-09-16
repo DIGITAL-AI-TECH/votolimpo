@@ -193,6 +193,10 @@ export async function listEntities(params?: {
   type?: string;
   search?: string;
   active?: boolean;
+  party?: string;
+  state?: string;
+  order_by?: string;
+  order_dir?: string;
   skip?: number;
   limit?: number;
 }): Promise<NCEntity[]> {
@@ -208,6 +212,8 @@ export async function countEntities(params?: {
   type?: string;
   search?: string;
   active?: boolean;
+  party?: string;
+  state?: string;
 }): Promise<number> {
   const res = await ncFetch<{ count: number }>({
     path: "/entities/count",
@@ -215,6 +221,18 @@ export async function countEntities(params?: {
     revalidate: 300,
   });
   return res.count;
+}
+
+/** Get distinct parties and states for filter dropdowns */
+export async function getEntityFilters(params?: {
+  type?: string;
+  active?: boolean;
+}): Promise<{ parties: string[]; states: string[] }> {
+  return ncFetch<{ parties: string[]; states: string[] }>({
+    path: "/entities/filters",
+    params: params as Record<string, string | number | boolean | undefined>,
+    revalidate: 600, // 10 min cache — filters change rarely
+  });
 }
 
 /** Get a single entity by ID */

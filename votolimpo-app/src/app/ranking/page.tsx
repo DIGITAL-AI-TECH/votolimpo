@@ -18,6 +18,17 @@ export default function RankingPage() {
   const [ufs, setUfs] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
 
+  // Fetch filter options once from dedicated endpoint
+  useEffect(() => {
+    fetch("/api/filters")
+      .then((res) => res.json())
+      .then((data) => {
+        setParties(data.parties || []);
+        setUfs(data.states || []);
+      })
+      .catch((err) => console.error("Failed to fetch filters:", err));
+  }, []);
+
   const fetchData = useCallback(async () => {
     setLoading(true);
     try {
@@ -36,20 +47,12 @@ export default function RankingPage() {
       const data = await res.json();
       setPoliticians(data.data || []);
       setTotal(data.total || 0);
-
-      // Extract unique parties and UFs from data for filters
-      if (parties.length === 0 && data.data?.length > 0) {
-        const allParties = [...new Set(data.data.map((p: Politician) => p.party))].sort() as string[];
-        const allUFs = [...new Set(data.data.map((p: Politician) => p.uf))].sort() as string[];
-        setParties(allParties);
-        setUfs(allUFs);
-      }
     } catch (error) {
       console.error("Failed to fetch ranking:", error);
     } finally {
       setLoading(false);
     }
-  }, [page, sortBy, sortOrder, selectedParty, selectedUF, parties.length]);
+  }, [page, sortBy, sortOrder, selectedParty, selectedUF]);
 
   useEffect(() => {
     fetchData();
@@ -125,7 +128,7 @@ export default function RankingPage() {
           <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 4h13M3 8h9m-9 4h9m5-4v12m0 0l-4-4m4 4l4-4" />
           </svg>
-          Clique nos cabecalhos para ordenar
+          Clique nos cabeçalhos para ordenar
         </div>
       </div>
 
@@ -150,7 +153,7 @@ export default function RankingPage() {
       {/* Legend */}
       <div className="mt-8 rounded-xl border border-[#2E2E2E] bg-[#141414] p-4">
         <h3 className="mb-3 text-xs font-semibold uppercase tracking-wider text-[#6B7280]">
-          Legenda — Indice de Transparencia
+          Legenda — Índice de Transparência
         </h3>
         <div className="flex flex-wrap gap-4">
           {[
@@ -158,7 +161,7 @@ export default function RankingPage() {
             { range: "60-79", label: "Bom", color: "text-blue-400", dot: "bg-blue-400" },
             { range: "40-59", label: "Regular", color: "text-yellow-400", dot: "bg-yellow-400" },
             { range: "20-39", label: "Preocupante", color: "text-orange-400", dot: "bg-orange-400" },
-            { range: "0-19", label: "Critico", color: "text-red-400", dot: "bg-red-400" },
+            { range: "0-19", label: "Crítico", color: "text-red-400", dot: "bg-red-400" },
           ].map((item) => (
             <div key={item.range} className="flex items-center gap-2">
               <span className={`h-2 w-2 rounded-full ${item.dot}`} />

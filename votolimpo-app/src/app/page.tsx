@@ -16,24 +16,24 @@ import type { Politician, Article, Stats } from "@/types";
 export const dynamic = "force-dynamic";
 
 export const metadata: Metadata = {
-  title: "Voto Limpo — Transparencia Politica Brasileira",
+  title: "Voto Limpo — Transparência Política Brasileira",
   description:
-    "Plataforma de transparencia politica brasileira. Acompanhe o historico, vinculos e indice de transparencia dos politicos do Brasil. Dados publicos, verificados e acessiveis.",
+    "Plataforma de transparência política brasileira. Acompanhe o histórico, vínculos e índice de transparência dos políticos do Brasil. Dados públicos, verificados e acessíveis.",
   alternates: {
     canonical: "https://votolimpo.com.br",
   },
   openGraph: {
     type: "website",
     url: "https://votolimpo.com.br",
-    title: "Voto Limpo — Transparencia Politica Brasileira",
+    title: "Voto Limpo — Transparência Política Brasileira",
     description:
-      "Plataforma de transparencia politica brasileira. Acompanhe o historico, vinculos e indice de transparencia dos politicos do Brasil.",
+      "Plataforma de transparência política brasileira. Acompanhe o histórico, vínculos e índice de transparência dos políticos do Brasil.",
   },
   twitter: {
     card: "summary_large_image",
-    title: "Voto Limpo — Transparencia Politica Brasileira",
+    title: "Voto Limpo — Transparência Política Brasileira",
     description:
-      "Plataforma de transparencia politica brasileira. Dados publicos, verificados e acessiveis.",
+      "Plataforma de transparência política brasileira. Dados públicos, verificados e acessíveis.",
   },
 };
 
@@ -78,7 +78,7 @@ export default async function HomePage() {
     name: "Voto Limpo",
     url: "https://votolimpo.com.br",
     description:
-      "Plataforma de transparencia politica brasileira. Acompanhe o historico, vinculos e indice de transparencia dos politicos do Brasil.",
+      "Plataforma de transparência política brasileira. Acompanhe o histórico, vínculos e índice de transparência dos políticos do Brasil.",
     potentialAction: {
       "@type": "SearchAction",
       target: {
@@ -98,7 +98,7 @@ export default async function HomePage() {
     <>
       <script
         type="application/ld+json"
-        dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd).replace(/</g, '\\u003c') }}
       />
     <div className="min-h-screen">
       {/* Hero Section */}
@@ -116,28 +116,28 @@ export default async function HomePage() {
           </div>
 
           <h1 className="text-4xl font-bold tracking-tight text-[#FAFAFA] sm:text-5xl md:text-6xl">
-            Transparencia politica{" "}
+            Transparência política{" "}
             <span className="text-emerald-400">ao alcance</span>
             <br />
             de todos
           </h1>
 
           <p className="mt-6 text-lg text-[#6B7280] max-w-2xl mx-auto leading-relaxed">
-            Acompanhe o historico de processos, vinculos empresariais e o indice de
-            transparencia dos politicos brasileiros. Dados publicos, verificados e acessiveis.
+            Acompanhe o histórico de processos, vínculos empresariais e o índice de
+            transparência dos políticos brasileiros. Dados públicos, verificados e acessíveis.
           </p>
 
           {/* Search */}
           <div className="mt-10 mx-auto max-w-xl">
-            <SearchBar placeholder="Buscar politico por nome, partido ou estado..." />
+            <SearchBar placeholder="Buscar político por nome, partido ou estado..." />
           </div>
 
           {/* Quick stats */}
           <div className="mt-10 flex flex-wrap items-center justify-center gap-6 md:gap-10">
             {[
-              { value: stats.totalPoliticians.toLocaleString("pt-BR"), label: "Politicos monitorados" },
+              { value: stats.totalPoliticians.toLocaleString("pt-BR"), label: "Políticos monitorados" },
               { value: stats.totalArticles.toLocaleString("pt-BR"), label: "Artigos indexados" },
-              { value: stats.totalRelationships.toLocaleString("pt-BR"), label: "Fontes de noticias" },
+              { value: stats.totalRelationships.toLocaleString("pt-BR"), label: "Fontes de notícias" },
             ].map((stat) => (
               <div key={stat.label} className="text-center">
                 <p className="font-mono text-3xl font-bold text-[#FAFAFA]">
@@ -157,7 +157,7 @@ export default async function HomePage() {
             <div>
               <h2 className="text-2xl font-bold text-[#FAFAFA]">Candidatos em Destaque</h2>
               <p className="mt-1 text-sm text-[#6B7280]">
-                Candidatos com maior cobertura midiática baseada em dados publicos
+                Candidatos com maior cobertura midiática baseada em dados públicos
               </p>
             </div>
             <Link
@@ -194,9 +194,9 @@ export default async function HomePage() {
         <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
           <div className="mb-8 flex items-center justify-between">
             <div>
-              <h2 className="text-2xl font-bold text-[#FAFAFA]">Noticias Recentes</h2>
+              <h2 className="text-2xl font-bold text-[#FAFAFA]">Notícias Recentes</h2>
               <p className="mt-1 text-sm text-[#6B7280]">
-                Ultimas reportagens sobre politica e transparencia
+                Últimas reportagens sobre política e transparência
               </p>
             </div>
             <Link
@@ -218,7 +218,7 @@ export default async function HomePage() {
             </div>
           ) : (
             <div className="rounded-xl border border-[#2E2E2E] bg-[#141414] p-12 text-center">
-              <p className="text-[#6B7280]">Artigos estao sendo processados...</p>
+              <p className="text-[#6B7280]">Artigos estão sendo processados...</p>
             </div>
           )}
         </div>
