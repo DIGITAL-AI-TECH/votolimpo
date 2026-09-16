@@ -131,6 +131,26 @@ export interface NCStats {
   collected_at: string;
 }
 
+export interface NCEntityScore {
+  entity_id: number;
+  score: number | null;      // 0-100, null = no processed articles
+  max_severity: string;      // critical|high|medium|low|info
+  article_count: number;
+}
+
+export interface NCVotoLimpoStats {
+  avg_score: number | null;  // 0-100, null = no processed articles
+  critical_count: number;
+  entities_with_articles: number;
+}
+
+/** Entity enriched with score data (returned by by-slug endpoint) */
+export interface NCEntityWithScore extends NCEntity {
+  article_count: number;
+  score: number | null;
+  max_severity: string;
+}
+
 export interface NCEntityStats {
   entity_id: number;
   entity_name: string;
@@ -181,6 +201,20 @@ export async function listEntities(params?: {
     params: params as Record<string, string | number | boolean | undefined>,
     revalidate: 300, // 5 min cache
   });
+}
+
+/** Count entities matching filters (mirrors listEntities params) */
+export async function countEntities(params?: {
+  type?: string;
+  search?: string;
+  active?: boolean;
+}): Promise<number> {
+  const res = await ncFetch<{ count: number }>({
+    path: "/entities/count",
+    params: params as Record<string, string | number | boolean | undefined>,
+    revalidate: 300,
+  });
+  return res.count;
 }
 
 /** Get a single entity by ID */
@@ -276,6 +310,30 @@ export async function getTopEntities(
   });
 }
 
+/** Get aggregated score data for a single entity */
+export async function getEntityScore(entityId: number): Promise<NCEntityScore> {
+  return ncFetch<NCEntityScore>({
+    path: `/entities/${entityId}/score`,
+    revalidate: 120,
+  });
+}
+
+/** Lookup entity by slug and get score data in one request */
+export async function getEntityBySlug(slug: string): Promise<NCEntityWithScore> {
+  return ncFetch<NCEntityWithScore>({
+    path: `/entities/by-slug/${slug}`,
+    revalidate: 120,
+  });
+}
+
+/** Get VotoLimpo aggregated stats (avgScore, criticalCount) */
+export async function getVotoLimpoStats(): Promise<NCVotoLimpoStats> {
+  return ncFetch<NCVotoLimpoStats>({
+    path: "/stats/votolimpo",
+    revalidate: 120,
+  });
+}
+
 // ---------------------------------------------------------------------------
 // Transformation helpers — NC data -> frontend types
 // ---------------------------------------------------------------------------
@@ -328,11 +386,20 @@ function partyColor(party: string | null): string {
 /** Convert NC entity to frontend Politician type */
 export function entityToPolitician(
   entity: NCEntity,
-  articleCount = 0
+  scoreData?: NCEntityScore | null
 ): Politician {
   const meta = parseMetadata(entity.metadata_json);
-  const photoUrl =
-    (meta.foto_url as string) || undefined;
+  const photoUrl = (meta.foto_url as string) || undefined;
+
+  // Score real do backend (0-100) ou 0 se null (sem artigos processados)
+  const score = scoreData?.score ?? (entity as NCEntityWithScore).score ?? null;
+  const articleCount =
+    scoreData?.article_count ??
+    (entity as NCEntityWithScore).article_count ??
+    0;
+  const maxSeverity = scoreData?.max_severity
+    ? mapSeverity(scoreData.max_severity)
+    : mapSeverity((entity as NCEntityWithScore).max_severity ?? "info");
 
   return {
     id: String(entity.id),
@@ -344,10 +411,10 @@ export function entityToPolitician(
     role: entity.role || "Candidato",
     photoUrl,
     bio: undefined,
-    score: 50, // placeholder — score will come from processing_output later
+    score: score ?? 0,  // 0 = sem dados suficientes (não 50)
     articleCount,
-    maxSeverity: "info" as Severity,
-    milestoneCount: 0,
+    maxSeverity,
+    milestoneCount: 0,  // mantido até frente de Milestones
     createdAt: entity.created_at,
     updatedAt: entity.updated_at,
   };
@@ -359,6 +426,38 @@ function mapSeverity(peSeverity: string | null): Severity {
     return peSeverity as Severity;
   }
   return "info";
+}
+
+// Static reliability map per source domain
+const SOURCE_RELIABILITY: Record<string, number> = {
+  "g1.globo.com": 0.9,
+  "globo.com": 0.9,
+  "folha.uol.com.br": 0.9,
+  "estadao.com.br": 0.9,
+  "uol.com.br": 0.85,
+  "bbc.com": 0.95,
+  "bbc.co.uk": 0.95,
+  "reuters.com": 0.95,
+  "cnn.com": 0.85,
+  "r7.com": 0.75,
+  "terra.com.br": 0.75,
+  "metropoles.com": 0.8,
+  "poder360.com.br": 0.85,
+  "congressoemfoco.uol.com.br": 0.85,
+  "agenciabrasil.ebc.com.br": 0.85,
+  "senado.leg.br": 0.9,
+  "camara.leg.br": 0.9,
+  "tse.jus.br": 0.95,
+  "veja.abril.com.br": 0.8,
+  "cartacapital.com.br": 0.75,
+  "oantagonista.com": 0.65,
+};
+
+/** Return reliability score for a domain (0-1) */
+export function getSourceReliability(domain: string | null): number {
+  if (!domain) return 0.5;
+  const clean = domain.replace(/^www\./, "").toLowerCase();
+  return SOURCE_RELIABILITY[clean] ?? 0.6; // default 0.6 for unknown domains
 }
 
 /** Convert NC article to frontend Article type */
@@ -374,9 +473,10 @@ export function ncArticleToArticle(ncArt: NCArticle): Article {
         : "info"
       : "info";
 
-  // Use PE veracity score (0-10) converted to 0-1, fallback to sentiment_score
+  // Use PE veracity score (0-10) converted to 0-1, with float precision fix
+  // score field uses 0-10 scale from PE
   const truthScore = ncArt.score !== null
-    ? ncArt.score / 10
+    ? Math.round(ncArt.score * 10) / 100
     : ncArt.sentiment_score ?? 0.5;
 
   // Extract clean title (strip HTML from content if title missing)
@@ -394,10 +494,8 @@ export function ncArticleToArticle(ncArt: NCArticle): Article {
     source: {
       id: ncArt.source_domain || "unknown",
       name: ncArt.source_name || formatSourceDomain(ncArt.source_domain),
-      url: ncArt.source_domain
-        ? `https://${ncArt.source_domain}`
-        : "",
-      reliability: 0.8,
+      url: ncArt.source_domain ? `https://${ncArt.source_domain}` : "",
+      reliability: getSourceReliability(ncArt.source_domain),
     },
     publishedAt: ncArt.published_at || ncArt.created_at,
     severity,
@@ -420,14 +518,17 @@ function formatSourceDomain(domain: string | null): string {
     .replace(/\b\w/g, (c) => c.toUpperCase());
 }
 
-/** Build Stats object from NC global stats */
-export function ncStatsToStats(ncStats: NCStats): Stats {
+/** Build Stats object from NC global stats and VotoLimpo stats */
+export function ncStatsToStats(
+  ncStats: NCStats,
+  vlStats?: NCVotoLimpoStats | null
+): Stats {
   return {
     totalPoliticians: ncStats.database.total_entities,
     totalArticles: ncStats.database.total_articles,
     totalEntities: ncStats.database.total_entities,
     totalRelationships: ncStats.database.total_sources,
-    avgScore: 50,
-    criticalCount: 0,
+    avgScore: vlStats?.avg_score ?? 0,
+    criticalCount: vlStats?.critical_count ?? 0,
   };
 }

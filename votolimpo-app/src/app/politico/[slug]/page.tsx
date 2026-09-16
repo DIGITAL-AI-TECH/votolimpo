@@ -1,12 +1,12 @@
 import { notFound } from "next/navigation";
 import type { Metadata } from "next";
-import { unstable_noStore } from "next/cache";
 import {
-  listEntities,
+  getEntityBySlug,
   getEntityArticles,
   getEntityStats,
   entityToPolitician,
   ncArticleToArticle,
+  type NCEntityScore,
 } from "@/lib/nc-api";
 import ScoreBadge from "@/components/ScoreBadge";
 import SeverityBadge from "@/components/SeverityBadge";
@@ -17,68 +17,67 @@ interface PageProps {
   params: Promise<{ slug: string }>;
 }
 
-async function findEntityBySlug(slug: string) {
-  // Try searching by first word of slug to narrow results, then match exact slug
-  const firstWord = slug.split("-")[0];
-
-  const entities = await listEntities({
-    search: firstWord,
-    type: "candidate",
-    active: true,
-    limit: 100,
-  });
-
-  const match = entities.find((e) => e.slug === slug);
-  if (match) return match;
-
-  // Fallback: fetch all candidates if search missed (slug might not match name)
-  const allEntities = await listEntities({
-    type: "candidate",
-    active: true,
-    limit: 500,
-  });
-
-  return allEntities.find((e) => e.slug === slug);
-}
-
 export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
-  unstable_noStore();
   const { slug } = await params;
-  try {
-    const entity = await findEntityBySlug(slug);
-    if (!entity) return { title: "Nao encontrado" };
+  const canonicalUrl = `https://votolimpo.com.br/politico/${slug}`;
 
-    const politician = entityToPolitician(entity);
+  try {
+    const entityData = await getEntityBySlug(slug);
+    const politician = entityToPolitician(entityData, {
+      entity_id: entityData.id,
+      score: entityData.score,
+      max_severity: entityData.max_severity,
+      article_count: entityData.article_count,
+    } as NCEntityScore);
+    const title = politician.name;
+    const description = `Perfil completo de ${politician.name} — ${politician.party} · ${politician.uf}. Consulte o historico, vinculos e o indice de transparencia no Voto Limpo.`;
     return {
-      title: politician.name,
-      description: `Perfil de ${politician.name} — ${politician.party} · ${politician.uf}.`,
+      title,
+      description,
+      alternates: {
+        canonical: canonicalUrl,
+      },
+      openGraph: {
+        type: "profile",
+        url: canonicalUrl,
+        title: `${title} | Voto Limpo`,
+        description,
+        siteName: "Voto Limpo",
+      },
+      twitter: {
+        card: "summary_large_image",
+        title: `${title} | Voto Limpo`,
+        description,
+      },
     };
   } catch {
-    return { title: "Erro" };
+    return {
+      title: "Erro ao carregar perfil",
+      robots: { index: false, follow: false },
+    };
   }
 }
 
 export default async function PoliticoPage({ params }: PageProps) {
-  unstable_noStore();
   const { slug } = await params;
 
-  let entity;
+  let entityData;
   try {
-    entity = await findEntityBySlug(slug);
+    entityData = await getEntityBySlug(slug);
   } catch (error) {
     console.error("[PoliticoPage] NC API error:", error);
     notFound();
   }
 
-  if (!entity) notFound();
+  if (!entityData) notFound();
 
   let articles;
   let statsRes;
 
   try {
     [articles, statsRes] = await Promise.all([
-      getEntityArticles(entity.id, { page_size: 50 }),
-      getEntityStats(entity.id),
+      getEntityArticles(entityData.id, { page_size: 50 }),
+      getEntityStats(entityData.id),
     ]);
   } catch (error) {
     console.error("[PoliticoPage] NC API error fetching details:", error);
@@ -86,10 +85,12 @@ export default async function PoliticoPage({ params }: PageProps) {
     statsRes = null;
   }
 
-  const politician = entityToPolitician(
-    entity,
-    statsRes?.articles.total ?? 0
-  );
+  const politician = entityToPolitician(entityData, {
+    entity_id: entityData.id,
+    score: entityData.score,
+    max_severity: entityData.max_severity,
+    article_count: entityData.article_count,
+  } as NCEntityScore);
 
   const frontendArticles = articles.items.map(ncArticleToArticle);
   const timelineItems = buildTimelineItems(frontendArticles, []);
@@ -102,6 +103,22 @@ export default async function PoliticoPage({ params }: PageProps) {
     return "Critico";
   }
 
+  const canonicalUrl = `https://votolimpo.com.br/politico/${politician.slug}`;
+
+  const jsonLd = {
+    "@context": "https://schema.org",
+    "@type": "Person",
+    name: politician.name,
+    url: canonicalUrl,
+    jobTitle: politician.role,
+    affiliation: {
+      "@type": "Organization",
+      name: politician.party,
+    },
+    description: `${politician.name} — ${politician.party} · ${politician.uf}. Indice de transparencia: ${politician.score}/100.`,
+    ...(politician.photoUrl ? { image: politician.photoUrl } : {}),
+  };
+
   function getScoreDescription(score: number): string {
     if (score >= 80) return "Este candidato apresenta alta transparencia nos dados disponiveis.";
     if (score >= 60) return "Este candidato apresenta boa transparencia com poucas ocorrencias relevantes.";
@@ -111,6 +128,11 @@ export default async function PoliticoPage({ params }: PageProps) {
   }
 
   return (
+    <>
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
+      />
     <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
       {/* Back button */}
       <div className="mb-6">
@@ -271,5 +293,6 @@ export default async function PoliticoPage({ params }: PageProps) {
         </div>
       </div>
     </div>
+    </>
   );
 }

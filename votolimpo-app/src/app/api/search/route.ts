@@ -1,5 +1,4 @@
 import { NextResponse } from "next/server";
-import { unstable_noStore } from "next/cache";
 import {
   listEntities,
   listArticles,
@@ -10,7 +9,6 @@ import {
 export const dynamic = "force-dynamic";
 
 export async function GET(request: Request) {
-  unstable_noStore();
   try {
     const { searchParams } = new URL(request.url);
     const q = searchParams.get("q") || "";

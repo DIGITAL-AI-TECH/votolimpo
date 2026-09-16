@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { unstable_noStore } from "next/cache";
+import type { Metadata } from "next";
 import {
   getGlobalStats,
   listEntities,
@@ -13,11 +13,29 @@ import ArticleCard from "@/components/ArticleCard";
 import SearchBar from "@/components/SearchBar";
 import type { Politician, Article, Stats } from "@/types";
 
-export const dynamic = "force-dynamic";
-export const revalidate = 120;
+export const metadata: Metadata = {
+  title: "Voto Limpo — Transparencia Politica Brasileira",
+  description:
+    "Plataforma de transparencia politica brasileira. Acompanhe o historico, vinculos e indice de transparencia dos politicos do Brasil. Dados publicos, verificados e acessiveis.",
+  alternates: {
+    canonical: "https://votolimpo.com.br",
+  },
+  openGraph: {
+    type: "website",
+    url: "https://votolimpo.com.br",
+    title: "Voto Limpo — Transparencia Politica Brasileira",
+    description:
+      "Plataforma de transparencia politica brasileira. Acompanhe o historico, vinculos e indice de transparencia dos politicos do Brasil.",
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "Voto Limpo — Transparencia Politica Brasileira",
+    description:
+      "Plataforma de transparencia politica brasileira. Dados publicos, verificados e acessiveis.",
+  },
+};
 
 export default async function HomePage() {
-  unstable_noStore();
   let stats: Stats;
   let top10: Politician[];
   let recentArticles: Article[];
@@ -52,7 +70,34 @@ export default async function HomePage() {
     recentArticles = [];
   }
 
+  const jsonLd = {
+    "@context": "https://schema.org",
+    "@type": "WebSite",
+    name: "Voto Limpo",
+    url: "https://votolimpo.com.br",
+    description:
+      "Plataforma de transparencia politica brasileira. Acompanhe o historico, vinculos e indice de transparencia dos politicos do Brasil.",
+    potentialAction: {
+      "@type": "SearchAction",
+      target: {
+        "@type": "EntryPoint",
+        urlTemplate: "https://votolimpo.com.br/busca?q={search_term_string}",
+      },
+      "query-input": "required name=search_term_string",
+    },
+    publisher: {
+      "@type": "Organization",
+      name: "Voto Limpo",
+      url: "https://votolimpo.com.br",
+    },
+  };
+
   return (
+    <>
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
+      />
     <div className="min-h-screen">
       {/* Hero Section */}
       <section className="relative overflow-hidden border-b border-[#1A1A1A] py-20 md:py-32">
@@ -90,7 +135,7 @@ export default async function HomePage() {
             {[
               { value: stats.totalPoliticians.toLocaleString("pt-BR"), label: "Politicos monitorados" },
               { value: stats.totalArticles.toLocaleString("pt-BR"), label: "Artigos indexados" },
-              { value: stats.totalRelationships.toLocaleString("pt-BR"), label: "Fontes mapeadas" },
+              { value: stats.totalRelationships.toLocaleString("pt-BR"), label: "Fontes de noticias" },
             ].map((stat) => (
               <div key={stat.label} className="text-center">
                 <p className="font-mono text-3xl font-bold text-[#FAFAFA]">
@@ -182,10 +227,10 @@ export default async function HomePage() {
         <div className="mx-auto max-w-4xl px-4 text-center sm:px-6 lg:px-8">
           <div className="rounded-2xl border border-[#2E2E2E] bg-[#141414] p-8 md:p-12">
             <h2 className="text-2xl font-bold text-[#FAFAFA] md:text-3xl">
-              Explore os vinculos politicos
+              Explore o mapa de partidos
             </h2>
             <p className="mt-4 text-[#6B7280]">
-              Visualize em tempo real as conexoes entre politicos e entidades no grafo interativo
+              Visualize como os candidatos se distribuem entre os partidos
             </p>
             <div className="mt-8 flex flex-col items-center justify-center gap-4 sm:flex-row">
               <Link
@@ -195,7 +240,7 @@ export default async function HomePage() {
                 <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
                 </svg>
-                Ver grafo de vinculos
+                Ver mapa de partidos
               </Link>
               <Link
                 href="/ranking"
@@ -208,5 +253,6 @@ export default async function HomePage() {
         </div>
       </section>
     </div>
+    </>
   );
 }

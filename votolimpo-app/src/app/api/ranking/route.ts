@@ -1,37 +1,57 @@
 import { NextResponse } from "next/server";
-import { unstable_noStore } from "next/cache";
-import { listEntities, entityToPolitician } from "@/lib/nc-api";
+import {
+  listEntities,
+  countEntities,
+  entityToPolitician,
+  type NCEntityWithScore,
+} from "@/lib/nc-api";
 import type { SortField, SortOrder, Politician } from "@/types";
 
-export const dynamic = "force-dynamic";
-
 export async function GET(request: Request) {
-  unstable_noStore();
   try {
     const { searchParams } = new URL(request.url);
-    const party = searchParams.get("party") || undefined;
-    const uf = searchParams.get("uf") || undefined;
-    const page = parseInt(searchParams.get("page") || "1");
-    const pageSize = parseInt(searchParams.get("pageSize") || "20");
-    const sortBy = (searchParams.get("sortBy") || "score") as SortField;
+    const page = Math.max(1, parseInt(searchParams.get("page") || "1") || 1);
+    const pageSize = Math.min(100, Math.max(1, parseInt(searchParams.get("pageSize") || "20") || 20));
+    const sortBy = (searchParams.get("sortBy") || "name") as SortField;
     const sortOrder = (searchParams.get("sortOrder") || "asc") as SortOrder;
+    const searchQuery = searchParams.get("search") || undefined;
 
-    // Fetch all candidates for ranking (NC max limit is 100 per page)
-    const entities = await listEntities({
-      type: "candidate",
-      active: true,
-      limit: 100,
+    // NOTE: The NC backend does not support filtering by party or uf.
+    // Party/UF filters are intentionally not forwarded to the backend —
+    // see spec OUT-OF-SCOPE: "Filtros partido/UF server-side no ranking".
+
+    const skip = (page - 1) * pageSize;
+
+    // Fetch one page from the NC backend and the total count in parallel
+    const [entities, total] = await Promise.all([
+      listEntities({
+        type: "candidate",
+        active: true,
+        skip,
+        limit: pageSize,
+        search: searchQuery,
+      }),
+      countEntities({
+        type: "candidate",
+        active: true,
+        search: searchQuery,
+      }),
+    ]);
+
+    // Map entities to Politician objects
+    // score is loaded individually on /politico/[slug] to avoid N+1
+    const politicians: Politician[] = entities.map((e) => {
+      const enriched = e as unknown as NCEntityWithScore;
+      return entityToPolitician(enriched, {
+        entity_id: enriched.id,
+        score: null,
+        max_severity: "info",
+        article_count: enriched.article_count ?? 0,
+      });
     });
 
-    let politicians: Politician[] = entities.map((e) =>
-      entityToPolitician(e)
-    );
-
-    // Apply filters
-    if (party) politicians = politicians.filter((p) => p.party === party);
-    if (uf) politicians = politicians.filter((p) => p.uf === uf);
-
-    // Sort
+    // Client-side sort within the current page
+    // (sort server-side is OUT-OF-SCOPE — NC backend has no order_by param)
     politicians.sort((a, b) => {
       let comparison = 0;
       switch (sortBy) {
@@ -56,12 +76,8 @@ export async function GET(request: Request) {
       return sortOrder === "desc" ? -comparison : comparison;
     });
 
-    const total = politicians.length;
-    const start = (page - 1) * pageSize;
-    const data = politicians.slice(start, start + pageSize);
-
     return NextResponse.json({
-      data,
+      data: politicians,
       total,
       page,
       pageSize,
