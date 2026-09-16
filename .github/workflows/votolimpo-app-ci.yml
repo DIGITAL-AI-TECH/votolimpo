@@ -42,14 +42,12 @@ jobs:
         run: |
           curl -sf -X POST "${N8N_NOTIFY_URL}" \
             -H "Content-Type: application/json" \
-            -d "$(python3 -c "import json,os; print(json.dumps({
-              'status':'started','repo':'votolimpo-app',
-              'branch':os.environ['BRANCH'],'actor':os.environ['ACTOR'],
-              'commit_sha':os.environ['SHA'],'commit_message':os.environ['COMMIT_MSG'],
-              'run_url':os.environ['RUN_URL'],
-              'stage':'Pipeline CI/CD',
-              'message':'Pipeline iniciado — build da imagem Next.js'
-            }))")" || true
+            -d "$(jq -n \
+              --arg branch "$BRANCH" --arg actor "$ACTOR" --arg sha "$SHA" \
+              --arg msg "$COMMIT_MSG" --arg url "$RUN_URL" \
+              '{status:"started",repo:"votolimpo-app",branch:$branch,actor:$actor,
+                commit_sha:$sha,commit_message:$msg,run_url:$url,
+                stage:"Pipeline CI/CD",message:"Pipeline iniciado — build da imagem Next.js"}')" || true
 
       - name: Set image metadata
         id: meta
@@ -82,17 +80,16 @@ jobs:
           ACTOR: ${{ github.actor }}
           BRANCH: ${{ github.ref_name }}
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          IMG_TAG: ${{ steps.meta.outputs.image_sha }}
         run: |
           curl -sf -X POST "${N8N_NOTIFY_URL}" \
             -H "Content-Type: application/json" \
-            -d "$(python3 -c "import json,os; print(json.dumps({
-              'status':'info','repo':'votolimpo-app',
-              'branch':os.environ['BRANCH'],'actor':os.environ['ACTOR'],
-              'commit_sha':os.environ['SHA'],
-              'run_url':os.environ['RUN_URL'],
-              'stage':'Build Docker',
-              'message':'Imagem pushed: ${{ env.IMAGE_NAME }}:${{ steps.meta.outputs.image_sha }}'
-            }))")" || true
+            -d "$(jq -n \
+              --arg branch "$BRANCH" --arg actor "$ACTOR" --arg sha "$SHA" \
+              --arg url "$RUN_URL" --arg tag "$IMG_TAG" \
+              '{status:"info",repo:"votolimpo-app",branch:$branch,actor:$actor,
+                commit_sha:$sha,run_url:$url,stage:"Build Docker",
+                message:("Imagem pushed: registry.digital-ai.tech/votolimpo-app:" + $tag)}')" || true
 
       - name: Notify -- Build Falhou
         if: failure()
@@ -104,16 +101,13 @@ jobs:
         run: |
           curl -sf -X POST "${N8N_NOTIFY_URL}" \
             -H "Content-Type: application/json" \
-            -d "$(python3 -c "import json,os; print(json.dumps({
-              'status':'failure','repo':'votolimpo-app',
-              'branch':os.environ['BRANCH'],'actor':os.environ['ACTOR'],
-              'commit_sha':os.environ['SHA'],
-              'run_url':os.environ['RUN_URL'],
-              'stage':'Build Docker',
-              'message':'Build da imagem falhou'
-            }))")" || true
+            -d "$(jq -n \
+              --arg branch "$BRANCH" --arg actor "$ACTOR" --arg sha "$SHA" --arg url "$RUN_URL" \
+              '{status:"failure",repo:"votolimpo-app",branch:$branch,actor:$actor,
+                commit_sha:$sha,run_url:$url,stage:"Build Docker",
+                message:"Build da imagem falhou"}')" || true
 
-  # ── Job 2: Deploy via Portainer API (no self-hosted runner needed) ───
+  # ── Job 2: Deploy via Portainer API ───
   deploy:
     name: Deploy — Swarm (Portainer API)
     runs-on: ubuntu-latest
@@ -128,14 +122,11 @@ jobs:
         run: |
           curl -sf -X POST "${N8N_NOTIFY_URL}" \
             -H "Content-Type: application/json" \
-            -d "$(python3 -c "import json,os; print(json.dumps({
-              'status':'info','repo':'votolimpo-app',
-              'branch':os.environ['BRANCH'],'actor':os.environ['ACTOR'],
-              'commit_sha':os.environ['SHA'],
-              'run_url':os.environ['RUN_URL'],
-              'stage':'Deploy Swarm',
-              'message':'Atualizando service via Portainer API...'
-            }))")" || true
+            -d "$(jq -n \
+              --arg branch "$BRANCH" --arg actor "$ACTOR" --arg sha "$SHA" --arg url "$RUN_URL" \
+              '{status:"info",repo:"votolimpo-app",branch:$branch,actor:$actor,
+                commit_sha:$sha,run_url:$url,stage:"Deploy Swarm",
+                message:"Atualizando service via Portainer API..."}')" || true
 
       - uses: actions/checkout@v4
 
@@ -150,27 +141,19 @@ jobs:
           STACK_ID=352
           ENDPOINT_ID=4
 
-          STACK_COMPOSE=$(cat votolimpo-app/docker-stack.yml)
-
           echo "Updating stack votolimpo-app (ID=${STACK_ID}) with IMAGE_TAG=${IMAGE_TAG}"
+
+          PAYLOAD=$(jq -n \
+            --arg compose "$(cat votolimpo-app/docker-stack.yml)" \
+            --arg nc_token "$NC_API_TOKEN" \
+            --arg img_tag "$IMAGE_TAG" \
+            '{StackFileContent: $compose, Env: [{name: "NC_API_TOKEN", value: $nc_token}, {name: "IMAGE_TAG", value: $img_tag}], Prune: true}')
 
           HTTP_CODE=$(curl -s -o /tmp/portainer_response.json -w "%{http_code}" \
             -X PUT "${PORTAINER_URL}/api/stacks/${STACK_ID}?endpointId=${ENDPOINT_ID}" \
             -H "X-API-Key: ${PORTAINER_API_KEY}" \
             -H "Content-Type: application/json" \
-            -d "$(python3 -c "
-import json, os
-compose = open('votolimpo-app/docker-stack.yml').read()
-payload = {
-    'StackFileContent': compose,
-    'Env': [
-        {'name': 'NC_API_TOKEN', 'value': os.environ['NC_API_TOKEN']},
-        {'name': 'IMAGE_TAG', 'value': os.environ['IMAGE_TAG']}
-    ],
-    'Prune': True
-}
-print(json.dumps(payload))
-")")
+            -d "$PAYLOAD")
 
           echo "Portainer response HTTP ${HTTP_CODE}"
           if [ "$HTTP_CODE" -ge 400 ]; then
@@ -181,22 +164,13 @@ print(json.dumps(payload))
 
           echo "Stack updated successfully. Waiting for convergence..."
 
-          # Poll Portainer API for service update status
           SERVICE_NAME="votolimpo-app_app"
           for i in $(seq 1 24); do
             sleep 10
             UPDATE_STATE=$(curl -s \
               -H "X-API-Key: ${PORTAINER_API_KEY}" \
               "${PORTAINER_URL}/api/endpoints/${ENDPOINT_ID}/docker/services" | \
-              python3 -c "
-import json, sys
-services = json.load(sys.stdin)
-for s in services:
-    if s['Spec']['Name'] == '${SERVICE_NAME}':
-        state = s.get('UpdateStatus', {}).get('State', 'unknown')
-        print(state)
-        break
-")
+              jq -r --arg svc "$SERVICE_NAME" '.[] | select(.Spec.Name == $svc) | .UpdateStatus.State // "unknown"')
             echo "Attempt ${i}/24 — UpdateStatus: ${UPDATE_STATE}"
             if [ "$UPDATE_STATE" = "completed" ]; then
               echo "Service converged successfully."
@@ -224,13 +198,12 @@ for s in services:
         run: |
           curl -sf -X POST "${N8N_NOTIFY_URL}" \
             -H "Content-Type: application/json" \
-            -d "$(python3 -c "import json,os; print(json.dumps({
-              'status':'success','repo':'votolimpo-app',
-              'branch':os.environ['BRANCH'],'actor':os.environ['ACTOR'],
-              'commit_sha':os.environ['SHA'],'commit_message':os.environ['COMMIT_MSG'],
-              'run_url':os.environ['RUN_URL'],
-              'message':'Deploy concluido: https://votolimpo.com.br'
-            }))")" || true
+            -d "$(jq -n \
+              --arg branch "$BRANCH" --arg actor "$ACTOR" --arg sha "$SHA" \
+              --arg msg "$COMMIT_MSG" --arg url "$RUN_URL" \
+              '{status:"success",repo:"votolimpo-app",branch:$branch,actor:$actor,
+                commit_sha:$sha,commit_message:$msg,run_url:$url,
+                message:"Deploy concluido: https://votolimpo.com.br"}')" || true
 
       - name: Notify -- Deploy Falhou
         if: failure()
@@ -242,11 +215,8 @@ for s in services:
         run: |
           curl -sf -X POST "${N8N_NOTIFY_URL}" \
             -H "Content-Type: application/json" \
-            -d "$(python3 -c "import json,os; print(json.dumps({
-              'status':'failure','repo':'votolimpo-app',
-              'branch':os.environ['BRANCH'],'actor':os.environ['ACTOR'],
-              'commit_sha':os.environ['SHA'],
-              'run_url':os.environ['RUN_URL'],
-              'stage':'Deploy Swarm',
-              'message':'Deploy falhou no Docker Swarm'
-            }))")" || true
+            -d "$(jq -n \
+              --arg branch "$BRANCH" --arg actor "$ACTOR" --arg sha "$SHA" --arg url "$RUN_URL" \
+              '{status:"failure",repo:"votolimpo-app",branch:$branch,actor:$actor,
+                commit_sha:$sha,run_url:$url,stage:"Deploy Swarm",
+                message:"Deploy falhou no Docker Swarm"}')" || true
