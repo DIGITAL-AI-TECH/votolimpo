@@ -1,11 +1,12 @@
 import { NextResponse } from "next/server";
 import { unstable_noStore } from "next/cache";
 import {
-  listEntities,
+  getEntityBySlug,
   getEntityArticles,
   getEntityStats,
   entityToPolitician,
   ncArticleToArticle,
+  type NCEntityScore,
 } from "@/lib/nc-api";
 
 interface RouteParams {
@@ -19,16 +20,11 @@ export async function GET(_request: Request, { params }: RouteParams) {
   try {
     const { slug } = await params;
 
-    // Find entity by slug — NC search is name-based, so we search and match slug
-    const entities = await listEntities({
-      type: "candidate",
-      active: true,
-      limit: 100,
-    });
-
-    const entity = entities.find((e) => e.slug === slug);
-
-    if (!entity) {
+    // Fetch entity directly by slug (no N+1 fallback needed)
+    let entityData;
+    try {
+      entityData = await getEntityBySlug(slug);
+    } catch {
       return NextResponse.json(
         { error: "Politician not found" },
         { status: 404 }
@@ -37,22 +33,24 @@ export async function GET(_request: Request, { params }: RouteParams) {
 
     // Fetch articles and stats in parallel
     const [articlesRes, statsRes] = await Promise.all([
-      getEntityArticles(entity.id, { page_size: 50 }),
-      getEntityStats(entity.id),
+      getEntityArticles(entityData.id, { page_size: 50 }),
+      getEntityStats(entityData.id),
     ]);
 
-    const politician = entityToPolitician(
-      entity,
-      statsRes.articles.total
-    );
+    const politician = entityToPolitician(entityData, {
+      entity_id: entityData.id,
+      score: entityData.score,
+      max_severity: entityData.max_severity,
+      article_count: entityData.article_count,
+    } as NCEntityScore);
 
     const articles = articlesRes.items.map(ncArticleToArticle);
 
     return NextResponse.json({
       politician,
       articles,
-      milestones: [], // NC doesn't have milestones yet
-      relationships: [], // NC doesn't have relationships yet
+      milestones: [],     // NC doesn't have milestones yet
+      relationships: [],  // NC doesn't have relationships yet
     });
   } catch (error) {
     console.error("[api/politicians/[slug]] NC API error:", error);
