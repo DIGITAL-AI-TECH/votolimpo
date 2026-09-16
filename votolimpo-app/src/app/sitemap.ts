@@ -45,7 +45,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     const entities = await listEntities({
       type: "candidate",
       active: true,
-      limit: 1000,
+      limit: 50000,
     });
 
     politicianUrls = entities.map((entity) => ({

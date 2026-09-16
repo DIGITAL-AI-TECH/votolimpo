@@ -40,6 +40,14 @@ export const metadata: Metadata = {
     title: "Voto Limpo — Transparencia Politica",
     description:
       "Acompanhe o historico e vinculos dos politicos brasileiros com transparencia e dados verificados.",
+    images: [
+      {
+        url: "/opengraph-image",
+        width: 1200,
+        height: 630,
+        alt: "Voto Limpo — Transparencia Politica Brasileira",
+      },
+    ],
   },
   twitter: {
     card: "summary_large_image",

@@ -108,7 +108,7 @@ export default function OGImage() {
           {[
             { label: "Politicos monitorados", icon: "👤" },
             { label: "Artigos indexados", icon: "📰" },
-            { label: "Fontes mapeadas", icon: "🔗" },
+            { label: "Fontes de noticias", icon: "🔗" },
           ].map((item) => (
             <div
               key={item.label}

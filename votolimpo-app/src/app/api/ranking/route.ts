@@ -7,8 +7,6 @@ import {
 } from "@/lib/nc-api";
 import type { SortField, SortOrder, Politician } from "@/types";
 
-export const dynamic = "force-dynamic";
-
 export async function GET(request: Request) {
   try {
     const { searchParams } = new URL(request.url);
