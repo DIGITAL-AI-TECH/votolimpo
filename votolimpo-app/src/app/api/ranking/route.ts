@@ -10,8 +10,8 @@ import type { SortField, SortOrder, Politician } from "@/types";
 export async function GET(request: Request) {
   try {
     const { searchParams } = new URL(request.url);
-    const page = parseInt(searchParams.get("page") || "1");
-    const pageSize = parseInt(searchParams.get("pageSize") || "20");
+    const page = Math.max(1, parseInt(searchParams.get("page") || "1") || 1);
+    const pageSize = Math.min(100, Math.max(1, parseInt(searchParams.get("pageSize") || "20") || 20));
     const sortBy = (searchParams.get("sortBy") || "name") as SortField;
     const sortOrder = (searchParams.get("sortOrder") || "asc") as SortOrder;
     const searchQuery = searchParams.get("search") || undefined;
