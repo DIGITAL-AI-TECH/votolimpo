@@ -1,6 +1,5 @@
 import { notFound } from "next/navigation";
 import type { Metadata } from "next";
-import { unstable_noStore } from "next/cache";
 import {
   getEntityBySlug,
   getEntityArticles,
@@ -19,7 +18,6 @@ interface PageProps {
 }
 
 export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
-  unstable_noStore();
   const { slug } = await params;
   const canonicalUrl = `https://votolimpo.com.br/politico/${slug}`;
 
@@ -61,7 +59,6 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
 }
 
 export default async function PoliticoPage({ params }: PageProps) {
-  unstable_noStore();
   const { slug } = await params;
 
   let entityData;

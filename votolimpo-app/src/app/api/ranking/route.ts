@@ -1,12 +1,8 @@
 import { NextResponse } from "next/server";
-import { unstable_noStore } from "next/cache";
 import { listEntities, entityToPolitician, type NCEntityWithScore } from "@/lib/nc-api";
 import type { SortField, SortOrder, Politician } from "@/types";
 
-export const dynamic = "force-dynamic";
-
 export async function GET(request: Request) {
-  unstable_noStore();
   try {
     const { searchParams } = new URL(request.url);
     const party = searchParams.get("party") || undefined;

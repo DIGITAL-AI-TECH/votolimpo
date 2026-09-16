@@ -1,19 +1,14 @@
 import type { Metadata } from "next";
-import { unstable_noStore } from "next/cache";
 import { listEntities, entityToPolitician } from "@/lib/nc-api";
 import GraphVisualization from "@/components/GraphVisualization";
 import type { GraphData, GraphNode, GraphEdge } from "@/types";
 
 export const metadata: Metadata = {
-  title: "Grafo de Vinculos",
-  description: "Visualizacao interativa dos vinculos entre candidatos e partidos",
+  title: "Mapa de Partidos",
+  description: "Visualizacao dos candidatos agrupados por partido",
 };
 
-export const dynamic = "force-dynamic";
-export const revalidate = 600;
-
 export default async function GrafoPage() {
-  unstable_noStore();
   let graphData: GraphData;
   let politicians = 0;
   let entities = 0;
@@ -73,9 +68,9 @@ export default async function GrafoPage() {
       <div className="border-b border-[#1A1A1A] px-4 py-4 sm:px-6 lg:px-8">
         <div className="flex items-center justify-between flex-wrap gap-4">
           <div>
-            <h1 className="text-2xl font-bold text-[#FAFAFA]">Grafo de Vinculos</h1>
+            <h1 className="text-2xl font-bold text-[#FAFAFA]">Mapa de Partidos</h1>
             <p className="mt-1 text-sm text-[#6B7280]">
-              Visualize as conexoes entre candidatos e partidos
+              Visualize os candidatos agrupados por partido
             </p>
           </div>
 
@@ -90,7 +85,7 @@ export default async function GrafoPage() {
             </div>
             <div className="flex items-center gap-1.5 rounded-lg border border-[#2E2E2E] bg-[#141414] px-3 py-1.5">
               <div className="h-px w-4 bg-[#6B7280]" />
-              <span className="text-xs text-[#6B7280]">{totalEdges} vinculos</span>
+              <span className="text-xs text-[#6B7280]">{totalEdges} filiacoes</span>
             </div>
           </div>
         </div>

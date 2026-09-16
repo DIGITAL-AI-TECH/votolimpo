@@ -1,5 +1,4 @@
 import Link from "next/link";
-import { unstable_noStore } from "next/cache";
 import type { Metadata } from "next";
 import {
   getGlobalStats,
@@ -36,11 +35,7 @@ export const metadata: Metadata = {
   },
 };
 
-export const dynamic = "force-dynamic";
-export const revalidate = 120;
-
 export default async function HomePage() {
-  unstable_noStore();
   let stats: Stats;
   let top10: Politician[];
   let recentArticles: Article[];
@@ -140,7 +135,7 @@ export default async function HomePage() {
             {[
               { value: stats.totalPoliticians.toLocaleString("pt-BR"), label: "Politicos monitorados" },
               { value: stats.totalArticles.toLocaleString("pt-BR"), label: "Artigos indexados" },
-              { value: stats.totalRelationships.toLocaleString("pt-BR"), label: "Fontes mapeadas" },
+              { value: stats.totalRelationships.toLocaleString("pt-BR"), label: "Fontes de noticias" },
             ].map((stat) => (
               <div key={stat.label} className="text-center">
                 <p className="font-mono text-3xl font-bold text-[#FAFAFA]">
@@ -232,10 +227,10 @@ export default async function HomePage() {
         <div className="mx-auto max-w-4xl px-4 text-center sm:px-6 lg:px-8">
           <div className="rounded-2xl border border-[#2E2E2E] bg-[#141414] p-8 md:p-12">
             <h2 className="text-2xl font-bold text-[#FAFAFA] md:text-3xl">
-              Explore os vinculos politicos
+              Explore o mapa de partidos
             </h2>
             <p className="mt-4 text-[#6B7280]">
-              Visualize em tempo real as conexoes entre politicos e entidades no grafo interativo
+              Visualize como os candidatos se distribuem entre os partidos
             </p>
             <div className="mt-8 flex flex-col items-center justify-center gap-4 sm:flex-row">
               <Link
@@ -245,7 +240,7 @@ export default async function HomePage() {
                 <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
                 </svg>
-                Ver grafo de vinculos
+                Ver mapa de partidos
               </Link>
               <Link
                 href="/ranking"

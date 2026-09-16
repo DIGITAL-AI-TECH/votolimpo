@@ -62,8 +62,6 @@ export const metadata: Metadata = {
   category: "politics",
 };
 
-export const dynamic = "force-dynamic";
-
 export default async function RootLayout({
   children,
 }: Readonly<{
