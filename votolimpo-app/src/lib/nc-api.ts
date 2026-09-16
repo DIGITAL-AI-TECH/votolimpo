@@ -203,6 +203,20 @@ export async function listEntities(params?: {
   });
 }
 
+/** Count entities matching filters (mirrors listEntities params) */
+export async function countEntities(params?: {
+  type?: string;
+  search?: string;
+  active?: boolean;
+}): Promise<number> {
+  const res = await ncFetch<{ count: number }>({
+    path: "/entities/count",
+    params: params as Record<string, string | number | boolean | undefined>,
+    revalidate: 300,
+  });
+  return res.count;
+}
+
 /** Get a single entity by ID */
 export async function getEntity(id: number): Promise<NCEntity> {
   return ncFetch<NCEntity>({ path: `/entities/${id}`, revalidate: 300 });
