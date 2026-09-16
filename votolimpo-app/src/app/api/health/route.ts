@@ -25,7 +25,7 @@ export async function GET() {
     }
 
     return NextResponse.json({ status: "healthy", nc_api: "ok" });
-  } catch (error) {
+  } catch {
     return NextResponse.json(
       { status: "unhealthy", nc_api: "error" },
       { status: 503 }
