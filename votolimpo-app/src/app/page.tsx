@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { unstable_noStore } from "next/cache";
+import type { Metadata } from "next";
 import {
   getGlobalStats,
   listEntities,
@@ -12,6 +13,28 @@ import PoliticianCard from "@/components/PoliticianCard";
 import ArticleCard from "@/components/ArticleCard";
 import SearchBar from "@/components/SearchBar";
 import type { Politician, Article, Stats } from "@/types";
+
+export const metadata: Metadata = {
+  title: "Voto Limpo — Transparencia Politica Brasileira",
+  description:
+    "Plataforma de transparencia politica brasileira. Acompanhe o historico, vinculos e indice de transparencia dos politicos do Brasil. Dados publicos, verificados e acessiveis.",
+  alternates: {
+    canonical: "https://votolimpo.com.br",
+  },
+  openGraph: {
+    type: "website",
+    url: "https://votolimpo.com.br",
+    title: "Voto Limpo — Transparencia Politica Brasileira",
+    description:
+      "Plataforma de transparencia politica brasileira. Acompanhe o historico, vinculos e indice de transparencia dos politicos do Brasil.",
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "Voto Limpo — Transparencia Politica Brasileira",
+    description:
+      "Plataforma de transparencia politica brasileira. Dados publicos, verificados e acessiveis.",
+  },
+};
 
 export const dynamic = "force-dynamic";
 export const revalidate = 120;
@@ -52,7 +75,34 @@ export default async function HomePage() {
     recentArticles = [];
   }
 
+  const jsonLd = {
+    "@context": "https://schema.org",
+    "@type": "WebSite",
+    name: "Voto Limpo",
+    url: "https://votolimpo.com.br",
+    description:
+      "Plataforma de transparencia politica brasileira. Acompanhe o historico, vinculos e indice de transparencia dos politicos do Brasil.",
+    potentialAction: {
+      "@type": "SearchAction",
+      target: {
+        "@type": "EntryPoint",
+        urlTemplate: "https://votolimpo.com.br/busca?q={search_term_string}",
+      },
+      "query-input": "required name=search_term_string",
+    },
+    publisher: {
+      "@type": "Organization",
+      name: "Voto Limpo",
+      url: "https://votolimpo.com.br",
+    },
+  };
+
   return (
+    <>
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
+      />
     <div className="min-h-screen">
       {/* Hero Section */}
       <section className="relative overflow-hidden border-b border-[#1A1A1A] py-20 md:py-32">
@@ -208,5 +258,6 @@ export default async function HomePage() {
         </div>
       </section>
     </div>
+    </>
   );
 }
