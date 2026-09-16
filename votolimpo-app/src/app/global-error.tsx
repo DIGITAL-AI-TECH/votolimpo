@@ -16,6 +16,7 @@ export default function GlobalError({ error, reset }: GlobalErrorProps) {
     <html lang="pt-BR" className="dark">
       <body className="min-h-screen bg-[#0A0A0A] text-[#FAFAFA] flex flex-col items-center justify-center px-4 antialiased">
         {/* Logo */}
+        {/* eslint-disable-next-line @next/next/no-html-link-for-pages -- global-error cannot use next/link (outside root layout) */}
         <a href="/" className="text-lg font-bold tracking-tight mb-12">
           Voto<span className="text-emerald-400">Limpo</span>
         </a>

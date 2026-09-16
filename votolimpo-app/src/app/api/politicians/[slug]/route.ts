@@ -2,7 +2,6 @@ import { NextResponse } from "next/server";
 import {
   getEntityBySlug,
   getEntityArticles,
-  getEntityStats,
   entityToPolitician,
   ncArticleToArticle,
   type NCEntityScore,
@@ -28,10 +27,7 @@ export async function GET(_request: Request, { params }: RouteParams) {
     }
 
     // Fetch articles and stats in parallel
-    const [articlesRes, statsRes] = await Promise.all([
-      getEntityArticles(entityData.id, { page_size: 50 }),
-      getEntityStats(entityData.id),
-    ]);
+    const articlesRes = await getEntityArticles(entityData.id, { page_size: 50 });
 
     const politician = entityToPolitician(entityData, {
       entity_id: entityData.id,
