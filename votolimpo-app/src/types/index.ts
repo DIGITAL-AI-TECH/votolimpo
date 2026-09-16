@@ -28,9 +28,12 @@ export interface Article {
   source: NewsSource;
   publishedAt: string;
   severity: Severity;
-  truthScore: number; // 0-1
+  truthScore: number; // 0-1 (from PE veracity_score / 10)
   politicianIds: string[];
-  tags: string[];
+  tags: string[]; // PE-extracted keywords
+  isPolitical?: boolean;
+  scoreBreakdown?: Record<string, number>; // veracity signals 0-10
+  processingStatus?: string;
 }
 
 export interface NewsSource {

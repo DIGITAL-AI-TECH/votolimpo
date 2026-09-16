@@ -91,6 +91,7 @@ export interface NCArticle {
   author: string | null;
   published_at: string | null;
   source_domain: string | null;
+  source_name: string | null;
   language: string | null;
   sentiment: string | null;
   sentiment_score: number | null;
@@ -99,6 +100,13 @@ export interface NCArticle {
   created_at: string;
   updated_at: string;
   entities_linked: Record<string, unknown>[] | null;
+  // PE-derived fields (populated by backend from processing_output)
+  severity: string | null;
+  is_political: boolean | null;
+  score: number | null; // veracity 0-10 scale
+  score_breakdown: Record<string, number> | null;
+  pe_keywords: string[] | null;
+  politicians: string[] | null;
 }
 
 export interface NCPaginatedArticles {
@@ -217,6 +225,8 @@ export async function listArticles(params?: {
   date_to?: string;
   q?: string;
   entity_id?: number;
+  severity?: string;
+  is_political?: boolean;
 }): Promise<NCPaginatedArticles> {
   return ncFetch<NCPaginatedArticles>({
     path: "/articles/",
@@ -343,16 +353,31 @@ export function entityToPolitician(
   };
 }
 
+/** Map PE severity string to frontend Severity type */
+function mapSeverity(peSeverity: string | null): Severity {
+  if (peSeverity && ["critical", "high", "medium", "low"].includes(peSeverity)) {
+    return peSeverity as Severity;
+  }
+  return "info";
+}
+
 /** Convert NC article to frontend Article type */
 export function ncArticleToArticle(ncArt: NCArticle): Article {
-  // Determine severity from sentiment_score
-  let severity: Severity = "info";
-  if (ncArt.sentiment_score !== null) {
-    if (ncArt.sentiment_score < 0.2) severity = "critical";
-    else if (ncArt.sentiment_score < 0.35) severity = "high";
-    else if (ncArt.sentiment_score < 0.5) severity = "medium";
-    else if (ncArt.sentiment_score < 0.65) severity = "low";
-  }
+  // Use PE-calculated severity when available, fallback to sentiment-based inference
+  const severity: Severity = ncArt.severity
+    ? mapSeverity(ncArt.severity)
+    : ncArt.sentiment_score !== null
+      ? ncArt.sentiment_score < 0.2 ? "critical"
+        : ncArt.sentiment_score < 0.35 ? "high"
+        : ncArt.sentiment_score < 0.5 ? "medium"
+        : ncArt.sentiment_score < 0.65 ? "low"
+        : "info"
+      : "info";
+
+  // Use PE veracity score (0-10) converted to 0-1, fallback to sentiment_score
+  const truthScore = ncArt.score !== null
+    ? ncArt.score / 10
+    : ncArt.sentiment_score ?? 0.5;
 
   // Extract clean title (strip HTML from content if title missing)
   let title = ncArt.title || "";
@@ -368,7 +393,7 @@ export function ncArticleToArticle(ncArt: NCArticle): Article {
     url: ncArt.url,
     source: {
       id: ncArt.source_domain || "unknown",
-      name: formatSourceDomain(ncArt.source_domain),
+      name: ncArt.source_name || formatSourceDomain(ncArt.source_domain),
       url: ncArt.source_domain
         ? `https://${ncArt.source_domain}`
         : "",
@@ -376,9 +401,12 @@ export function ncArticleToArticle(ncArt: NCArticle): Article {
     },
     publishedAt: ncArt.published_at || ncArt.created_at,
     severity,
-    truthScore: ncArt.sentiment_score ?? 0.5,
-    politicianIds: [],
-    tags: [],
+    truthScore,
+    isPolitical: ncArt.is_political ?? undefined,
+    tags: ncArt.pe_keywords ?? [],
+    politicianIds: ncArt.politicians ?? [],
+    scoreBreakdown: ncArt.score_breakdown ?? undefined,
+    processingStatus: ncArt.processing_status,
   };
 }
 

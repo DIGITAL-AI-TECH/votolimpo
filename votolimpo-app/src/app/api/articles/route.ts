@@ -14,12 +14,17 @@ export async function GET(request: Request) {
     const q = searchParams.get("q") || undefined;
     const entityId = searchParams.get("politicianId") || undefined;
 
+    const severity = searchParams.get("severity") || undefined;
+    const isPolitical = searchParams.get("is_political") || undefined;
+
     const result = await listArticles({
       page,
       page_size: pageSize,
       status,
       q,
       entity_id: entityId ? parseInt(entityId) : undefined,
+      severity,
+      is_political: isPolitical !== undefined ? isPolitical === "true" : undefined,
     });
 
     const articles = result.items.map(ncArticleToArticle);

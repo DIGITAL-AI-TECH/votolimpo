@@ -28,8 +28,13 @@ const ArticleCard: FC<ArticleCardProps> = ({ article }) => {
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2 mb-2">
             <SeverityBadge severity={article.severity} size="sm" />
+            {article.isPolitical && (
+              <span className="rounded bg-blue-500/20 px-1.5 py-0.5 text-xs font-medium text-blue-400">
+                Pol\u00edtico
+              </span>
+            )}
             <span className="text-xs text-[#6B7280]">{article.source.name}</span>
-            <span className="text-xs text-[#6B7280]">·</span>
+            <span className="text-xs text-[#6B7280]">\u00b7</span>
             <span className="text-xs text-[#6B7280]">{formatDate(article.publishedAt)}</span>
           </div>
 
@@ -50,7 +55,7 @@ const ArticleCard: FC<ArticleCardProps> = ({ article }) => {
 
       <div className="mt-3 flex items-center justify-between">
         <div className="flex flex-wrap gap-1.5">
-          {article.tags.slice(0, 3).map((tag) => (
+          {article.tags.slice(0, 4).map((tag) => (
             <span
               key={tag}
               className="rounded bg-[#2E2E2E] px-1.5 py-0.5 text-xs text-[#6B7280]"
