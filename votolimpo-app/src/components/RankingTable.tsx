@@ -50,7 +50,7 @@ const RankingTable: FC<RankingTableProps> = ({
     <div className="flex flex-col gap-4">
       {/* Table */}
       <div className="overflow-x-auto rounded-xl border border-[#2E2E2E]">
-        <table className="w-full min-w-[640px]">
+        <table className="w-full min-w-[640px]" aria-label="Ranking de candidatos">
           <thead>
             <tr className="border-b border-[#2E2E2E] bg-[#141414]">
               <th className="px-4 py-3 text-left text-xs font-semibold text-[#6B7280] w-12">#</th>
@@ -59,6 +59,7 @@ const RankingTable: FC<RankingTableProps> = ({
                   key={col.key}
                   className="px-4 py-3 text-left text-xs font-semibold text-[#6B7280] cursor-pointer hover:text-[#FAFAFA] transition-colors select-none"
                   onClick={() => handleSort(col.key)}
+                  aria-label={`Ordenar por ${col.label}`}
                 >
                   <span className="flex items-center gap-1">
                     {col.label}
@@ -141,6 +142,7 @@ const RankingTable: FC<RankingTableProps> = ({
             <button
               onClick={() => onPageChange(page - 1)}
               disabled={page === 1}
+              aria-label="Página anterior"
               className="rounded-lg border border-[#2E2E2E] bg-[#141414] px-3 py-1.5 text-xs text-[#FAFAFA] hover:bg-[#1A1A1A] disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
             >
               Anterior
@@ -164,6 +166,7 @@ const RankingTable: FC<RankingTableProps> = ({
             <button
               onClick={() => onPageChange(page + 1)}
               disabled={page === totalPages}
+              aria-label="Próxima página"
               className="rounded-lg border border-[#2E2E2E] bg-[#141414] px-3 py-1.5 text-xs text-[#FAFAFA] hover:bg-[#1A1A1A] disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
             >
               Próxima

@@ -9,7 +9,7 @@ export default function robots(): MetadataRoute.Robots {
         disallow: ["/api/", "/_next/"],
       },
     ],
-    sitemap: "https://votolimpo.com.br/sitemap.xml",
-    host: "https://votolimpo.com.br",
+    sitemap: "https://votolimpo.digital-ai.tech/sitemap.xml",
+    host: "https://votolimpo.digital-ai.tech",
   };
 }

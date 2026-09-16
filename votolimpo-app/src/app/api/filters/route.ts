@@ -8,7 +8,9 @@ export async function GET() {
       active: true,
     });
 
-    return NextResponse.json(filters);
+    const response = NextResponse.json(filters);
+    response.headers.set('Cache-Control', 'public, s-maxage=60, stale-while-revalidate=300');
+    return response;
   } catch (error) {
     console.error("[api/filters] NC API error:", error);
     return NextResponse.json(

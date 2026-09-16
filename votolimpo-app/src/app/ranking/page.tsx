@@ -93,6 +93,7 @@ export default function RankingPage() {
         <select
           value={selectedParty}
           onChange={(e) => handleFilterChange("party", e.target.value)}
+          aria-label="Filtrar por partido"
           className="rounded-lg border border-[#2E2E2E] bg-[#0A0A0A] px-3 py-2 text-sm text-[#FAFAFA] outline-none focus:border-emerald-500/50"
         >
           <option value="">Todos os partidos</option>
@@ -104,6 +105,7 @@ export default function RankingPage() {
         <select
           value={selectedUF}
           onChange={(e) => handleFilterChange("uf", e.target.value)}
+          aria-label="Filtrar por estado"
           className="rounded-lg border border-[#2E2E2E] bg-[#0A0A0A] px-3 py-2 text-sm text-[#FAFAFA] outline-none focus:border-emerald-500/50"
         >
           <option value="">Todos os estados</option>

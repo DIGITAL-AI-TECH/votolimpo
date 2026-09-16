@@ -33,13 +33,15 @@ export async function GET(request: Request) {
 
     const politicians = entities.map((e) => entityToPolitician(e));
 
-    return NextResponse.json({
+    const response = NextResponse.json({
       data: politicians,
       total,
       page,
       pageSize,
       totalPages: Math.ceil(total / pageSize),
     });
+    response.headers.set('Cache-Control', 'public, s-maxage=60, stale-while-revalidate=300');
+    return response;
   } catch (error) {
     console.error("[api/politicians] NC API error:", error);
     return NextResponse.json(
