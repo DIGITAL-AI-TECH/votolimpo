@@ -4,6 +4,8 @@ import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 import { getGlobalStats, ncStatsToStats } from "@/lib/nc-api";
 
+export const dynamic = "force-dynamic";
+
 export const metadata: Metadata = {
   metadataBase: new URL("https://votolimpo.com.br"),
   title: {
