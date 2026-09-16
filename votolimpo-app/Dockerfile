@@ -7,11 +7,11 @@ WORKDIR /app
 # Install pnpm
 RUN corepack enable && corepack prepare pnpm@9.15.9 --activate
 
-# Copy package files
-COPY package.json pnpm-lock.yaml* ./
+# Copy package files and workspace config
+COPY package.json pnpm-lock.yaml* pnpm-workspace.yaml* ./
 
-# Install dependencies
-RUN pnpm install --frozen-lockfile
+# Install dependencies (use lockfile if present, generate if not)
+RUN if [ -f pnpm-lock.yaml ]; then pnpm install --frozen-lockfile; else pnpm install; fi
 
 # Stage 2: builder
 FROM node:20-alpine AS builder
