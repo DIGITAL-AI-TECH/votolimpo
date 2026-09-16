@@ -113,10 +113,10 @@ jobs:
               'message':'Build da imagem falhou'
             }))")" || true
 
-  # ── Job 2: Deploy via service update (self-hosted runner) ───
+  # ── Job 2: Deploy via Portainer API (no self-hosted runner needed) ───
   deploy:
-    name: Deploy — Swarm
-    runs-on: [self-hosted, swarm]
+    name: Deploy — Swarm (Portainer API)
+    runs-on: ubuntu-latest
     needs: docker
     steps:
       - name: Notify -- Deploy em Andamento
@@ -134,42 +134,84 @@ jobs:
               'commit_sha':os.environ['SHA'],
               'run_url':os.environ['RUN_URL'],
               'stage':'Deploy Swarm',
-              'message':'Atualizando service no Docker Swarm...'
+              'message':'Atualizando service via Portainer API...'
             }))")" || true
 
-      - name: Login no registry
-        run: echo "${{ secrets.REGISTRY_PASSWORD }}" | docker login ${{ env.REGISTRY }} -u "${{ secrets.REGISTRY_USER }}" --password-stdin
+      - uses: actions/checkout@v4
 
-      - name: Pull e update service
+      - name: Update stack via Portainer API
         env:
-          IMAGE: ${{ env.IMAGE_NAME }}:${{ needs.docker.outputs.image_sha }}
+          PORTAINER_URL: ${{ secrets.PORTAINER_URL }}
+          PORTAINER_API_KEY: ${{ secrets.PORTAINER_API_KEY }}
+          IMAGE_TAG: ${{ needs.docker.outputs.image_sha }}
+          NC_API_TOKEN: ${{ secrets.NC_API_TOKEN }}
         run: |
           set -e
-          STACK_SERVICE="votolimpo-app_app"
+          STACK_ID=352
+          ENDPOINT_ID=4
 
-          echo "Pulling image: ${IMAGE}"
-          docker pull "${IMAGE}"
+          STACK_COMPOSE=$(cat votolimpo-app/docker-stack.yml)
 
-          echo "Updating service: ${STACK_SERVICE}"
-          docker service update \
-            --image "${IMAGE}" \
-            --with-registry-auth \
-            "${STACK_SERVICE}"
+          echo "Updating stack votolimpo-app (ID=${STACK_ID}) with IMAGE_TAG=${IMAGE_TAG}"
 
-          echo "Waiting for convergence..."
-          timeout 120 bash -c "
-            while true; do
-              STATE=\$(docker service ps ${STACK_SERVICE} \
-                --filter 'desired-state=running' \
-                --format '{{.CurrentState}}' | head -1)
-              echo \"State: \${STATE}\"
-              if [[ \"\${STATE}\" == Running* ]]; then
-                echo 'Service converged successfully.'
-                break
-              fi
-              sleep 5
-            done
-          "
+          HTTP_CODE=$(curl -s -o /tmp/portainer_response.json -w "%{http_code}" \
+            -X PUT "${PORTAINER_URL}/api/stacks/${STACK_ID}?endpointId=${ENDPOINT_ID}" \
+            -H "X-API-Key: ${PORTAINER_API_KEY}" \
+            -H "Content-Type: application/json" \
+            -d "$(python3 -c "
+import json, os
+compose = open('votolimpo-app/docker-stack.yml').read()
+payload = {
+    'StackFileContent': compose,
+    'Env': [
+        {'name': 'NC_API_TOKEN', 'value': os.environ['NC_API_TOKEN']},
+        {'name': 'IMAGE_TAG', 'value': os.environ['IMAGE_TAG']}
+    ],
+    'Prune': True
+}
+print(json.dumps(payload))
+")")
+
+          echo "Portainer response HTTP ${HTTP_CODE}"
+          if [ "$HTTP_CODE" -ge 400 ]; then
+            echo "ERROR: Portainer API returned ${HTTP_CODE}"
+            cat /tmp/portainer_response.json
+            exit 1
+          fi
+
+          echo "Stack updated successfully. Waiting for convergence..."
+
+          # Poll Portainer API for service update status
+          SERVICE_NAME="votolimpo-app_app"
+          for i in $(seq 1 24); do
+            sleep 10
+            UPDATE_STATE=$(curl -s \
+              -H "X-API-Key: ${PORTAINER_API_KEY}" \
+              "${PORTAINER_URL}/api/endpoints/${ENDPOINT_ID}/docker/services" | \
+              python3 -c "
+import json, sys
+services = json.load(sys.stdin)
+for s in services:
+    if s['Spec']['Name'] == '${SERVICE_NAME}':
+        state = s.get('UpdateStatus', {}).get('State', 'unknown')
+        print(state)
+        break
+")
+            echo "Attempt ${i}/24 — UpdateStatus: ${UPDATE_STATE}"
+            if [ "$UPDATE_STATE" = "completed" ]; then
+              echo "Service converged successfully."
+              exit 0
+            elif [ "$UPDATE_STATE" = "rollback_completed" ]; then
+              echo "ERROR: Service rolled back automatically."
+              exit 1
+            elif [ "$UPDATE_STATE" = "paused" ]; then
+              echo "ERROR: Service update paused due to failure."
+              exit 1
+            fi
+          done
+
+          echo "WARNING: Convergence timeout (240s). Check Portainer manually."
+          exit 1
 
       - name: Notify -- Deploy Concluido
         if: success()
