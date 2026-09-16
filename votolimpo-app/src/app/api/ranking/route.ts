@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { unstable_noStore } from "next/cache";
-import { listEntities, entityToPolitician } from "@/lib/nc-api";
+import { listEntities, entityToPolitician, type NCEntityWithScore } from "@/lib/nc-api";
 import type { SortField, SortOrder, Politician } from "@/types";
 
 export const dynamic = "force-dynamic";
@@ -23,9 +23,18 @@ export async function GET(request: Request) {
       limit: 100,
     });
 
-    let politicians: Politician[] = entities.map((e) =>
-      entityToPolitician(e)
-    );
+    // entities now include article_count from the enriched GET /entities/ endpoint
+    // We pass article_count via NCEntityWithScore cast — score is computed on
+    // the individual politician page to avoid N+1 queries in the ranking list.
+    let politicians: Politician[] = entities.map((e) => {
+      const enriched = e as unknown as NCEntityWithScore;
+      return entityToPolitician(enriched, {
+        entity_id: enriched.id,
+        score: null,           // score loaded individually on /politico/[slug]
+        max_severity: "info",
+        article_count: enriched.article_count ?? 0,
+      });
+    });
 
     // Apply filters
     if (party) politicians = politicians.filter((p) => p.party === party);
