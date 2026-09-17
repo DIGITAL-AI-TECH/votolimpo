@@ -20,6 +20,15 @@ interface FetchOptions {
 }
 
 async function ncFetch<T>(opts: FetchOptions): Promise<T> {
+  // During Docker build, NC_API_TOKEN is "build-placeholder" and the API is
+  // unreachable.  Fail fast so pages render with their fallback data instead
+  // of hanging 60s per page (which causes Next.js static generation to abort).
+  if (NC_API_TOKEN === "build-placeholder" || !NC_API_TOKEN) {
+    throw new Error(
+      `NC API unavailable during build (token=${NC_API_TOKEN ? "placeholder" : "empty"})`,
+    );
+  }
+
   const url = new URL(opts.path, NC_API_URL);
 
   if (opts.params) {
