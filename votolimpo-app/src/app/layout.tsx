@@ -2,9 +2,7 @@ import type { Metadata } from "next";
 import "./globals.css";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
-import { getGlobalStats, ncStatsToStats } from "@/lib/nc-api";
-
-export const dynamic = "force-dynamic";
+import { getGlobalStats, getVotoLimpoStats, ncStatsToStats } from "@/lib/nc-api";
 
 export const metadata: Metadata = {
   metadataBase: new URL("https://votolimpo.com.br"),
@@ -79,8 +77,11 @@ export default async function RootLayout({
 }>) {
   let stats;
   try {
-    const ncStats = await getGlobalStats();
-    stats = ncStatsToStats(ncStats);
+    const [ncStats, vlStats] = await Promise.all([
+      getGlobalStats(),
+      getVotoLimpoStats(),
+    ]);
+    stats = ncStatsToStats(ncStats, vlStats);
   } catch {
     // Fallback stats if NC API is unavailable
     stats = {

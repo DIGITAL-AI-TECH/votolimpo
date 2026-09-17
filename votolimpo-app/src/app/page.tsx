@@ -2,6 +2,7 @@ import Link from "next/link";
 import type { Metadata } from "next";
 import {
   getGlobalStats,
+  getVotoLimpoStats,
   listEntities,
   listArticles,
   ncStatsToStats,
@@ -12,8 +13,6 @@ import PoliticianCard from "@/components/PoliticianCard";
 import ArticleCard from "@/components/ArticleCard";
 import SearchBar from "@/components/SearchBar";
 import type { Politician, Article, Stats } from "@/types";
-
-export const dynamic = "force-dynamic";
 
 export const metadata: Metadata = {
   title: "Voto Limpo — Transparência Política Brasileira",
@@ -43,13 +42,14 @@ export default async function HomePage() {
   let recentArticles: Article[];
 
   try {
-    const [ncStats, entities, articlesRes] = await Promise.all([
+    const [ncStats, vlStats, entities, articlesRes] = await Promise.all([
       getGlobalStats(),
+      getVotoLimpoStats(),
       listEntities({ type: "candidate", active: true, limit: 50 }),
       listArticles({ status: "processed", page_size: 6 }),
     ]);
 
-    stats = ncStatsToStats(ncStats);
+    stats = ncStatsToStats(ncStats, vlStats);
 
     // Sort by name for now (score will come from processing later)
     top10 = entities

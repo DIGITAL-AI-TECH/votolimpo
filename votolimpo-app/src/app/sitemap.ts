@@ -3,7 +3,7 @@ import { listEntities } from "@/lib/nc-api";
 
 export const revalidate = 3600; // 1 hora
 
-const BASE_URL = "https://votolimpo.digital-ai.tech";
+const BASE_URL = "https://votolimpo.com.br";
 
 const STATIC_PAGES: MetadataRoute.Sitemap = [
   {

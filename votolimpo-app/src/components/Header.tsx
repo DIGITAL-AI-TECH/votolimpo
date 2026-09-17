@@ -8,7 +8,7 @@ const NAV_LINKS = [
   { href: "/", label: "Início" },
   { href: "/ranking", label: "Ranking" },
   { href: "/busca", label: "Busca" },
-  { href: "/grafo", label: "Grafo" },
+  { href: "/grafo", label: "Mapa de Partidos" },
   { href: "/como-funciona", label: "Como Funciona" },
 ];
 
