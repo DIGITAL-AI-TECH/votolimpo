@@ -18,6 +18,8 @@ import SeverityBadge from "@/components/SeverityBadge";
 import ShareButton from "@/components/ShareButton";
 import Timeline, { buildTimelineItems } from "@/components/Timeline";
 
+export const dynamic = "force-dynamic";
+
 interface PageProps {
   params: Promise<{ slug: string }>;
 }
