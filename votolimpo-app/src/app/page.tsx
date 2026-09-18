@@ -47,7 +47,7 @@ export default async function HomePage() {
     const [ncStats, vlStats, entities, articlesRes] = await Promise.all([
       getGlobalStats(),
       getVotoLimpoStats(),
-      listEntities({ type: "candidate", active: true, limit: 50 }),
+      listEntities({ type: "candidate", active: true, limit: 50, order_by: "article_count", order_dir: "desc" }),
       listArticles({ status: "processed", page_size: 6 }),
     ]);
 
