@@ -4,11 +4,14 @@ import type { Metadata } from "next";
 import {
   getEntityBySlug,
   getEntityArticles,
+  getEntityMilestones,
   getEntityStats,
   entityToPolitician,
   ncArticleToArticle,
+  ncMilestoneToLegalMilestone,
   type NCEntityScore,
 } from "@/lib/nc-api";
+import type { LegalMilestone } from "@/types";
 
 import ScoreBadge from "@/components/ScoreBadge";
 import SeverityBadge from "@/components/SeverityBadge";
@@ -75,12 +78,17 @@ export default async function PoliticoPage({ params }: PageProps) {
 
   let articles;
   let statsRes;
+  let milestones: LegalMilestone[] = [];
 
   try {
-    [articles, statsRes] = await Promise.all([
+    const [articlesRes, statsResult, rawMilestones] = await Promise.all([
       getEntityArticles(entityData.id, { page_size: 50 }),
       getEntityStats(entityData.id),
+      getEntityMilestones(entityData.id).catch(() => []),
     ]);
+    articles = articlesRes;
+    statsRes = statsResult;
+    milestones = rawMilestones.map(ncMilestoneToLegalMilestone);
   } catch (error) {
     console.error("[PoliticoPage] NC API error fetching details:", error);
     articles = { items: [], total: 0, page: 1, page_size: 50, pages: 1 };
@@ -94,8 +102,11 @@ export default async function PoliticoPage({ params }: PageProps) {
     article_count: entityData.article_count,
   } as NCEntityScore);
 
+  // Enrich milestoneCount with real data
+  politician.milestoneCount = milestones.length;
+
   const frontendArticles = articles.items.map(ncArticleToArticle);
-  const timelineItems = buildTimelineItems(frontendArticles, []);
+  const timelineItems = buildTimelineItems(frontendArticles, milestones);
 
   function getScoreLabel(score: number | null): string {
     if (score === null) return "Sem dados";

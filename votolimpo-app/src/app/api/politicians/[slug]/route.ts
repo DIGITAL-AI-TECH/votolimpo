@@ -40,6 +40,9 @@ export async function GET(_request: Request, { params }: RouteParams) {
       article_count: entityData.article_count,
     } as NCEntityScore);
 
+    // Enrich milestoneCount with real data
+    politician.milestoneCount = milestones.length;
+
     const articles = articlesRes.items.map(ncArticleToArticle);
 
     return NextResponse.json({

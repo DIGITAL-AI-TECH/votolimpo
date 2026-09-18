@@ -167,7 +167,8 @@ validator_config:
 # --- Post-Processors ---
 # score_calculator: pure math, no tokens. article_matcher + cluster_updater: SQL only.
 # milestone_detector: ativo — persiste milestones extraidos pelo LLM em votolimpo.milestones.
-# entity_resolver, relationship_builder: disabled (fields removed from schema).
+# entity_resolver: resolves politician names to DB IDs (required by milestone_detector).
+# relationship_builder: disabled (fields removed from schema).
 post_processors:
   - type: score_calculator
     config:
@@ -196,6 +197,13 @@ post_processors:
       cluster_articles_table: votolimpo.cluster_articles
       cluster_politicians_table: votolimpo.cluster_politicians
       similarity_threshold: 0.50
+
+  - type: entity_resolver
+    config:
+      politician_table: votolimpo.politicians
+      entity_table: votolimpo.entities
+      fuzzy_threshold: 0.80
+      fuzzy_party_threshold: 0.70
 
   - type: milestone_detector
     config:

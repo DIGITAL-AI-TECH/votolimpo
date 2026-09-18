@@ -5,6 +5,8 @@
  * to the NC backend without exposing the internal URL or token.
  */
 
+import type { LegalMilestone } from "@/types";
+
 const NC_API_URL =
   process.env.NC_API_URL || "https://api.news-collector.digital-ai.tech";
 const NC_API_TOKEN = process.env.NC_API_TOKEN || "";
@@ -361,6 +363,24 @@ export async function getEntityMilestones(entityId: number): Promise<NCMilestone
   });
 }
 
+/** Map NC milestone to frontend LegalMilestone type */
+export function ncMilestoneToLegalMilestone(m: NCMilestone): LegalMilestone {
+  const validTypes = ["indictment", "conviction", "acquittal", "investigation", "appeal", "settlement", "impeachment", "election"] as const;
+  type MilestoneType = typeof validTypes[number];
+  const milestoneType: MilestoneType = validTypes.includes(m.type as MilestoneType)
+    ? (m.type as MilestoneType)
+    : "investigation";
+  return {
+    id: String(m.id),
+    politicianId: String(m.politician_id),
+    title: m.title,
+    description: m.description || "",
+    type: milestoneType,
+    date: m.date || new Date().toISOString().slice(0, 10),
+    severity: "info",
+  };
+}
+
 /** Get aggregated score data for a single entity */
 export async function getEntityScore(entityId: number): Promise<NCEntityScore> {
   return ncFetch<NCEntityScore>({
@@ -475,7 +495,7 @@ export function entityToPolitician(
     score: score ?? null,  // null = sem artigos processados (N/D)
     articleCount,
     maxSeverity,
-    milestoneCount: 0,  // mantido até frente de Milestones
+    milestoneCount: 0,  // will be enriched by the caller when milestones are fetched
     createdAt: entity.created_at,
     updatedAt: entity.updated_at,
   };
