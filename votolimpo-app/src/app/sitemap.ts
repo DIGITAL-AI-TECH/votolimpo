@@ -42,13 +42,24 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   let politicianUrls: MetadataRoute.Sitemap = [];
 
   try {
-    const entities = await listEntities({
-      type: "candidate",
-      active: true,
-      limit: 50000,
-    });
+    // Paginate — NC API max limit is 100 per request
+    const PAGE_SIZE = 100;
+    let allEntities: Awaited<ReturnType<typeof listEntities>> = [];
+    let skip = 0;
+    let batch: Awaited<ReturnType<typeof listEntities>>;
 
-    politicianUrls = entities.map((entity) => ({
+    do {
+      batch = await listEntities({
+        type: "candidate",
+        active: true,
+        limit: PAGE_SIZE,
+        skip,
+      });
+      allEntities = allEntities.concat(batch);
+      skip += PAGE_SIZE;
+    } while (batch.length === PAGE_SIZE);
+
+    politicianUrls = allEntities.map((entity) => ({
       url: `${BASE_URL}/politico/${entity.slug}`,
       lastModified: new Date(entity.updated_at),
       changeFrequency: "daily" as const,

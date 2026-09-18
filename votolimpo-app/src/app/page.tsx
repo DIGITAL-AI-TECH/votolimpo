@@ -14,6 +14,8 @@ import ArticleCard from "@/components/ArticleCard";
 import SearchBar from "@/components/SearchBar";
 import type { Politician, Article, Stats } from "@/types";
 
+export const revalidate = 60; // ISR: regenerate every 60s
+
 export const metadata: Metadata = {
   title: "Voto Limpo — Transparência Política Brasileira",
   description:
