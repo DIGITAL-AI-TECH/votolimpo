@@ -167,7 +167,7 @@ jobs:
           NC_API_TOKEN: ${{ secrets.NC_API_TOKEN }}
         run: |
           set -e
-          STACK_ID=352
+          STACK_ID=358
           ENDPOINT_ID=4
 
           echo "Updating stack votolimpo-app (ID=${STACK_ID}) with IMAGE_TAG=${IMAGE_TAG}"
