@@ -172,7 +172,7 @@ describe('entityToPolitician', () => {
     expect(politician.maxSeverity).toBe('medium');
   });
 
-  it('scoreData com score null -> score 0', () => {
+  it('scoreData com score null -> score null (sem artigos processados)', () => {
     const entity = makeEntity();
     const scoreData: NCEntityScore = {
       entity_id: 1,
@@ -181,7 +181,7 @@ describe('entityToPolitician', () => {
       article_count: 5,
     };
     const politician = entityToPolitician(entity, scoreData);
-    expect(politician.score).toBe(0);
+    expect(politician.score).toBeNull();
   });
 
   it('campos hardcoded: milestoneCount sempre 0', () => {

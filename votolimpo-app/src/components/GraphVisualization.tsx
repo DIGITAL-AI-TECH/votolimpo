@@ -66,7 +66,7 @@ const GraphVisualization: FC<GraphVisualizationProps> = ({ data }) => {
         slug?: string;
         party?: string;
         partyColor?: string;
-        score?: number;
+        score?: number | null;
         entityType?: string;
       };
       const nodes: SimNode[] = data.nodes.map((n) => ({ ...n }));

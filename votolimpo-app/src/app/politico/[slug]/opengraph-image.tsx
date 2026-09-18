@@ -9,7 +9,8 @@ interface Props {
   params: Promise<{ slug: string }>;
 }
 
-function getScoreColor(score: number): string {
+function getScoreColor(score: number | null): string {
+  if (score === null) return "#6B7280";
   if (score >= 80) return "#10B981";
   if (score >= 60) return "#3B82F6";
   if (score >= 40) return "#EAB308";
@@ -17,7 +18,8 @@ function getScoreColor(score: number): string {
   return "#EF4444";
 }
 
-function getScoreLabel(score: number): string {
+function getScoreLabel(score: number | null): string {
+  if (score === null) return "Sem dados";
   if (score >= 80) return "Excelente";
   if (score >= 60) return "Bom";
   if (score >= 40) return "Regular";
@@ -32,7 +34,7 @@ export default async function OGImage({ params }: Props) {
   let party = "";
   let uf = "";
   let role = "Candidato";
-  let score = 50;
+  let score: number | null = null;
 
   try {
     const firstWord = slug.split("-")[0];
@@ -226,10 +228,10 @@ export default async function OGImage({ params }: Props) {
                     fontFamily: "monospace",
                   }}
                 >
-                  {score}
+                  {score !== null ? score : "N/D"}
                 </span>
                 <span style={{ fontSize: 12, color: "#6B7280", marginTop: 2 }}>
-                  /100
+                  {score !== null ? "/100" : ""}
                 </span>
               </div>
               <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>

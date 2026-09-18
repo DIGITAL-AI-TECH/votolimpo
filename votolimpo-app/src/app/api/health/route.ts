@@ -18,17 +18,22 @@ export async function GET() {
     clearTimeout(timeout);
 
     if (!res.ok) {
+      // Return 200 with degraded status — the app itself is healthy,
+      // only the NC API dependency is unreachable. Returning 503 here
+      // causes Docker Swarm healthcheck to kill the container.
       return NextResponse.json(
         { status: "degraded", nc_api: "unreachable", code: res.status },
-        { status: 503 }
+        { status: 200 }
       );
     }
 
     return NextResponse.json({ status: "healthy", nc_api: "ok" });
   } catch {
+    // App process is alive — return 200 even if NC API is down.
+    // Swarm healthcheck must not kill the container for a dependency failure.
     return NextResponse.json(
-      { status: "unhealthy", nc_api: "error" },
-      { status: 503 }
+      { status: "degraded", nc_api: "error" },
+      { status: 200 }
     );
   }
 }

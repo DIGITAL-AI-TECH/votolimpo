@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import {
   getEntityBySlug,
   getEntityArticles,
+  getEntityMilestones,
   entityToPolitician,
   ncArticleToArticle,
   type NCEntityScore,
@@ -26,8 +27,11 @@ export async function GET(_request: Request, { params }: RouteParams) {
       );
     }
 
-    // Fetch articles and stats in parallel
-    const articlesRes = await getEntityArticles(entityData.id, { page_size: 50 });
+    // Fetch articles and milestones in parallel
+    const [articlesRes, milestones] = await Promise.all([
+      getEntityArticles(entityData.id, { page_size: 50 }),
+      getEntityMilestones(entityData.id).catch(() => []),
+    ]);
 
     const politician = entityToPolitician(entityData, {
       entity_id: entityData.id,
@@ -41,7 +45,7 @@ export async function GET(_request: Request, { params }: RouteParams) {
     return NextResponse.json({
       politician,
       articles,
-      milestones: [],     // NC doesn't have milestones yet
+      milestones,
       relationships: [],  // NC doesn't have relationships yet
     });
   } catch (error) {

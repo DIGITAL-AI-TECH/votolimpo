@@ -1,4 +1,7 @@
+"use client";
+
 import Link from "next/link";
+import { useState, useEffect } from "react";
 import type { FC } from "react";
 import type { Stats } from "@/types";
 
@@ -6,7 +9,26 @@ interface FooterProps {
   stats?: Stats;
 }
 
-const Footer: FC<FooterProps> = ({ stats }) => {
+const Footer: FC<FooterProps> = ({ stats: serverStats }) => {
+  const [stats, setStats] = useState<Stats | undefined>(serverStats);
+
+  useEffect(() => {
+    const allZero =
+      !serverStats ||
+      (serverStats.totalPoliticians === 0 &&
+        serverStats.totalArticles === 0 &&
+        serverStats.totalEntities === 0 &&
+        serverStats.totalRelationships === 0 &&
+        serverStats.criticalCount === 0);
+
+    if (allZero) {
+      fetch("/api/stats")
+        .then((res) => res.ok ? res.json() : null)
+        .then((data) => { if (data && !data.error) setStats(data); })
+        .catch(() => {/* silently fail */});
+    }
+  }, [serverStats]);
+
   return (
     <footer className="mt-auto border-t border-[#2E2E2E] bg-[#0A0A0A]">
       <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">

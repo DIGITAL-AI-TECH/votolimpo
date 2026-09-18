@@ -87,6 +87,8 @@ export interface NCEntity {
   metadata_json: string | null;
   created_at: string;
   updated_at: string;
+  tse_id?: string | null;
+  photo_url?: string | null;
 }
 
 export interface NCArticle {
@@ -151,6 +153,19 @@ export interface NCVotoLimpoStats {
   avg_score: number | null;  // 0-100, null = no processed articles
   critical_count: number;
   entities_with_articles: number;
+}
+
+export interface NCMilestone {
+  id: number;
+  politician_id: number;
+  article_id: number | null;
+  type: string;
+  title: string;
+  description: string | null;
+  date: string | null;
+  confidence: number | null;
+  source_url: string | null;
+  created_at: string | null;
 }
 
 /** Entity enriched with score data (returned by by-slug endpoint) */
@@ -337,6 +352,15 @@ export async function getTopEntities(
   });
 }
 
+/** Get milestones for a specific entity, ordered by date DESC */
+export async function getEntityMilestones(entityId: number): Promise<NCMilestone[]> {
+  return ncFetch<NCMilestone[]>({
+    path: `/entities/${entityId}/milestones`,
+    params: { limit: 50 },
+    revalidate: 300,
+  });
+}
+
 /** Get aggregated score data for a single entity */
 export async function getEntityScore(entityId: number): Promise<NCEntityScore> {
   return ncFetch<NCEntityScore>({
@@ -416,7 +440,17 @@ export function entityToPolitician(
   scoreData?: NCEntityScore | null
 ): Politician {
   const meta = parseMetadata(entity.metadata_json);
-  const photoUrl = (meta.foto_url as string) || undefined;
+
+  // Priorizar photo_url direto do backend (URL local do NC)
+  // Se é path relativo (/static/...), prefixar com NC_API_URL
+  let photoUrl: string | undefined;
+  if (entity.photo_url) {
+    photoUrl = entity.photo_url.startsWith("/")
+      ? `${NC_API_URL}${entity.photo_url}`
+      : entity.photo_url;
+  } else {
+    photoUrl = (meta.foto_url as string) || undefined;
+  }
 
   // Score real do backend (0-100) ou 0 se null (sem artigos processados)
   const score = scoreData?.score ?? (entity as NCEntityWithScore).score ?? null;
@@ -438,7 +472,7 @@ export function entityToPolitician(
     role: entity.role || "Candidato",
     photoUrl,
     bio: undefined,
-    score: score ?? 0,  // 0 = sem dados suficientes (não 50)
+    score: score ?? null,  // null = sem artigos processados (N/D)
     articleCount,
     maxSeverity,
     milestoneCount: 0,  // mantido até frente de Milestones

@@ -24,10 +24,10 @@ export async function GET(request: Request) {
       party: "party",
       uf: "state",
       articleCount: "article_count",
+      score: "score",
     };
     const order_by = orderByMap[sortBy] || "name";
-    // score ordering requires article_count as proxy (scores are computed per-entity)
-    const effectiveOrderBy = sortBy === "score" ? "article_count" : order_by;
+    const effectiveOrderBy = order_by;
 
     const skip = (page - 1) * pageSize;
 

@@ -1,7 +1,7 @@
 import type { FC } from "react";
 
 interface ScoreBadgeProps {
-  score: number;
+  score: number | null;
   size?: "sm" | "md" | "lg";
   showLabel?: boolean;
 }
@@ -14,6 +14,13 @@ function getScoreConfig(score: number) {
   return { label: "Crítico", color: "text-red-400", bg: "bg-red-400/10 border-red-400/30", ring: "bg-red-400" };
 }
 
+const ND_CONFIG = {
+  label: "Sem dados",
+  color: "text-[#6B7280]",
+  bg: "bg-[#6B7280]/10 border-[#6B7280]/30",
+  ring: "bg-[#6B7280]",
+};
+
 const sizeClasses = {
   sm: { container: "px-2 py-0.5", text: "text-xs", score: "text-xs font-mono font-bold" },
   md: { container: "px-3 py-1", text: "text-sm", score: "text-sm font-mono font-bold" },
@@ -21,16 +28,17 @@ const sizeClasses = {
 };
 
 const ScoreBadge: FC<ScoreBadgeProps> = ({ score, size = "md", showLabel = false }) => {
-  const config = getScoreConfig(score);
+  const isNull = score === null || score === undefined;
+  const config = isNull ? ND_CONFIG : getScoreConfig(score);
   const sizes = sizeClasses[size];
 
   return (
     <span
       className={`inline-flex items-center gap-1.5 rounded-full border ${config.bg} ${sizes.container} transition-all`}
-      title={`Índice de Transparência: ${score}/100 — ${config.label}`}
+      title={isNull ? "Sem artigos processados" : `Índice de Transparência: ${score}/100 — ${config.label}`}
     >
       <span className={`h-2 w-2 rounded-full ${config.ring} flex-shrink-0`} />
-      <span className={`${sizes.score} ${config.color}`}>{score}</span>
+      <span className={`${sizes.score} ${config.color}`}>{isNull ? "N/D" : score}</span>
       {showLabel && (
         <span className={`${sizes.text} ${config.color} opacity-80`}>{config.label}</span>
       )}

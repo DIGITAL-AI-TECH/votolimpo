@@ -8,7 +8,9 @@ export async function GET() {
       getVotoLimpoStats(),
     ]);
     const stats = ncStatsToStats(ncStats, vlStats);
-    return NextResponse.json(stats);
+    const response = NextResponse.json(stats);
+    response.headers.set("Cache-Control", "public, s-maxage=60, stale-while-revalidate=300");
+    return response;
   } catch (error) {
     console.error("[api/stats] NC API error:", error);
     return NextResponse.json(

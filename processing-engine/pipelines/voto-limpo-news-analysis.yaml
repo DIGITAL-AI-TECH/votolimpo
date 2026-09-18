@@ -53,6 +53,18 @@ system_prompt: |
 
   SUMMARY: resumo factual de 1-3 frases do conteudo da noticia. Maximo 500 caracteres.
 
+  MILESTONES (marcos juridicos/politicos):
+  Se o artigo descreve um evento juridico ou politico significativo para um dos politicos mencionados, extraia os milestones.
+  Tipos validos: inquiry (inquerito), complaint (denuncia), conviction (condenacao), acquittal (absolvicao), arrest (prisao), impeachment (impeachment), plea_deal (acordo de delacao/plea), fine (multa).
+  Para CADA milestone:
+  - politician_name: nome EXATO como aparece no campo "politicians"
+  - type: um dos tipos validos acima
+  - title: titulo descritivo curto (max 100 chars)
+  - description: descricao factual do evento (max 300 chars, ou null se nao houver detalhes)
+  - date: data do evento no formato YYYY-MM-DD (se mencionada explicitamente, senao use a data de publicacao)
+  - confidence: 0.0-1.0 (quao confiante voce esta de que este milestone realmente ocorreu)
+  Se nao houver milestones relevantes, retorne array vazio.
+
   Responda EXCLUSIVAMENTE com JSON valido no formato do schema.
 
 user_prompt_template: |
@@ -121,6 +133,22 @@ output_schema:
     entity_names:
       type: array
       items: { type: string }
+    milestones:
+      type: array
+      default: []
+      items:
+        type: object
+        required: [politician_name, type, title, date, confidence]
+        additionalProperties: false
+        properties:
+          politician_name: { type: string }
+          type:
+            type: string
+            enum: [inquiry, complaint, conviction, acquittal, arrest, impeachment, plea_deal, fine]
+          title: { type: string }
+          description: { type: ["string", "null"] }
+          date: { type: string }
+          confidence: { type: number }
 
 # --- Validators ---
 validators: [schema, grounding, range]
@@ -138,7 +166,8 @@ validator_config:
 
 # --- Post-Processors ---
 # score_calculator: pure math, no tokens. article_matcher + cluster_updater: SQL only.
-# entity_resolver, relationship_builder, milestone_detector: disabled (fields removed from schema).
+# milestone_detector: ativo — persiste milestones extraidos pelo LLM em votolimpo.milestones.
+# entity_resolver, relationship_builder: disabled (fields removed from schema).
 post_processors:
   - type: score_calculator
     config:
@@ -167,6 +196,12 @@ post_processors:
       cluster_articles_table: votolimpo.cluster_articles
       cluster_politicians_table: votolimpo.cluster_politicians
       similarity_threshold: 0.50
+
+  - type: milestone_detector
+    config:
+      milestone_table: votolimpo.milestones
+      confidence_threshold: 0.70
+      dedup_window_days: 7
 
 # --- Sink ---
 # Persist directly to votolimpo.articles via column_mapping UPSERT.

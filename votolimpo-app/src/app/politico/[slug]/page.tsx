@@ -97,7 +97,8 @@ export default async function PoliticoPage({ params }: PageProps) {
   const frontendArticles = articles.items.map(ncArticleToArticle);
   const timelineItems = buildTimelineItems(frontendArticles, []);
 
-  function getScoreLabel(score: number): string {
+  function getScoreLabel(score: number | null): string {
+    if (score === null) return "Sem dados";
     if (score >= 80) return "Excelente";
     if (score >= 60) return "Bom";
     if (score >= 40) return "Regular";
@@ -117,11 +118,12 @@ export default async function PoliticoPage({ params }: PageProps) {
       "@type": "Organization",
       name: politician.party,
     },
-    description: `${politician.name} — ${politician.party} · ${politician.uf}. Índice de transparência: ${politician.score}/100.`,
+    description: `${politician.name} — ${politician.party} · ${politician.uf}. Índice de transparência: ${politician.score !== null ? `${politician.score}/100` : "N/D"}.`,
     ...(politician.photoUrl ? { image: politician.photoUrl } : {}),
   };
 
-  function getScoreDescription(score: number): string {
+  function getScoreDescription(score: number | null): string {
+    if (score === null) return "Ainda não há artigos processados suficientes para calcular o índice de transparência.";
     if (score >= 80) return "Este candidato apresenta alta transparência nos dados disponíveis.";
     if (score >= 60) return "Este candidato apresenta boa transparência com poucas ocorrências relevantes.";
     if (score >= 40) return "Este candidato apresenta transparência regular com algumas ocorrências relevantes.";
@@ -228,8 +230,8 @@ export default async function PoliticoPage({ params }: PageProps) {
 
             <div className="text-center mb-4">
               <div className="font-mono text-5xl font-bold text-[#FAFAFA]">
-                {politician.score}
-                <span className="text-xl text-[#6B7280]">/100</span>
+                {politician.score !== null ? politician.score : <span className="text-3xl text-[#6B7280]">N/D</span>}
+                {politician.score !== null && <span className="text-xl text-[#6B7280]">/100</span>}
               </div>
               <p className="mt-2 text-sm font-medium text-emerald-400">
                 {getScoreLabel(politician.score)}
@@ -241,8 +243,10 @@ export default async function PoliticoPage({ params }: PageProps) {
               <div
                 className="h-full rounded-full transition-all"
                 style={{
-                  width: `${politician.score}%`,
-                  background: politician.score >= 80
+                  width: politician.score !== null ? `${politician.score}%` : "0%",
+                  background: politician.score === null
+                    ? "#6B7280"
+                    : politician.score >= 80
                     ? "#10B981"
                     : politician.score >= 60
                     ? "#3B82F6"

@@ -5,6 +5,8 @@ services:
     image: registry.digital-ai.tech/votolimpo-app:${IMAGE_TAG:-latest}
     environment:
       - NODE_ENV=production
+      - HOSTNAME=0.0.0.0
+      - PORT=3000
       - NC_API_URL=http://news-collector_news-collector-api:8000
       - NC_API_TOKEN=${NC_API_TOKEN}
       - NEXT_PUBLIC_APP_URL=https://votolimpo.com.br
@@ -12,7 +14,7 @@ services:
       - oraculusnet
       - votolimpo-net
     healthcheck:
-      test: ["CMD", "wget", "-q", "--spider", "http://localhost:3000/api/health"]
+      test: ["CMD", "wget", "-q", "--spider", "--timeout=5", "http://localhost:3000/api/health"]
       interval: 30s
       timeout: 10s
       retries: 5
@@ -45,10 +47,10 @@ services:
         - "traefik.http.routers.votolimpo.middlewares=votolimpo-www-redirect"
       resources:
         limits:
-          memory: 384M
+          memory: 512M
           cpus: "0.5"
         reservations:
-          memory: 128M
+          memory: 192M
 
 networks:
   oraculusnet:

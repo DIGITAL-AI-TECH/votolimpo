@@ -12,7 +12,7 @@ export interface Politician {
   role: string;
   photoUrl?: string;
   bio?: string;
-  score: number; // 0-100 transparency score
+  score: number | null; // 0-100 transparency score, null = sem artigos processados
   articleCount: number;
   maxSeverity: Severity;
   milestoneCount: number;
@@ -108,7 +108,7 @@ export interface GraphNode {
   slug?: string;
   party?: string;
   partyColor?: string;
-  score?: number;
+  score?: number | null;
   entityType?: string;
 }
 
