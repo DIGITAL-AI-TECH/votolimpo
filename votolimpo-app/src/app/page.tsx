@@ -51,10 +51,10 @@ export default async function HomePage() {
 
     stats = ncStatsToStats(ncStats, vlStats);
 
-    // Sort by name for now (score will come from processing later)
+    // Sort by article_count desc (most covered), then by name
     top10 = entities
       .map((e) => entityToPolitician(e))
-      .sort((a, b) => a.name.localeCompare(b.name))
+      .sort((a, b) => b.articleCount - a.articleCount || a.name.localeCompare(b.name))
       .slice(0, 10);
 
     recentArticles = articlesRes.items.map(ncArticleToArticle);
@@ -135,9 +135,9 @@ export default async function HomePage() {
           {/* Quick stats */}
           <div className="mt-10 flex flex-wrap items-center justify-center gap-6 md:gap-10">
             {[
-              { value: stats.totalPoliticians.toLocaleString("pt-BR"), label: "Políticos monitorados" },
-              { value: stats.totalArticles.toLocaleString("pt-BR"), label: "Artigos indexados" },
-              { value: stats.totalRelationships.toLocaleString("pt-BR"), label: "Fontes de notícias" },
+              { value: new Intl.NumberFormat("pt-BR").format(stats.totalPoliticians), label: "Políticos monitorados" },
+              { value: new Intl.NumberFormat("pt-BR").format(stats.totalArticles), label: "Artigos indexados" },
+              { value: new Intl.NumberFormat("pt-BR").format(stats.totalRelationships), label: "Fontes de notícias" },
             ].map((stat) => (
               <div key={stat.label} className="text-center">
                 <p className="font-mono text-3xl font-bold text-[#FAFAFA]">

@@ -58,8 +58,8 @@ export async function GET(request: Request) {
       const enriched = e as unknown as NCEntityWithScore;
       return entityToPolitician(enriched, {
         entity_id: enriched.id,
-        score: null,
-        max_severity: "info",
+        score: enriched.score ?? null,
+        max_severity: enriched.max_severity ?? "info",
         article_count: enriched.article_count ?? 0,
       });
     });
