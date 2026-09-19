@@ -198,6 +198,20 @@ async def init_votolimpo_schema():
         await conn.execute("CREATE EXTENSION IF NOT EXISTS pg_trgm;")
         await conn.execute("CREATE SCHEMA IF NOT EXISTS votolimpo;")
 
+        # Detect legacy UUID-based schema and nuke it.
+        # Old tables used UUID PKs + different column names (occurred_at, milestone_type).
+        # Current DDL uses SERIAL INTEGER PKs + renamed columns (date, type).
+        # CREATE TABLE IF NOT EXISTS won't fix the mismatch, so drop+recreate.
+        legacy = await conn.fetchval("""
+            SELECT data_type FROM information_schema.columns
+            WHERE table_schema = 'votolimpo' AND table_name = 'politicians'
+              AND column_name = 'id'
+        """)
+        if legacy and legacy == 'uuid':
+            logger.warning("Detected legacy UUID schema — dropping votolimpo for clean recreation")
+            await conn.execute("DROP SCHEMA votolimpo CASCADE;")
+            await conn.execute("CREATE SCHEMA votolimpo;")
+
         # --- ENUMs (must match NC 001_create_schema_enums.sql exactly) ---
         for enum_name, enum_values in [
             ("severity_level", "'low','medium','high','critical'"),
