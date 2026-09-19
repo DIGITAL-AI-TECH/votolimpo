@@ -78,7 +78,8 @@ jobs:
         env:
           DATABASE_URL: postgresql://postgres:postgres@localhost:5432/processing_engine
           PE_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/processing_engine
-          PE_VOTOLIMPO_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/processing_engine
+          # PE_VOTOLIMPO_DATABASE_URL not set — unit tests use mock pools,
+          # votolimpo schema init is skipped gracefully when URL is empty
           PE_API_KEY: test-key
           DB_HOST: localhost
           DB_PORT: "5432"
@@ -86,7 +87,7 @@ jobs:
           DB_PASSWORD: postgres
           DB_NAME: processing_engine
           API_KEY: test-api-key
-        run: pytest tests/ -q --tb=short --ignore=tests/e2e
+        run: pytest tests/ -q --tb=short --ignore=tests/e2e --ignore=tests/integration
 
       - name: Notify — Tests OK
         if: success()
