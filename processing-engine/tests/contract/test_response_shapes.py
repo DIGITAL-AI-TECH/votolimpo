@@ -120,9 +120,9 @@ class TestJobContract:
         "pipeline_id": str,
         "pipeline_version": int,
         "status": str,
-        "items_total": int,
-        "items_completed": int,
-        "items_failed": int,
+        "total_items": int,
+        "completed_items": int,
+        "failed_items": int,
         "created_at": str,
     }
 
@@ -144,9 +144,9 @@ class TestJobContract:
             pipeline_id=uuid.uuid4(),
             pipeline_version=1,
             status="queued",
-            items_total=5,
-            items_completed=0,
-            items_failed=0,
+            total_items=5,
+            completed_items=0,
+            failed_items=0,
             created_at=datetime.now(UTC),
         )
         return j.model_dump(mode="json")
@@ -203,9 +203,9 @@ class TestJobListResponseContract:
             pipeline_id=uuid.uuid4(),
             pipeline_version=1,
             status="queued",
-            items_total=1,
-            items_completed=0,
-            items_failed=0,
+            total_items=1,
+            completed_items=0,
+            failed_items=0,
             created_at=datetime.now(UTC),
         )
         resp = JobListResponse(items=[j], total=1)
@@ -238,7 +238,7 @@ class TestItemResultContract:
         "cached": bool,
         "usage": (dict, type(None)),
         "duration_ms": (int, type(None)),
-        "error_message": (str, type(None)),
+        "error": (str, type(None)),
     }
 
     ITEM_STATUS_VALUES = {
@@ -399,8 +399,8 @@ class TestStatsContract:
         "period": str,
         "total_jobs": int,
         "total_items": int,
-        "items_completed": int,
-        "items_failed": int,
+        "completed_items": int,
+        "failed_items": int,
         "items_duplicate": int,
         "success_rate": (int, float),
         "total_cost_usd": (int, float),

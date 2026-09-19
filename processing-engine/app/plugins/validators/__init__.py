@@ -128,12 +128,23 @@ def _extract_path(data: dict, path: str) -> list[Any]:
 
 
 # Registry
+from app.plugins.validators.composite import CompositeValidator
+from app.plugins.validators.schema import SchemaValidator
+
 VALIDATORS: dict[str, type] = {
     "json_schema": JsonSchemaValidator,
+    "schema": SchemaValidator,
     "grounding": GroundingValidator,
     "range": RangeValidator,
     "date": DateValidator,
+    "composite": CompositeValidator,
 }
+
+# Populate global registry
+from app.plugins.registry import register as _register
+
+for _name, _cls in VALIDATORS.items():
+    _register("validator", _name, _cls)
 
 
 def get_validator(validator_type: str) -> Validator:

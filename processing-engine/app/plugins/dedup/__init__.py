@@ -88,11 +88,22 @@ class NoneDedup:
         return "new"
 
 
+from app.plugins.dedup.composite import CompositeDedupStrategy
+from app.plugins.dedup.hash import HashDedupStrategy
+from app.plugins.dedup.semantic import SemanticDedupStrategy
+
 DEDUP_STRATEGIES: dict[str, type] = {
     "hash": HashDedup,
     "composite": CompositeDedup,
+    "semantic": SemanticDedupStrategy,
     "none": NoneDedup,
 }
+
+# Populate global registry
+from app.plugins.registry import register as _register
+
+for _name, _cls in DEDUP_STRATEGIES.items():
+    _register("dedup", _name, _cls)
 
 
 def get_dedup(strategy: str) -> DedupStrategy:

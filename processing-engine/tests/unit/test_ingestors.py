@@ -172,10 +172,18 @@ class TestPDFIngestor:
     ingestor = PDFIngestor()
 
     async def test_rejects_str_input(self):
+        try:
+            import fitz  # noqa: F401
+        except ImportError:
+            pytest.skip("PyMuPDF not installed")
         with pytest.raises(ValueError, match="expects bytes"):
             await self.ingestor.ingest("not bytes", CONTENT_TYPE_PDF)
 
     async def test_invalid_bytes_raises_value_error(self):
+        try:
+            import fitz  # noqa: F401
+        except ImportError:
+            pytest.skip("PyMuPDF not installed")
         with pytest.raises(ValueError, match="Failed to open PDF"):
             await self.ingestor.ingest(b"not a pdf", CONTENT_TYPE_PDF)
 

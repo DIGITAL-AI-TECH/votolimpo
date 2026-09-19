@@ -46,10 +46,25 @@ class HTMLIngestor:
 
 
 # Registry
+from app.plugins.ingestors.auto import AutoIngestor
+from app.plugins.ingestors.json_ingestor import JSONIngestor
+from app.plugins.ingestors.pdf import PDFIngestor
+from app.plugins.ingestors.text import TextIngestor
+
 INGESTORS: dict[str, type] = {
     "raw_text": RawTextIngestor,
+    "text": TextIngestor,
     "html": HTMLIngestor,
+    "pdf": PDFIngestor,
+    "json": JSONIngestor,
+    "auto": AutoIngestor,
 }
+
+# Populate global registry
+from app.plugins.registry import register as _register
+
+for _name, _cls in INGESTORS.items():
+    _register("ingestor", _name, _cls)
 
 
 def get_ingestor(ingestor_type: str) -> Ingestor:
