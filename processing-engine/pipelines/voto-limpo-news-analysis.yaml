@@ -242,7 +242,7 @@ sink_config:
     processing_status: completed
   item_field_mapping:
     source_url: source_url
-    article_id: nc_article_id
+    nc_article_id: nc_article_id
     title: title
   jsonb_fallback: raw_output
   type_casts:

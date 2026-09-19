@@ -307,7 +307,12 @@ async def _process_single_item(
                         if isinstance(item["metadata"], str)
                         else (item["metadata"] or {})
                     )
-                    metadata["source_url"] = item["source_url"]
+                    metadata["source_url"] = (
+                        item["source_url"]
+                        or metadata.get("url")
+                        or metadata.get("source_url")
+                        or ""
+                    )
                     await sink.persist(
                         json.loads(cached["output"]),
                         metadata,
@@ -488,7 +493,12 @@ async def _process_single_item(
             if isinstance(item["metadata"], str)
             else (item["metadata"] or {})
         )
-        metadata["source_url"] = item["source_url"]
+        metadata["source_url"] = (
+            item["source_url"]
+            or metadata.get("url")
+            or metadata.get("source_url")
+            or ""
+        )
 
         pre_sink_pps = [
             (t, p, c)
