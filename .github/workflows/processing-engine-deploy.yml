@@ -71,7 +71,7 @@ jobs:
         working-directory: processing-engine
         env:
           DATABASE_URL: postgresql://postgres:postgres@localhost:5432/processing_engine
-        run: alembic upgrade head
+        run: python -m alembic upgrade head
 
       - name: Run tests
         working-directory: processing-engine
