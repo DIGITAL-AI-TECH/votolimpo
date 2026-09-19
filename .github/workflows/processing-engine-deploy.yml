@@ -66,12 +66,13 @@ jobs:
         run: |
           pip install --upgrade pip
           pip install -e ".[dev]"
+          pip install alembic sqlalchemy
 
       - name: Run migrations
         working-directory: processing-engine
         env:
           DATABASE_URL: postgresql://postgres:postgres@localhost:5432/processing_engine
-        run: python -m alembic upgrade head
+        run: alembic upgrade head
 
       - name: Run tests
         working-directory: processing-engine
