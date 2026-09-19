@@ -205,6 +205,10 @@ post_processors:
       fuzzy_threshold: 0.80
       fuzzy_party_threshold: 0.70
 
+  - type: score_persister
+    config:
+      history_table: votolimpo.score_history
+
   - type: milestone_detector
     config:
       milestone_table: votolimpo.milestones
@@ -248,14 +252,15 @@ sink_config:
   array_columns:
     - keywords
 
-# --- Crons (executados pelo worker deste pipeline) ---
-# Crons removidos (handlers inexistentes — dead config detectada em audit 2026-09-11):
-#   recalculate_politician_scores, update_source_reputation,
-#   regenerate_content, deactivate_stale_clusters
-crons:
-  - name: refresh_materialized_views
-    schedule: "0 */6 * * *"  # cada 6h
-    handler: mv_refresher.refresh_all
+# --- Crons ---
+# Crons NÃO são configurados por pipeline — são GLOBAIS do PE, gerenciados pelo
+# APScheduler em app/cron/__init__.py. Os 5 jobs registrados:
+#   - cron_recalculate_scores: diário 03:00 UTC (recalcula scores de políticos)
+#   - cron_refresh_mvs: a cada 6h (refresh de materialized views, se existirem)
+#   - cron_regenerate_content: domingo 05:00 UTC (bios e AI summaries via LLM)
+#   - cron_cleanup_logs: mensal dia 1 02:00 UTC (limpa logs >90 dias)
+#   - cron_deactivate_stale_clusters: diário 04:00 UTC (desativa clusters inativos)
+crons: []
 
 # --- Limites ---
 max_concurrent: 5

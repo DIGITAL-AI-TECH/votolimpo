@@ -5,7 +5,7 @@ from typing import Any
 
 import asyncpg
 
-from . import validate_sql_identifier
+from . import acquire_votolimpo_conn, validate_sql_identifier
 
 logger = logging.getLogger(__name__)
 
@@ -25,7 +25,7 @@ class ArticleMatcher:
         config: dict[str, Any],
     ) -> dict:
         match_table = validate_sql_identifier(
-            config.get("match_table", "voto_limpo.article_matches"), "match_table"
+            config.get("match_table", "votolimpo.article_matches"), "match_table"
         )
         weights = config.get(
             "weights",
@@ -44,7 +44,7 @@ class ArticleMatcher:
 
         matched_ids = []
 
-        async with pool.acquire() as conn, conn.transaction():
+        async with acquire_votolimpo_conn(pool) as conn, conn.transaction():
             # Get current article data
             row = await conn.fetchrow(
                 """

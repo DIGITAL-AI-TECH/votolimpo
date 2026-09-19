@@ -356,6 +356,17 @@ async def init_votolimpo_schema():
             );
         """)
 
+        await conn.execute("""
+            CREATE TABLE IF NOT EXISTS votolimpo.score_history (
+                id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+                politician_id UUID NOT NULL REFERENCES votolimpo.politicians(id),
+                score NUMERIC(5,2) NOT NULL,
+                score_components JSONB,
+                article_count INT DEFAULT 0,
+                calculated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+            );
+        """)
+
         # --- Cluster tables (used by NC clusters router + PE cluster_updater) ---
         await conn.execute("""
             CREATE TABLE IF NOT EXISTS votolimpo.news_clusters (
@@ -400,6 +411,7 @@ async def init_votolimpo_schema():
             "CREATE INDEX IF NOT EXISTS idx_vl_relationships_target ON votolimpo.relationships (target_id)",
             "CREATE INDEX IF NOT EXISTS idx_vl_cluster_articles_cluster ON votolimpo.cluster_articles (cluster_id)",
             "CREATE INDEX IF NOT EXISTS idx_vl_cluster_articles_article ON votolimpo.cluster_articles (article_id)",
+            "CREATE INDEX IF NOT EXISTS idx_vl_score_history_politician ON votolimpo.score_history (politician_id, calculated_at DESC)",
         ]:
             await conn.execute(idx_sql)
 

@@ -8,7 +8,7 @@ services:
       - "-c"
       - "max_connections=200"
     environment:
-      POSTGRES_PASSWORD: "vnBnBsOrtrLtx-DbYlO5VpyOGx94XHhe"
+      POSTGRES_PASSWORD: "${POSTGRES_PASSWORD}"
     volumes:
       - pgdata:/var/lib/postgresql/data
     networks:
@@ -38,11 +38,21 @@ services:
       WORKER_CONCURRENCY: "2"
       WORKER_POLL_INTERVAL: "2"
       LOG_LEVEL: "info"
+    healthcheck:
+      test: ["CMD", "curl", "-sf", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
     networks:
       - oraculusnet
       - pe-net
     deploy:
       replicas: 1
+      update_config:
+        parallelism: 1
+        delay: 10s
+        order: start-first
       labels:
         - "traefik.enable=true"
         - "traefik.http.routers.processing-engine.rule=Host(`processing-engine.digital-ai.tech`)"

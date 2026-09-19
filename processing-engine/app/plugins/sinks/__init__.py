@@ -130,7 +130,7 @@ class PostgreSQLSink:
                 params.append(source_url)
                 values.append(f"${len(params)}")
 
-        # Type casts for enum/custom PostgreSQL types (e.g. {"severity": "voto_limpo.severity_level"})
+        # Type casts for enum/custom PostgreSQL types (e.g. {"severity": "votolimpo.severity_level"})
         type_casts = config.get("type_casts", {})
 
         # Columns that should be passed as native PostgreSQL arrays (not JSON strings)
@@ -228,7 +228,7 @@ class PostgreSQLSink:
     async def _upsert_article(
         self, conn: asyncpg.Connection, output: dict, metadata: dict
     ) -> int:
-        """Upsert article into voto_limpo.articles (legacy mode)."""
+        """Upsert article into votolimpo.articles (legacy mode)."""
         url = metadata.get("source_url", "")
         url_hash = hashlib.sha256(url.encode()).hexdigest()
 
@@ -238,10 +238,10 @@ class PostgreSQLSink:
         if source_name:
             row = await conn.fetchrow(
                 """
-                INSERT INTO voto_limpo.sources (name, domain)
+                INSERT INTO votolimpo.sources (name, domain)
                 VALUES ($1, $2)
                 ON CONFLICT (name) DO UPDATE SET
-                    article_count = voto_limpo.sources.article_count + 1,
+                    article_count = votolimpo.sources.article_count + 1,
                     updated_at = NOW()
                 RETURNING id
             """,
@@ -258,16 +258,16 @@ class PostgreSQLSink:
 
         row = await conn.fetchrow(
             """
-            INSERT INTO voto_limpo.articles
+            INSERT INTO votolimpo.articles
                 (title, url, url_hash, source_id, published_at,
                  severity, summary, keywords, processing_status,
                  nc_article_id, raw_extraction, processed_at)
             VALUES ($1, $2, $3, $4, $5,
-                    $6::voto_limpo.severity_level, $7, $8,
-                    'completed'::voto_limpo.processing_status,
+                    $6::votolimpo.severity_level, $7, $8,
+                    'completed'::votolimpo.processing_status,
                     $9, $10, NOW())
             ON CONFLICT (url_hash) DO UPDATE SET
-                processing_status = 'completed'::voto_limpo.processing_status,
+                processing_status = 'completed'::votolimpo.processing_status,
                 severity = EXCLUDED.severity,
                 summary = EXCLUDED.summary,
                 keywords = EXCLUDED.keywords,

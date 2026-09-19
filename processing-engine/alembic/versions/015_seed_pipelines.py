@@ -147,6 +147,7 @@ INSERT INTO processing_engine.pipelines (
     :max_concurrent, :rate_limit_rpm, :budget_limit_usd, :budget_period,
     :max_retries, :retry_backoff_base, :cache_ttl_hours
 )
+ON CONFLICT (name) DO NOTHING
 """)
 
 
@@ -197,7 +198,7 @@ def upgrade():
             json.dumps(VOTO_LIMPO_OUTPUT_SCHEMA),
             ["schema"],
             "postgresql",
-            json.dumps({"table": "voto_limpo.articles", "conflict_column": "pe_item_id"}),
+            json.dumps({"table": "votolimpo.articles", "conflict_column": "pe_item_id"}),
             5,
             60,
             50.0,

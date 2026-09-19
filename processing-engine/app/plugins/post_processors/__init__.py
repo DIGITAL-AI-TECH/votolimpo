@@ -1,13 +1,53 @@
 """Post-processor plugins — execute after LLM validation, before sink persistence."""
 
 import logging
+import os
 import re
 import unicodedata
+from contextlib import asynccontextmanager
 from typing import Any, Protocol, runtime_checkable
 
 import asyncpg
 
 logger = logging.getLogger(__name__)
+
+
+# ─── VotoLimpo connection routing ───
+# Post-processors that write to votolimpo.* tables need a connection to the
+# VotoLimpo database, which may be different from the PE pool (PE_DATABASE_URL).
+# This mirrors the sink's connection routing logic (C4 fix).
+
+VOTOLIMPO_DB_ENV_VARS = ("PE_VOTOLIMPO_DATABASE_URL", "VOTOLIMPO_DATABASE_URL")
+
+
+@asynccontextmanager
+async def acquire_votolimpo_conn(pe_pool: asyncpg.Pool):
+    """Acquire a connection to the VotoLimpo database.
+
+    Checks PE_VOTOLIMPO_DATABASE_URL / VOTOLIMPO_DATABASE_URL env vars first.
+    If neither is set, falls back to the PE pool (backward compatibility).
+
+    Usage:
+        async with acquire_votolimpo_conn(pool) as conn:
+            await conn.execute(...)
+    """
+    target_url = None
+    for env_var in VOTOLIMPO_DB_ENV_VARS:
+        target_url = os.environ.get(env_var)
+        if target_url:
+            break
+
+    if target_url:
+        clean_url = target_url.replace("postgresql+asyncpg://", "postgresql://")
+        own_conn = await asyncpg.connect(clean_url, timeout=10)
+        try:
+            yield own_conn
+        finally:
+            await own_conn.close()
+    else:
+        # Fallback: use PE pool (same DB or env var not configured)
+        async with pe_pool.acquire() as conn:
+            yield conn
 
 
 @runtime_checkable
@@ -110,11 +150,13 @@ def _register_all():
     from .milestone_detector import MilestoneDetector
     from .relationship_builder import RelationshipBuilder
     from .score_calculator import ScoreCalculator
+    from .score_persister import ScorePersister
 
     POST_PROCESSORS.update(
         {
             "entity_resolver": EntityResolver,
             "score_calculator": ScoreCalculator,
+            "score_persister": ScorePersister,
             "relationship_builder": RelationshipBuilder,
             "milestone_detector": MilestoneDetector,
             "article_matcher": ArticleMatcher,

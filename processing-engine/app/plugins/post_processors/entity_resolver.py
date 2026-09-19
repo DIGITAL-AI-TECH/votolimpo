@@ -6,6 +6,7 @@ from typing import Any
 import asyncpg
 
 from . import (
+    acquire_votolimpo_conn,
     generate_slug,
     normalize_entity_name,
     normalize_for_search,
@@ -30,10 +31,10 @@ class EntityResolver:
         config: dict[str, Any],
     ) -> dict:
         politician_table = validate_sql_identifier(
-            config.get("politician_table", "voto_limpo.politicians"), "politician_table"
+            config.get("politician_table", "votolimpo.politicians"), "politician_table"
         )
         entity_table = validate_sql_identifier(
-            config.get("entity_table", "voto_limpo.entities"), "entity_table"
+            config.get("entity_table", "votolimpo.entities"), "entity_table"
         )
         fuzzy_threshold = config.get("fuzzy_threshold", 0.80)
         fuzzy_party_threshold = config.get("fuzzy_party_threshold", 0.70)
@@ -42,7 +43,7 @@ class EntityResolver:
         resolved_politician_ids = []
         resolved_entity_ids = []
 
-        async with pool.acquire() as conn, conn.transaction():
+        async with acquire_votolimpo_conn(pool) as conn, conn.transaction():
             # Resolve politicians
             for pol in output.get("politicians", []):
                 name = pol.get("name")
@@ -72,8 +73,28 @@ class EntityResolver:
                         politician_id,
                     )
 
-            # Resolve entities
-            for ent in output.get("entities", []):
+            # Resolve entities — supports both formats:
+            #   1. "entities": [{name, type}]  (structured, preferred)
+            #   2. "entity_names": ["str"]     (LLM output schema returns this)
+            entities_list = output.get("entities", [])
+            if not entities_list:
+                # Fallback: convert entity_names (strings) to entity objects
+                entity_names = output.get("entity_names", [])
+                # Build set of resolved politician names to avoid duplicating them as entities
+                resolved_politician_names = {
+                    normalize_for_search(pol.get("name", ""))
+                    for pol in output.get("politicians", [])
+                    if pol.get("name")
+                }
+                for raw_name in entity_names:
+                    if not raw_name or not isinstance(raw_name, str):
+                        continue
+                    # Skip names that are already resolved politicians
+                    if normalize_for_search(raw_name) in resolved_politician_names:
+                        continue
+                    entities_list.append({"name": raw_name, "type": "organization"})
+
+            for ent in entities_list:
                 name = ent.get("name")
                 ent_type = ent.get("type")
                 if not name or not ent_type:
@@ -173,7 +194,7 @@ class EntityResolver:
         row = await conn.fetchrow(
             f"""
             SELECT id FROM {table}
-            WHERE normalized_name = $1 AND type = $2::voto_limpo.entity_type
+            WHERE normalized_name = $1 AND type = $2::votolimpo.entity_type
         """,
             norm,
             ent_type,
@@ -194,7 +215,7 @@ class EntityResolver:
             f"""
             SELECT id FROM {table}
             WHERE similarity(normalized_name, $1) > $2
-              AND type = $3::voto_limpo.entity_type
+              AND type = $3::votolimpo.entity_type
             ORDER BY similarity(normalized_name, $1) DESC LIMIT 1
         """,
             norm,
@@ -217,7 +238,7 @@ class EntityResolver:
         row = await conn.fetchrow(
             f"""
             INSERT INTO {table} (name, normalized_name, type, article_count)
-            VALUES ($1, $2, $3::voto_limpo.entity_type, 1)
+            VALUES ($1, $2, $3::votolimpo.entity_type, 1)
             RETURNING id
         """,
             clean_name,

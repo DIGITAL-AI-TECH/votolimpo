@@ -10,6 +10,7 @@ from apscheduler.triggers.cron import CronTrigger
 from openai import AsyncOpenAI
 
 from ..config import settings
+from ..plugins.post_processors import acquire_votolimpo_conn
 from ..storage.database import get_pool
 
 logger = logging.getLogger(__name__)
@@ -70,7 +71,7 @@ def _calculate_politician_score(articles: list[dict]) -> dict:
 async def cron_recalculate_scores():
     """Recalculate politician scores. Daily at 03:00 UTC."""
     pool = await get_pool()
-    async with pool.acquire() as conn:
+    async with acquire_votolimpo_conn(pool) as conn:
         # Single query: fetch all articles grouped by politician
         rows = await conn.fetch("""
             SELECT pa.politician_id,
@@ -80,8 +81,8 @@ async def cron_recalculate_scores():
                        'veracity_score', a.veracity_score,
                        'published_at', a.published_at
                    )::text) as articles_json
-            FROM voto_limpo.politician_articles pa
-            JOIN voto_limpo.articles a ON a.id = pa.article_id
+            FROM votolimpo.politician_articles pa
+            JOIN votolimpo.articles a ON a.id = pa.article_id
             WHERE a.processing_status = 'completed'
             GROUP BY pa.politician_id
         """)
@@ -103,7 +104,7 @@ async def cron_recalculate_scores():
 
             await conn.execute(
                 """
-                UPDATE voto_limpo.politicians
+                UPDATE votolimpo.politicians
                 SET score = $1, score_components = $2, total_articles = $3, updated_at = NOW()
                 WHERE id = $4
             """,
@@ -115,7 +116,7 @@ async def cron_recalculate_scores():
 
             await conn.execute(
                 """
-                INSERT INTO voto_limpo.score_history (politician_id, score, components)
+                INSERT INTO votolimpo.score_history (politician_id, score, components)
                 VALUES ($1, $2, $3)
             """,
                 row["politician_id"],
@@ -128,16 +129,30 @@ async def cron_recalculate_scores():
 
 
 async def cron_refresh_mvs():
-    """Refresh materialized views. Every 6 hours."""
+    """Refresh materialized views (if they exist). Every 6 hours.
+
+    The views v_politician_ranking and v_politician_timeline are regular VIEWs
+    (not MATERIALIZED), so they don't need refresh. This function handles
+    optional MVs (mv_article_relations, mv_global_stats) gracefully —
+    if they don't exist, it logs and skips.
+    """
     pool = await get_pool()
-    async with pool.acquire() as conn:
-        await conn.execute(
-            "REFRESH MATERIALIZED VIEW CONCURRENTLY voto_limpo.mv_article_relations"
-        )
-        await conn.execute(
-            "REFRESH MATERIALIZED VIEW CONCURRENTLY voto_limpo.mv_global_stats"
-        )
-    logger.info("Materialized views refreshed")
+    mvs = [
+        "votolimpo.mv_article_relations",
+        "votolimpo.mv_global_stats",
+    ]
+    async with acquire_votolimpo_conn(pool) as conn:
+        for mv in mvs:
+            try:
+                await conn.execute(
+                    f"REFRESH MATERIALIZED VIEW CONCURRENTLY {mv}"
+                )
+                logger.info("Refreshed materialized view %s", mv)
+            except Exception:
+                logger.debug(
+                    "Materialized view %s does not exist or refresh failed — skipping",
+                    mv,
+                )
 
 
 async def cron_regenerate_content():
@@ -145,10 +160,10 @@ async def cron_regenerate_content():
     client = AsyncOpenAI(api_key=settings.openai_api_key)
     pool = await get_pool()
 
-    async with pool.acquire() as conn:
+    async with acquire_votolimpo_conn(pool) as conn:
         # Bios
         politicians = await conn.fetch("""
-            SELECT id, name, party, state, role FROM voto_limpo.politicians
+            SELECT id, name, party, state, role FROM votolimpo.politicians
             WHERE bio IS NULL OR updated_at < NOW() - INTERVAL '30 days'
         """)
 
@@ -177,9 +192,9 @@ async def cron_regenerate_content():
                 max_tokens=100,
             )
             bio = response.choices[0].message.content.strip()[:200]
-            async with pool.acquire() as conn:
+            async with acquire_votolimpo_conn(pool) as conn:
                 await conn.execute(
-                    "UPDATE voto_limpo.politicians SET bio = $1, updated_at = NOW() WHERE id = $2",
+                    "UPDATE votolimpo.politicians SET bio = $1, updated_at = NOW() WHERE id = $2",
                     bio,
                     p["id"],
                 )
@@ -188,9 +203,9 @@ async def cron_regenerate_content():
             logger.exception("Failed bio for politician %d", p["id"])
 
     # Summaries
-    async with pool.acquire() as conn:
+    async with acquire_votolimpo_conn(pool) as conn:
         pols_need_summary = await conn.fetch("""
-            SELECT id FROM voto_limpo.politicians
+            SELECT id FROM votolimpo.politicians
             WHERE total_articles >= 5
               AND (ai_summary IS NULL OR updated_at < NOW() - INTERVAL '7 days')
         """)
@@ -198,12 +213,12 @@ async def cron_regenerate_content():
     summary_count = 0
     for p in pols_need_summary:
         try:
-            async with pool.acquire() as conn:
+            async with acquire_votolimpo_conn(pool) as conn:
                 articles = await conn.fetch(
                     """
                     SELECT a.title, a.summary, a.severity::text, a.published_at, pa.role::text
-                    FROM voto_limpo.articles a
-                    JOIN voto_limpo.politician_articles pa ON pa.article_id = a.id
+                    FROM votolimpo.articles a
+                    JOIN votolimpo.politician_articles pa ON pa.article_id = a.id
                     WHERE pa.politician_id = $1 AND a.processing_status = 'completed'
                     ORDER BY CASE a.severity
                         WHEN 'critical' THEN 4 WHEN 'high' THEN 3
@@ -218,7 +233,7 @@ async def cron_regenerate_content():
                     continue
 
                 pol = await conn.fetchrow(
-                    "SELECT name, party, state FROM voto_limpo.politicians WHERE id = $1",
+                    "SELECT name, party, state FROM votolimpo.politicians WHERE id = $1",
                     p["id"],
                 )
                 if not pol:
@@ -252,9 +267,9 @@ async def cron_regenerate_content():
                 max_tokens=300,
             )
             summary = response.choices[0].message.content.strip()[:600]
-            async with pool.acquire() as conn:
+            async with acquire_votolimpo_conn(pool) as conn:
                 await conn.execute(
-                    "UPDATE voto_limpo.politicians SET ai_summary = $1, updated_at = NOW() WHERE id = $2",
+                    "UPDATE votolimpo.politicians SET ai_summary = $1, updated_at = NOW() WHERE id = $2",
                     summary,
                     p["id"],
                 )
@@ -279,9 +294,9 @@ async def cron_cleanup_logs():
 async def cron_deactivate_stale_clusters():
     """Deactivate clusters with no activity in 30 days. Daily."""
     pool = await get_pool()
-    async with pool.acquire() as conn:
+    async with acquire_votolimpo_conn(pool) as conn:
         await conn.execute("""
-            UPDATE voto_limpo.news_clusters SET is_active = false, updated_at = NOW()
+            UPDATE votolimpo.news_clusters SET is_active = false, updated_at = NOW()
             WHERE is_active = true AND last_article < NOW() - INTERVAL '30 days'
         """)
     logger.info("Deactivated stale clusters")
