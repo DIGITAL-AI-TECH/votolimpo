@@ -87,6 +87,7 @@ output_schema:
     - veracity_signals
     - is_political
     - entity_names
+    - milestones
   additionalProperties: false
   properties:
     politicians:
@@ -135,10 +136,9 @@ output_schema:
       items: { type: string }
     milestones:
       type: array
-      default: []
       items:
         type: object
-        required: [politician_name, type, title, date, confidence]
+        required: [politician_name, type, title, description, date, confidence]
         additionalProperties: false
         properties:
           politician_name: { type: string }
