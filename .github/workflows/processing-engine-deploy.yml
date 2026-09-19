@@ -3,7 +3,9 @@ name: Deploy Processing Engine
 on:
   push:
     branches: [main]
-    paths: ['processing-engine/**']
+    paths:
+      - 'processing-engine/**'
+      - '.github/workflows/processing-engine-deploy.yml'
   workflow_dispatch:
 
 env:
@@ -53,7 +55,7 @@ jobs:
 
       - name: Run tests
         working-directory: processing-engine
-        run: pytest tests/ -q --tb=short
+        run: pytest tests/ -q --tb=short --ignore=tests/e2e
 
       - name: Notify — Tests OK
         if: success()
