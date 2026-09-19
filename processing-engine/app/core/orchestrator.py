@@ -455,8 +455,9 @@ async def _process_single_item(
         # Step 5: Validate
         all_errors = []
         for v_type, validator, v_config in validators:
-            errors = validator.validate(output, clean_content, v_config)
-            all_errors.extend(errors)
+            result = validator.validate(output, clean_content, v_config)
+            if not result.valid:
+                all_errors.extend(result.errors)
 
         # H1 fix: proper retry loop
         if all_errors:
@@ -478,8 +479,9 @@ async def _process_single_item(
                 cost += llm_result["cost_usd"]
                 all_errors = []
                 for v_type, validator, v_config in validators:
-                    errors = validator.validate(output, clean_content, v_config)
-                    all_errors.extend(errors)
+                    result = validator.validate(output, clean_content, v_config)
+                    if not result.valid:
+                        all_errors.extend(result.errors)
                 if not all_errors:
                     break
 
