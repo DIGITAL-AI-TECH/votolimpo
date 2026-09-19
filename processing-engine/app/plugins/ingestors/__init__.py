@@ -45,8 +45,9 @@ class HTMLIngestor:
         return text[:max_chars]
 
 
-# Registry
+# Registry — import full-featured ingestors from their modules
 from app.plugins.ingestors.auto import AutoIngestor
+from app.plugins.ingestors.html import HTMLIngestor as _HTMLIngestorFull
 from app.plugins.ingestors.json_ingestor import JSONIngestor
 from app.plugins.ingestors.pdf import PDFIngestor
 from app.plugins.ingestors.text import TextIngestor
@@ -54,7 +55,7 @@ from app.plugins.ingestors.text import TextIngestor
 INGESTORS: dict[str, type] = {
     "raw_text": RawTextIngestor,
     "text": TextIngestor,
-    "html": HTMLIngestor,
+    "html": _HTMLIngestorFull,
     "pdf": PDFIngestor,
     "json": JSONIngestor,
     "auto": AutoIngestor,

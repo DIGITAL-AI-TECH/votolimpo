@@ -13,12 +13,9 @@ class PDFIngestor:
     Note: raw input MUST be bytes (PDF binary).
     """
 
-    async def ingest(
-        self,
-        raw: str | bytes,
-        content_type: str,
-        max_chars: int = 100000,
-    ) -> str:
+    async def ingest(self, content: str, config: dict) -> str:
+        max_chars = config.get("max_content_chars", 100000) if isinstance(config, dict) else 100000
+
         try:
             import fitz  # PyMuPDF
         except ImportError as exc:
@@ -26,11 +23,11 @@ class PDFIngestor:
                 "PyMuPDF is required for PDF ingestion. Install with: pip install PyMuPDF"
             ) from exc
 
-        if isinstance(raw, str):
+        if isinstance(content, str):
             raise ValueError("PDFIngestor expects bytes input, not str.")
 
         try:
-            doc = fitz.open(stream=raw, filetype="pdf")
+            doc = fitz.open(stream=content, filetype="pdf")
         except Exception as exc:
             raise ValueError(f"Failed to open PDF: {exc}") from exc
 

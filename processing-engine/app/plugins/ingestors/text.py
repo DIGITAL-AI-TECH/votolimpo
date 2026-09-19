@@ -15,19 +15,16 @@ class TextIngestor:
     Handles both str and bytes input. Applies truncation per FR-017.
     """
 
-    async def ingest(
-        self,
-        raw: str | bytes,
-        content_type: str,
-        max_chars: int = 100000,
-    ) -> str:
-        if isinstance(raw, bytes):
+    async def ingest(self, content: str, config: dict) -> str:
+        max_chars = config.get("max_content_chars", 100000) if isinstance(config, dict) else 100000
+
+        if isinstance(content, bytes):
             # Try UTF-8 first, fall back to latin-1 (never fails)
             try:
-                text = raw.decode("utf-8")
+                text = content.decode("utf-8")
             except UnicodeDecodeError:
-                text = raw.decode("latin-1")
+                text = content.decode("latin-1")
         else:
-            text = raw
+            text = content
 
         return _truncate(text, max_chars)

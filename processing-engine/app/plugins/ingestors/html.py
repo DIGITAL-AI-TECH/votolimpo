@@ -18,19 +18,16 @@ class HTMLIngestor:
     Normalizes whitespace and applies truncation per FR-017.
     """
 
-    async def ingest(
-        self,
-        raw: str | bytes,
-        content_type: str,
-        max_chars: int = 100000,
-    ) -> str:
-        if isinstance(raw, bytes):
+    async def ingest(self, content: str, config: dict) -> str:
+        max_chars = config.get("max_content_chars", 100000) if isinstance(config, dict) else 100000
+
+        if isinstance(content, bytes):
             try:
-                html = raw.decode("utf-8")
+                html = content.decode("utf-8")
             except UnicodeDecodeError:
-                html = raw.decode("latin-1")
+                html = content.decode("latin-1")
         else:
-            html = raw
+            html = content
 
         soup = BeautifulSoup(html, "html.parser")
 

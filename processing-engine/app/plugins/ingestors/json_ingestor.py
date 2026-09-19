@@ -13,19 +13,16 @@ class JSONIngestor:
     Applies truncation per FR-017.
     """
 
-    async def ingest(
-        self,
-        raw: str | bytes,
-        content_type: str,
-        max_chars: int = 100000,
-    ) -> str:
-        if isinstance(raw, bytes):
+    async def ingest(self, content: str, config: dict) -> str:
+        max_chars = config.get("max_content_chars", 100000) if isinstance(config, dict) else 100000
+
+        if isinstance(content, bytes):
             try:
-                raw_str = raw.decode("utf-8")
+                raw_str = content.decode("utf-8")
             except UnicodeDecodeError:
-                raw_str = raw.decode("latin-1")
+                raw_str = content.decode("latin-1")
         else:
-            raw_str = raw
+            raw_str = content
 
         try:
             data = json.loads(raw_str)
