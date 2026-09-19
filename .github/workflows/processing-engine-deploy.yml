@@ -77,6 +77,9 @@ jobs:
         working-directory: processing-engine
         env:
           DATABASE_URL: postgresql://postgres:postgres@localhost:5432/processing_engine
+          PE_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/processing_engine
+          PE_VOTOLIMPO_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/processing_engine
+          PE_API_KEY: test-key
           DB_HOST: localhost
           DB_PORT: "5432"
           DB_USER: postgres
