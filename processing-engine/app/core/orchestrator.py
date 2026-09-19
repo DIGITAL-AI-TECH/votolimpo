@@ -87,7 +87,7 @@ async def process_next_job():
     # Proper SKIP LOCKED: SELECT FOR UPDATE inside transaction, then UPDATE
     async with pool.acquire() as conn, conn.transaction():
         row = await conn.fetchrow("""
-                SELECT id, pipeline_id FROM processing_engine.jobs
+                SELECT id, pipeline_id, skip_cache FROM processing_engine.jobs
                 WHERE status = 'pending'
                 ORDER BY
                     CASE priority
@@ -115,19 +115,20 @@ async def process_next_job():
 
     job_id = row["id"]  # UUID from DB
     pipeline_id = str(row["pipeline_id"])  # str for get_pipeline lookup
+    skip_cache = row.get("skip_cache", False)
 
-    logger.info("Processing job: %s (pipeline: %s)", job_id, pipeline_id)
+    logger.info("Processing job: %s (pipeline: %s, skip_cache: %s)", job_id, pipeline_id, skip_cache)
 
     pipeline = get_pipeline(pipeline_id)
     if not pipeline:
         await _fail_job(job_id, f"Pipeline not found: {pipeline_id}")
         return job_id
 
-    await _process_job_items(job_id, pipeline)
+    await _process_job_items(job_id, pipeline, skip_cache=skip_cache)
     return job_id
 
 
-async def _process_job_items(job_id: str, pipeline: PipelineConfig):
+async def _process_job_items(job_id: str, pipeline: PipelineConfig, *, skip_cache: bool = False):
     """Process all items through the pipeline (C2 fix: LLM outside pool.acquire)."""
     pool = await get_pool()
 
@@ -192,6 +193,7 @@ async def _process_job_items(job_id: str, pipeline: PipelineConfig):
                 system_prompt,
                 output_schema,
                 pool,
+                skip_cache=skip_cache,
             )
 
     results = await asyncio.gather(*[_process_one(item) for item in items])
@@ -251,6 +253,8 @@ async def _process_single_item(
     system_prompt,
     output_schema,
     pool,
+    *,
+    skip_cache: bool = False,
 ) -> dict:
     """Process a single item through the pipeline. Returns stats dict.
 
@@ -280,8 +284,8 @@ async def _process_single_item(
             raise ValueError("Ingestor returned empty content — cannot process item")
         content_hash = hashlib.sha256(clean_content.encode()).hexdigest()
 
-        # Step 2: Cache check (short acquire)
-        if pipeline.cache.enabled:
+        # Step 2: Cache check (short acquire) — skip if job has skip_cache=True
+        if pipeline.cache.enabled and not skip_cache:
             async with pool.acquire() as conn:
                 cached = await conn.fetchrow(
                     "SELECT output FROM processing_engine.cache WHERE content_hash = $1 AND pipeline_id = $2 AND expires_at > NOW()",
@@ -289,6 +293,63 @@ async def _process_single_item(
                     pipeline_uuid,
                 )
             if cached:
+                output = json.loads(cached["output"])
+                metadata = (
+                    json.loads(item["metadata"])
+                    if isinstance(item["metadata"], str)
+                    else (item["metadata"] or {})
+                )
+                metadata["source_url"] = (
+                    item["source_url"]
+                    or metadata.get("url")
+                    or metadata.get("source_url")
+                    or ""
+                )
+
+                # Classify post-processors into pre-sink and post-sink
+                _POST_SINK_CACHED = {
+                    "entity_resolver", "article_matcher", "cluster_updater",
+                    "score_persister", "milestone_detector",
+                }
+                pre_sink_pps = [
+                    (t, p, c) for t, p, c in post_processors
+                    if t not in _POST_SINK_CACHED
+                ]
+                post_sink_pps = [
+                    (t, p, c) for t, p, c in post_processors
+                    if t in _POST_SINK_CACHED
+                ]
+
+                # Run pre-sink post-processors (e.g. score_calculator)
+                for pp_type, processor, pp_config in pre_sink_pps:
+                    try:
+                        output = await processor.process(output, metadata, pool, pp_config)
+                    except Exception as pp_err:
+                        logger.warning(
+                            "Pre-sink post-processor %s failed on cache hit for item %s: %s",
+                            pp_type, item_id, pp_err,
+                        )
+
+                # Persist via sink
+                async with pool.acquire() as conn:
+                    persist_result = await sink.persist(
+                        output, metadata, pipeline.sink.config, conn,
+                    )
+
+                # Inject article_id for post-sink processors
+                if persist_result and persist_result.get("article_id"):
+                    output["article_id"] = persist_result["article_id"]
+
+                # Run post-sink post-processors (entity_resolver, milestone_detector, etc.)
+                for pp_type, processor, pp_config in post_sink_pps:
+                    try:
+                        output = await processor.process(output, metadata, pool, pp_config)
+                    except Exception as pp_err:
+                        logger.warning(
+                            "Post-sink processor %s failed on cache hit for item %s (non-fatal): %s",
+                            pp_type, item_id, pp_err,
+                        )
+
                 duration_ms = int((time.time() - t0) * 1000)
                 async with pool.acquire() as conn:
                     await conn.execute(
@@ -298,34 +359,14 @@ async def _process_single_item(
                             duration_ms = $2, updated_at = NOW()
                         WHERE id = $3
                     """,
-                        cached["output"],
+                        json.dumps(output),
                         duration_ms,
                         item_id,
                     )
-                    metadata = (
-                        json.loads(item["metadata"])
-                        if isinstance(item["metadata"], str)
-                        else (item["metadata"] or {})
-                    )
-                    metadata["source_url"] = (
-                        item["source_url"]
-                        or metadata.get("url")
-                        or metadata.get("source_url")
-                        or ""
-                    )
-                    await sink.persist(
-                        json.loads(cached["output"]),
-                        metadata,
-                        pipeline.sink.config,
-                        conn,
-                    )
                     await _log_step(
-                        conn,
-                        job_id,
-                        item_id,
-                        "cache_hit",
-                        "completed",
+                        conn, job_id, item_id, "cache_hit", "completed",
                         duration_ms=duration_ms,
+                        metadata={"post_processors": [pp[0] for pp in post_processors]},
                     )
                 return {
                     "completed": 1,
