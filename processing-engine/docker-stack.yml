@@ -13,7 +13,6 @@ services:
       - pgdata:/var/lib/postgresql/data
     networks:
       - pe-net
-      - oraculusnet
     deploy:
       replicas: 1
       placement:
