@@ -1,5 +1,6 @@
 """Database connection pool using asyncpg directly."""
 
+import asyncio
 import logging
 import os
 
@@ -12,6 +13,10 @@ logger = logging.getLogger(__name__)
 # Connection pool (initialized on startup)
 _pool: asyncpg.Pool | None = None
 
+# Retry settings for initial connection
+_CONNECT_MAX_RETRIES = 10
+_CONNECT_BASE_DELAY = 2  # seconds
+
 
 def _get_dsn() -> str:
     """Convert SQLAlchemy-style URL to asyncpg DSN."""
@@ -22,15 +27,31 @@ def _get_dsn() -> str:
 
 
 async def get_pool() -> asyncpg.Pool:
-    """Get or create the connection pool."""
+    """Get or create the connection pool with retry on transient failures."""
     global _pool
     if _pool is None:
-        _pool = await asyncpg.create_pool(
-            dsn=_get_dsn(),
-            min_size=2,
-            max_size=10,
-        )
-        logger.info("Database pool created")
+        last_err: Exception | None = None
+        for attempt in range(1, _CONNECT_MAX_RETRIES + 1):
+            try:
+                _pool = await asyncpg.create_pool(
+                    dsn=_get_dsn(),
+                    min_size=2,
+                    max_size=10,
+                )
+                logger.info("Database pool created (attempt %d)", attempt)
+                return _pool
+            except (ConnectionRefusedError, OSError) as exc:
+                last_err = exc
+                delay = _CONNECT_BASE_DELAY * attempt
+                logger.warning(
+                    "DB connection attempt %d/%d failed: %s — retrying in %ds",
+                    attempt,
+                    _CONNECT_MAX_RETRIES,
+                    exc,
+                    delay,
+                )
+                await asyncio.sleep(delay)
+        raise last_err  # type: ignore[misc]
     return _pool
 
 
