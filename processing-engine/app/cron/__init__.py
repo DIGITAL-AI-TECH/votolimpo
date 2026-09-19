@@ -144,9 +144,7 @@ async def cron_refresh_mvs():
     async with acquire_votolimpo_conn(pool) as conn:
         for mv in mvs:
             try:
-                await conn.execute(
-                    f"REFRESH MATERIALIZED VIEW CONCURRENTLY {mv}"
-                )
+                await conn.execute(f"REFRESH MATERIALIZED VIEW CONCURRENTLY {mv}")
                 logger.info("Refreshed materialized view %s", mv)
             except Exception:
                 logger.debug(
