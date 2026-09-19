@@ -1,4 +1,12 @@
-"""Score Persister — persist veracity scores to score_history after each article."""
+"""Score Persister — persist veracity scores to score_history after each article.
+
+NC schema (002_create_tables.sql):
+    score_history.politician_id INTEGER NOT NULL REFERENCES politicians(id)
+    score_history.score         DECIMAL(5,2) NOT NULL
+    score_history.components    JSONB NOT NULL  (column name is 'components', NOT 'score_components')
+    score_history.calculated_at TIMESTAMPTZ DEFAULT NOW()
+    (no article_count column in NC schema)
+"""
 
 import json
 import logging
@@ -37,7 +45,8 @@ class ScorePersister:
         if not politician_ids or veracity_score is None:
             return output
 
-        components_json = json.dumps(score_components) if score_components else None
+        # NC schema: column is 'components' (JSONB NOT NULL), not 'score_components'
+        components_json = json.dumps(score_components) if score_components else "{}"
         persisted_ids = []
 
         async with acquire_votolimpo_conn(pool) as conn:
@@ -46,8 +55,8 @@ class ScorePersister:
                     row = await conn.fetchrow(
                         f"""
                         INSERT INTO {history_table}
-                            (politician_id, score, score_components, article_count, calculated_at)
-                        VALUES ($1, $2, $3::jsonb, 1, NOW())
+                            (politician_id, score, components)
+                        VALUES ($1, $2, $3::jsonb)
                         RETURNING id
                     """,
                         politician_id,

@@ -182,17 +182,21 @@ Todo componente e testavel de forma isolada.
 **UNICO banco**: PostgreSQL 16 via container `pe-postgres:5432` (Docker Swarm overlay).
 **NAO existe Supabase, banco externo ou banco AWS neste projeto.**
 
-Tres databases na mesma instancia:
+Dois databases na mesma instancia PostgreSQL, com schemas internos:
 
 | Database | Schema | Proposito | Quem usa |
 |----------|--------|-----------|----------|
-| `processing_engine` | public | Job queue, pipelines, custos | PE (API + Worker) |
-| `votolimpo` | voto_limpo | Artigos processados, politicos, scores (sink output) | PE (sink writes) + Frontend |
-| `news_collector` | news_collector | Sources, entities, articles, jobs, schedules | News Collector (FastAPI) |
+| `processing_engine` | `public` | Job queue, pipelines, custos | PE (API + Worker) |
+| `news_collector` | `news_collector` | Entities, articles, article_entities, schedules, sources (NC internal) | News Collector (FastAPI) |
+| `news_collector` | `votolimpo` | Politicians, articles (sink output), milestones, scores, clusters | PE (sink writes via VOTOLIMPO_DATABASE_URL) + NC (cross-schema reads) + Frontend (via NC API) |
+
+**NOTA**: O schema chama-se `votolimpo` (sem underscore). As tabelas do schema `votolimpo`
+vivem DENTRO do database `news_collector` (mesmo database do NC). NC acessa ambos schemas.
 
 **Connection strings** (env vars no Portainer stack 345):
 - `DATABASE_URL` = `postgresql+asyncpg://postgres:<pwd>@pe-postgres:5432/processing_engine`
-- `VOTOLIMPO_DATABASE_URL` = `postgresql://postgres:<pwd>@pe-postgres:5432/votolimpo`
+- `VOTOLIMPO_DATABASE_URL` = `postgresql://postgres:<pwd>@pe-postgres:5432/news_collector`
+  (aponta pro database news_collector onde vive o schema votolimpo)
 
 **NC** (Portainer stack 347) conecta no mesmo `pe-postgres`:
 - `DATABASE_URL` = `postgresql+asyncpg://postgres:<pwd>@pe-postgres:5432/news_collector`
@@ -228,13 +232,21 @@ Fontes (15 portais) → Firecrawl (coleta)
 
 ### Cron jobs
 
+**NC crons** (APScheduler no News Collector):
+
 | Job | Frequencia | Funcao |
 |-----|-----------|--------|
-| Collector | 4x/dia (6h, 12h, 18h, 0h) | Coletar artigos novos |
-| Processor | A cada 15min | Processar artigos pendentes |
-| Score Calculator | 1x/dia (3h) | Recalcular scores |
-| Score History | 1x/semana (dom 4h) | Snapshot para historico |
-| Stale Check | 1x/dia (5h) | Marcar fontes sem artigos ha 7+ dias |
+| Collector | 4x/dia (6h, 12h, 18h, 0h) | Coletar artigos novos via Firecrawl |
+
+**PE crons** (APScheduler em `app/cron/__init__.py` — globais, NAO configurados por pipeline YAML):
+
+| Job | Frequencia | Funcao |
+|-----|-----------|--------|
+| cron_recalculate_scores | 1x/dia (3h) | Recalcular scores de politicos |
+| cron_refresh_mvs | A cada 6h | Refresh materialized views (se existirem) |
+| cron_regenerate_content | 1x/semana (dom 5h) | Gerar bios e AI summaries via LLM |
+| cron_cleanup_logs | Mensal (dia 1, 2h) | Limpar logs >90 dias |
+| cron_deactivate_stale_clusters | 1x/dia (4h) | Desativar clusters inativos |
 
 ## Governance
 
@@ -259,4 +271,4 @@ conformidade com os principios aqui definidos.
 - O gate de review (engineering-quality-gate) verifica testes,
   seguranca e conformidade com esta constitution.
 
-**Version**: 1.1.0 | **Ratified**: 2026-09-06 | **Last Amended**: 2026-09-13
+**Version**: 1.2.0 | **Ratified**: 2026-09-06 | **Last Amended**: 2026-09-19

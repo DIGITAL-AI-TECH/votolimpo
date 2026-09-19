@@ -467,14 +467,42 @@ async def _process_single_item(
                     "duration": duration_ms,
                 }
 
-        # Step 5.5: Post-process (sequential chain — output flows between processors)
+        # Step 5.5: Post-process (two-phase: pre-sink enrichment, then post-sink persistence)
+        #
+        # Post-processors that need article_id (from sink RETURNING id) must run
+        # AFTER the sink persist. Pre-sink processors enrich the output (scores,
+        # entity resolution) before persistence.
+        #
+        # Pre-sink:  score_calculator, entity_resolver (enrich output, no article_id needed)
+        # Post-sink: article_matcher, cluster_updater, score_persister, milestone_detector
+        _POST_SINK_PROCESSORS = {
+            "entity_resolver",
+            "article_matcher",
+            "cluster_updater",
+            "score_persister",
+            "milestone_detector",
+        }
+
         metadata = (
             json.loads(item["metadata"])
             if isinstance(item["metadata"], str)
             else (item["metadata"] or {})
         )
         metadata["source_url"] = item["source_url"]
-        for pp_type, processor, pp_config in post_processors:
+
+        pre_sink_pps = [
+            (t, p, c)
+            for t, p, c in post_processors
+            if t not in _POST_SINK_PROCESSORS
+        ]
+        post_sink_pps = [
+            (t, p, c)
+            for t, p, c in post_processors
+            if t in _POST_SINK_PROCESSORS
+        ]
+
+        # Phase 1: Pre-sink post-processors (enrich output before persist)
+        for pp_type, processor, pp_config in pre_sink_pps:
             try:
                 output = await processor.process(output, metadata, pool, pp_config)
             except Exception as pp_err:
@@ -510,6 +538,41 @@ async def _process_single_item(
                     "duration": duration_ms,
                 }
 
+        # Step 6: Persist via sink (short acquire) — BEFORE post-sink processors
+        # so that article_id is available for article_matcher, cluster_updater, etc.
+        async with pool.acquire() as conn:
+            persist_result = await sink.persist(
+                output, metadata, pipeline.sink.config, conn
+            )
+
+        # Inject article_id from sink RETURNING id into output for post-sink processors
+        if persist_result.get("article_id"):
+            output["article_id"] = persist_result["article_id"]
+
+        # Phase 2: Post-sink post-processors (need article_id)
+        for pp_type, processor, pp_config in post_sink_pps:
+            try:
+                output = await processor.process(output, metadata, pool, pp_config)
+            except Exception as pp_err:
+                # Post-sink processor failures are non-fatal: article already persisted.
+                # Log the error but don't fail the entire item.
+                logger.error(
+                    "Post-sink processor %s failed for item %s (non-fatal): %s",
+                    pp_type,
+                    item_id,
+                    pp_err,
+                )
+                async with pool.acquire() as conn:
+                    await _log_step(
+                        conn,
+                        job_id,
+                        item_id,
+                        "post_process",
+                        "warning",
+                        error_message=str(pp_err),
+                        metadata={"processor": pp_type, "phase": "post_sink"},
+                    )
+
         # Log post-processing completion
         async with pool.acquire() as conn:
             await _log_step(
@@ -519,12 +582,6 @@ async def _process_single_item(
                 "post_process",
                 "completed",
                 metadata={"processors": [pp[0] for pp in post_processors]},
-            )
-
-        # Step 6: Persist via sink (short acquire)
-        async with pool.acquire() as conn:
-            persist_result = await sink.persist(
-                output, metadata, pipeline.sink.config, conn
             )
 
         # Cache the result

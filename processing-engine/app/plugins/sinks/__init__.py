@@ -5,12 +5,29 @@ import json
 import logging
 import os
 from typing import Protocol
+from urllib.parse import parse_qs, urlencode, urlparse, urlunparse
 
 import asyncpg
 
 from app.plugins.post_processors import validate_sql_identifier
 
 logger = logging.getLogger(__name__)
+
+
+def _normalize_url(url: str) -> str:
+    """Normalize URL for consistent hashing — matches NC's hashing.py logic exactly.
+
+    Lowercase scheme+host, strip trailing slash, sort query params.
+    """
+    parsed = urlparse(url.strip())
+    scheme = parsed.scheme.lower()
+    netloc = parsed.netloc.lower()
+    path = parsed.path.rstrip("/") or "/"
+    query_params = parse_qs(parsed.query, keep_blank_values=True)
+    sorted_query = urlencode(
+        sorted((k, v) for k, vals in query_params.items() for v in vals)
+    )
+    return urlunparse((scheme, netloc, path, parsed.params, sorted_query, ""))
 
 
 class Sink(Protocol):
@@ -113,11 +130,15 @@ class PostgreSQLSink:
 
         # Auto-generate url_hash from source_url when conflict_column is url_hash
         # (required for ON CONFLICT to work — url_hash must be in the INSERT)
+        # CRITICAL: URL normalization MUST match the News Collector's hashing logic
+        # (news-collector/src/app/utils/hashing.py) to ensure UPSERT matches existing rows.
         if conflict_column == "url_hash" and "url_hash" not in [
             v for v in mapping.values()
         ]:
             source_url = item_metadata.get("source_url") or ""
-            url_hash = hashlib.sha256(source_url.encode()).hexdigest()
+            url_hash = hashlib.sha256(
+                _normalize_url(source_url).encode("utf-8")
+            ).hexdigest()
             columns.append("url_hash")
             params.append(url_hash)
             values.append(f"${len(params)}")
@@ -230,7 +251,9 @@ class PostgreSQLSink:
     ) -> int:
         """Upsert article into votolimpo.articles (legacy mode)."""
         url = metadata.get("source_url", "")
-        url_hash = hashlib.sha256(url.encode()).hexdigest()
+        url_hash = hashlib.sha256(
+            _normalize_url(url).encode("utf-8")
+        ).hexdigest()
 
         # Upsert source
         source_name = metadata.get("source_name")

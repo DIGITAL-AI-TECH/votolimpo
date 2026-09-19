@@ -73,6 +73,49 @@ class EntityResolver:
                         politician_id,
                     )
 
+            # Link politicians to article via politician_articles (post-sink: article_id available)
+            article_id = output.get("article_id")
+            if article_id and resolved_politician_ids:
+                # Map article_role from LLM output to NC enum values
+                role_map = {
+                    "protagonist": "protagonist",
+                    "mentioned": "mentioned",
+                    "investigated": "investigated",
+                    "witness": "witness",
+                    "victim": "victim",
+                    "other": "other",
+                    "subject": "protagonist",  # legacy PE mapping
+                    "related": "mentioned",  # legacy PE mapping
+                }
+                for pol in output.get("politicians", []):
+                    pid = pol.get("resolved_id")
+                    if not pid:
+                        continue
+                    raw_role = pol.get("article_role", "mentioned")
+                    nc_role = role_map.get(raw_role, "mentioned")
+                    relevance = pol.get("relevance_score")
+                    try:
+                        await conn.execute(
+                            """
+                            INSERT INTO votolimpo.politician_articles
+                                (politician_id, article_id, role, relevance_score)
+                            VALUES ($1, $2, $3::votolimpo.article_role, $4)
+                            ON CONFLICT (politician_id, article_id) DO UPDATE
+                            SET role = EXCLUDED.role, relevance_score = EXCLUDED.relevance_score
+                        """,
+                            pid,
+                            article_id,
+                            nc_role,
+                            relevance,
+                        )
+                    except Exception as e:
+                        logger.warning(
+                            "Failed to link politician %s to article %s: %s",
+                            pid,
+                            article_id,
+                            e,
+                        )
+
             # Resolve entities — supports both formats:
             #   1. "entities": [{name, type}]  (structured, preferred)
             #   2. "entity_names": ["str"]     (LLM output schema returns this)
@@ -187,8 +230,15 @@ class EntityResolver:
         table: str,
         fuzzy_threshold: float,
     ) -> int:
-        """Resolve entity: exact normalized → fuzzy → create."""
+        """Resolve entity: exact normalized → fuzzy → create.
+
+        NC schema (002_create_tables.sql): entities uses 'type' column (not 'entity_type')
+        with enum values: person, organization, location, event, concept.
+        """
         norm = normalize_for_search(name)
+
+        # Map PE entity types to NC enum values if needed
+        nc_type = _map_entity_type(ent_type)
 
         # Exact normalized match
         row = await conn.fetchrow(
@@ -197,7 +247,7 @@ class EntityResolver:
             WHERE normalized_name = $1 AND type = $2::votolimpo.entity_type
         """,
             norm,
-            ent_type,
+            nc_type,
         )
         if row:
             await conn.execute(
@@ -220,7 +270,7 @@ class EntityResolver:
         """,
             norm,
             fuzzy_threshold,
-            ent_type,
+            nc_type,
         )
         if row:
             await conn.execute(
@@ -243,6 +293,25 @@ class EntityResolver:
         """,
             clean_name,
             norm,
-            ent_type,
+            nc_type,
         )
         return row["id"]
+
+
+# NC entity_type enum: person, organization, location, event, concept
+# Map any non-NC values to the closest NC equivalent
+_ENTITY_TYPE_MAP = {
+    "company": "organization",
+    "lobby": "organization",
+    "ngo": "organization",
+    "person": "person",
+    "organization": "organization",
+    "location": "location",
+    "event": "event",
+    "concept": "concept",
+}
+
+
+def _map_entity_type(ent_type: str) -> str:
+    """Map entity type to NC-compatible enum value."""
+    return _ENTITY_TYPE_MAP.get(ent_type.lower(), "organization")

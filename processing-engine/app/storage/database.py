@@ -173,6 +173,11 @@ async def init_votolimpo_schema():
     """Ensure the votolimpo schema and all required tables exist.
 
     Uses VOTOLIMPO_DATABASE_URL (or PE_VOTOLIMPO_DATABASE_URL) to connect.
+
+    IMPORTANT: The votolimpo schema is OWNED by the News Collector (NC) migrations.
+    NC uses SERIAL (INTEGER) PKs — this fallback DDL MUST match NC's schema exactly
+    to avoid type mismatches when both services share the same database.
+
     Creates schema, ENUMs, tables, indexes — all idempotent (IF NOT EXISTS).
     """
     raw_url = os.environ.get("PE_VOTOLIMPO_DATABASE_URL") or os.environ.get(
@@ -193,21 +198,37 @@ async def init_votolimpo_schema():
         await conn.execute("CREATE EXTENSION IF NOT EXISTS pg_trgm;")
         await conn.execute("CREATE SCHEMA IF NOT EXISTS votolimpo;")
 
-        # --- ENUMs (idempotent via DO block) ---
+        # --- ENUMs (must match NC 001_create_schema_enums.sql exactly) ---
         for enum_name, enum_values in [
             ("severity_level", "'low','medium','high','critical'"),
-            ("article_role", "'subject','mentioned','related'"),
-            ("entity_type", "'company','organization','lobby','ngo'"),
+            (
+                "article_role",
+                "'protagonist','mentioned','investigated','witness','victim','other'",
+            ),
+            (
+                "entity_type",
+                "'person','organization','location','event','concept'",
+            ),
             (
                 "relationship_type",
-                "'business','political','family','legal','financial'",
+                "'ally','opponent','party_member','family','business','legal','investigation'",
             ),
             (
                 "milestone_type",
                 "'inquiry','complaint','conviction','acquittal','arrest','impeachment','plea_deal','fine'",
             ),
-            ("match_type", "'content','entity','temporal'"),
-            ("processing_status", "'pending','processing','completed','failed'"),
+            (
+                "match_type",
+                "'same_event','follow_up','related','contradiction'",
+            ),
+            (
+                "processing_status",
+                "'pending','processing','completed','failed','retry'",
+            ),
+            (
+                "source_category",
+                "'mainstream','regional','portal','blog','govt','agency','international'",
+            ),
         ]:
             await conn.execute(f"""
                 DO $$ BEGIN
@@ -216,235 +237,259 @@ async def init_votolimpo_schema():
                 END $$;
             """)
 
-        # --- Tables ---
+        # --- Tables (aligned with NC 002_create_tables.sql — SERIAL INTEGER PKs) ---
+
         await conn.execute("""
-            CREATE TABLE IF NOT EXISTS votolimpo.parties (
-                id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+            CREATE TABLE IF NOT EXISTS votolimpo.politicians (
+                id SERIAL PRIMARY KEY,
                 name TEXT NOT NULL,
-                abbreviation VARCHAR(20) UNIQUE NOT NULL,
-                logo_url TEXT,
-                color VARCHAR(7),
-                created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+                slug TEXT NOT NULL UNIQUE,
+                party TEXT,
+                state TEXT,
+                city TEXT,
+                role TEXT,
+                foto_url TEXT,
+                bio TEXT,
+                ai_summary TEXT,
+                score DECIMAL(5,2) DEFAULT 0,
+                score_components JSONB DEFAULT '{}',
+                total_articles INTEGER DEFAULT 0,
+                search_vector TSVECTOR,
+                nc_entity_id TEXT,
+                tse_id TEXT,
+                created_at TIMESTAMPTZ DEFAULT NOW(),
+                updated_at TIMESTAMPTZ DEFAULT NOW()
             );
         """)
 
         await conn.execute("""
-            CREATE TABLE IF NOT EXISTS votolimpo.politicians (
-                id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-                slug VARCHAR(200) UNIQUE NOT NULL,
-                name TEXT NOT NULL,
-                party VARCHAR(50),
-                party_id UUID REFERENCES votolimpo.parties(id),
-                state VARCHAR(2),
-                role TEXT,
-                photo_url TEXT,
-                score NUMERIC(5,2) DEFAULT 0,
-                total_news INT DEFAULT 0,
-                severity_max VARCHAR(10),
-                first_news_at TIMESTAMPTZ,
-                last_news_at TIMESTAMPTZ,
-                bio TEXT,
-                ai_summary TEXT,
-                tse_id VARCHAR(50),
-                created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-                updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+            CREATE TABLE IF NOT EXISTS votolimpo.parties (
+                id SERIAL PRIMARY KEY,
+                name TEXT NOT NULL UNIQUE,
+                abbreviation TEXT NOT NULL UNIQUE,
+                logo_url TEXT,
+                created_at TIMESTAMPTZ DEFAULT NOW()
+            );
+        """)
+
+        await conn.execute("""
+            CREATE TABLE IF NOT EXISTS votolimpo.politician_parties (
+                id SERIAL PRIMARY KEY,
+                politician_id INTEGER NOT NULL REFERENCES votolimpo.politicians(id),
+                party_id INTEGER NOT NULL REFERENCES votolimpo.parties(id),
+                start_date DATE,
+                end_date DATE,
+                is_current BOOLEAN DEFAULT true,
+                created_at TIMESTAMPTZ DEFAULT NOW()
             );
         """)
 
         await conn.execute("""
             CREATE TABLE IF NOT EXISTS votolimpo.sources (
-                id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-                name TEXT NOT NULL,
-                domain VARCHAR(255) UNIQUE NOT NULL,
-                reputation NUMERIC(3,2),
-                category VARCHAR(50),
-                logo_url TEXT,
-                article_count INT DEFAULT 0,
-                active BOOLEAN DEFAULT true,
-                created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-                updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+                id SERIAL PRIMARY KEY,
+                name TEXT NOT NULL UNIQUE,
+                domain TEXT UNIQUE,
+                reputation_score DECIMAL(3,2) DEFAULT 0.50,
+                category votolimpo.source_category DEFAULT 'portal',
+                article_count INTEGER DEFAULT 0,
+                created_at TIMESTAMPTZ DEFAULT NOW(),
+                updated_at TIMESTAMPTZ DEFAULT NOW()
             );
         """)
 
         await conn.execute("""
             CREATE TABLE IF NOT EXISTS votolimpo.articles (
-                id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-                title TEXT,
-                url TEXT,
-                url_hash TEXT UNIQUE,
-                summary TEXT,
-                original_url TEXT,
-                source_id UUID REFERENCES votolimpo.sources(id),
-                source_domain TEXT,
+                id SERIAL PRIMARY KEY,
+                title TEXT NOT NULL,
+                url TEXT NOT NULL,
+                url_hash TEXT NOT NULL UNIQUE,
+                content_hash TEXT,
+                source_id INTEGER REFERENCES votolimpo.sources(id),
                 published_at TIMESTAMPTZ,
-                collected_at TIMESTAMPTZ DEFAULT now(),
-                veracity_score NUMERIC(5,4),
+                collected_at TIMESTAMPTZ DEFAULT NOW(),
+                processed_at TIMESTAMPTZ,
+                source_reputation DECIMAL(3,2),
+                multi_source_score DECIMAL(3,2),
+                narrative_consistency DECIMAL(3,2),
+                documental_evidence DECIMAL(3,2),
+                temporality_score DECIMAL(3,2),
+                emotional_language DECIMAL(3,2),
+                veracity_score DECIMAL(3,2),
                 severity votolimpo.severity_level,
-                raw_content TEXT,
-                ai_processed BOOLEAN DEFAULT false,
-                source_reputation NUMERIC(5,4),
-                multi_source_count INT,
-                multi_source_score NUMERIC(5,4),
-                narrative_consistency NUMERIC(5,4),
-                documental_evidence NUMERIC(5,4),
-                temporality_score NUMERIC(5,4),
-                emotional_language NUMERIC(5,4),
-                score_components JSONB,
+                summary TEXT,
                 keywords TEXT[],
-                is_political BOOLEAN,
+                processing_status votolimpo.processing_status DEFAULT 'pending',
+                processing_errors JSONB DEFAULT '[]',
                 nc_article_id TEXT,
+                raw_extraction JSONB,
+                score_components JSONB DEFAULT '{}',
+                language VARCHAR(10) DEFAULT 'pt',
+                is_political BOOLEAN DEFAULT true,
                 source_url TEXT,
                 raw_output JSONB,
-                pe_item_id UUID,
-                processing_status votolimpo.processing_status DEFAULT 'pending',
-                processed_at TIMESTAMPTZ,
-                sentiment TEXT,
-                sentiment_score NUMERIC(5,4),
-                created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-                updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+                created_at TIMESTAMPTZ DEFAULT NOW(),
+                updated_at TIMESTAMPTZ DEFAULT NOW()
             );
         """)
 
         await conn.execute("""
             CREATE TABLE IF NOT EXISTS votolimpo.politician_articles (
-                politician_id UUID NOT NULL REFERENCES votolimpo.politicians(id),
-                article_id UUID NOT NULL REFERENCES votolimpo.articles(id),
+                id SERIAL PRIMARY KEY,
+                politician_id INTEGER NOT NULL REFERENCES votolimpo.politicians(id),
+                article_id INTEGER NOT NULL REFERENCES votolimpo.articles(id),
                 role votolimpo.article_role DEFAULT 'mentioned',
-                PRIMARY KEY (politician_id, article_id)
-            );
-        """)
-
-        await conn.execute("""
-            CREATE TABLE IF NOT EXISTS votolimpo.entities (
-                id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-                name TEXT NOT NULL,
-                entity_type votolimpo.entity_type NOT NULL,
-                description TEXT,
-                score NUMERIC(5,2),
-                created_at TIMESTAMPTZ NOT NULL DEFAULT now()
-            );
-        """)
-
-        await conn.execute("""
-            CREATE TABLE IF NOT EXISTS votolimpo.relationships (
-                id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-                source_type VARCHAR(20) NOT NULL,
-                source_id UUID NOT NULL,
-                target_type VARCHAR(20) NOT NULL,
-                target_id UUID NOT NULL,
-                relationship_type votolimpo.relationship_type NOT NULL,
-                weight INT DEFAULT 1,
-                description TEXT,
-                created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-                updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
-            );
-        """)
-
-        await conn.execute("""
-            CREATE TABLE IF NOT EXISTS votolimpo.relationship_evidence (
-                relationship_id UUID NOT NULL REFERENCES votolimpo.relationships(id),
-                article_id UUID NOT NULL REFERENCES votolimpo.articles(id),
-                PRIMARY KEY (relationship_id, article_id)
-            );
-        """)
-
-        await conn.execute("""
-            CREATE TABLE IF NOT EXISTS votolimpo.milestones (
-                id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-                politician_id UUID NOT NULL REFERENCES votolimpo.politicians(id),
-                title TEXT NOT NULL,
-                description TEXT,
-                milestone_type votolimpo.milestone_type NOT NULL,
-                occurred_at DATE,
-                source_url TEXT,
-                article_id UUID REFERENCES votolimpo.articles(id),
-                created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+                relevance_score DECIMAL(3,2),
+                UNIQUE(politician_id, article_id)
             );
         """)
 
         await conn.execute("""
             CREATE TABLE IF NOT EXISTS votolimpo.article_matches (
-                article_a_id UUID NOT NULL REFERENCES votolimpo.articles(id),
-                article_b_id UUID NOT NULL REFERENCES votolimpo.articles(id),
-                similarity NUMERIC(5,4),
-                entity_overlap NUMERIC(5,4),
-                keyword_overlap NUMERIC(5,4),
-                temporal_prox NUMERIC(5,4),
+                id SERIAL PRIMARY KEY,
+                article_a_id INTEGER NOT NULL REFERENCES votolimpo.articles(id),
+                article_b_id INTEGER NOT NULL REFERENCES votolimpo.articles(id),
                 match_type votolimpo.match_type,
-                created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-                PRIMARY KEY (article_a_id, article_b_id),
-                CHECK (article_a_id < article_b_id)
+                similarity DECIMAL(3,2) NOT NULL,
+                entity_overlap DECIMAL(3,2),
+                keyword_overlap DECIMAL(3,2),
+                temporal_prox DECIMAL(3,2),
+                created_at TIMESTAMPTZ DEFAULT NOW(),
+                CHECK (article_a_id < article_b_id),
+                UNIQUE(article_a_id, article_b_id)
             );
         """)
 
         await conn.execute("""
-            CREATE TABLE IF NOT EXISTS votolimpo.score_history (
-                id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-                politician_id UUID NOT NULL REFERENCES votolimpo.politicians(id),
-                score NUMERIC(5,2) NOT NULL,
-                score_components JSONB,
-                article_count INT DEFAULT 0,
-                calculated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+            CREATE TABLE IF NOT EXISTS votolimpo.milestones (
+                id SERIAL PRIMARY KEY,
+                politician_id INTEGER NOT NULL REFERENCES votolimpo.politicians(id),
+                article_id INTEGER REFERENCES votolimpo.articles(id),
+                type votolimpo.milestone_type NOT NULL,
+                title TEXT NOT NULL,
+                description TEXT,
+                date DATE NOT NULL,
+                confidence DECIMAL(3,2) NOT NULL,
+                source_url TEXT,
+                created_at TIMESTAMPTZ DEFAULT NOW()
             );
         """)
 
-        # --- Cluster tables (used by NC clusters router + PE cluster_updater) ---
+        await conn.execute("""
+            CREATE TABLE IF NOT EXISTS votolimpo.entities (
+                id SERIAL PRIMARY KEY,
+                name TEXT NOT NULL,
+                normalized_name TEXT NOT NULL,
+                type votolimpo.entity_type NOT NULL,
+                metadata JSONB DEFAULT '{}',
+                first_seen_at TIMESTAMPTZ DEFAULT NOW(),
+                last_seen_at TIMESTAMPTZ DEFAULT NOW(),
+                article_count INTEGER DEFAULT 0,
+                created_at TIMESTAMPTZ DEFAULT NOW()
+            );
+        """)
+
+        await conn.execute("""
+            CREATE TABLE IF NOT EXISTS votolimpo.relationships (
+                id SERIAL PRIMARY KEY,
+                source_id INTEGER NOT NULL,
+                target_id INTEGER NOT NULL,
+                source_type TEXT NOT NULL CHECK (source_type IN ('politician', 'entity')),
+                target_type TEXT NOT NULL CHECK (target_type IN ('politician', 'entity')),
+                type votolimpo.relationship_type NOT NULL,
+                weight INTEGER DEFAULT 1,
+                first_seen_at TIMESTAMPTZ DEFAULT NOW(),
+                last_seen_at TIMESTAMPTZ DEFAULT NOW(),
+                created_at TIMESTAMPTZ DEFAULT NOW(),
+                updated_at TIMESTAMPTZ DEFAULT NOW(),
+                UNIQUE(source_id, target_id, source_type, target_type, type)
+            );
+        """)
+
+        await conn.execute("""
+            CREATE TABLE IF NOT EXISTS votolimpo.relationship_evidence (
+                id SERIAL PRIMARY KEY,
+                relationship_id INTEGER NOT NULL REFERENCES votolimpo.relationships(id),
+                article_id INTEGER NOT NULL REFERENCES votolimpo.articles(id),
+                excerpt TEXT,
+                created_at TIMESTAMPTZ DEFAULT NOW()
+            );
+        """)
+
         await conn.execute("""
             CREATE TABLE IF NOT EXISTS votolimpo.news_clusters (
                 id SERIAL PRIMARY KEY,
-                title TEXT,
+                title TEXT NOT NULL,
                 summary TEXT,
-                article_count INT DEFAULT 0,
+                article_count INTEGER DEFAULT 0,
                 first_article TIMESTAMPTZ,
                 last_article TIMESTAMPTZ,
                 is_active BOOLEAN DEFAULT true,
-                created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-                updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+                created_at TIMESTAMPTZ DEFAULT NOW(),
+                updated_at TIMESTAMPTZ DEFAULT NOW()
             );
         """)
 
         await conn.execute("""
             CREATE TABLE IF NOT EXISTS votolimpo.cluster_articles (
-                cluster_id INT NOT NULL REFERENCES votolimpo.news_clusters(id),
-                article_id UUID NOT NULL REFERENCES votolimpo.articles(id),
+                cluster_id INTEGER NOT NULL REFERENCES votolimpo.news_clusters(id),
+                article_id INTEGER NOT NULL REFERENCES votolimpo.articles(id),
                 PRIMARY KEY (cluster_id, article_id)
             );
         """)
 
         await conn.execute("""
             CREATE TABLE IF NOT EXISTS votolimpo.cluster_politicians (
-                cluster_id INT NOT NULL REFERENCES votolimpo.news_clusters(id),
-                politician_id UUID NOT NULL REFERENCES votolimpo.politicians(id),
-                article_count INT DEFAULT 0,
+                cluster_id INTEGER NOT NULL REFERENCES votolimpo.news_clusters(id),
+                politician_id INTEGER NOT NULL REFERENCES votolimpo.politicians(id),
+                article_count INTEGER DEFAULT 0,
                 PRIMARY KEY (cluster_id, politician_id)
             );
         """)
 
-        # --- Indexes ---
+        await conn.execute("""
+            CREATE TABLE IF NOT EXISTS votolimpo.score_history (
+                id SERIAL PRIMARY KEY,
+                politician_id INTEGER NOT NULL REFERENCES votolimpo.politicians(id),
+                score DECIMAL(5,2) NOT NULL,
+                components JSONB NOT NULL,
+                calculated_at TIMESTAMPTZ DEFAULT NOW()
+            );
+        """)
+
+        # --- Indexes (aligned with NC 002_create_tables.sql) ---
         for idx_sql in [
-            "CREATE INDEX IF NOT EXISTS idx_vl_politicians_score ON votolimpo.politicians (score DESC)",
-            "CREATE INDEX IF NOT EXISTS idx_vl_politicians_slug ON votolimpo.politicians (slug)",
-            "CREATE INDEX IF NOT EXISTS idx_vl_articles_published ON votolimpo.articles (published_at DESC)",
-            "CREATE INDEX IF NOT EXISTS idx_vl_articles_source ON votolimpo.articles (source_id)",
-            "CREATE INDEX IF NOT EXISTS idx_vl_articles_url_hash ON votolimpo.articles (url_hash)",
-            "CREATE INDEX IF NOT EXISTS idx_vl_milestones_politician ON votolimpo.milestones (politician_id)",
-            "CREATE INDEX IF NOT EXISTS idx_vl_relationships_source ON votolimpo.relationships (source_id)",
-            "CREATE INDEX IF NOT EXISTS idx_vl_relationships_target ON votolimpo.relationships (target_id)",
-            "CREATE INDEX IF NOT EXISTS idx_vl_cluster_articles_cluster ON votolimpo.cluster_articles (cluster_id)",
-            "CREATE INDEX IF NOT EXISTS idx_vl_cluster_articles_article ON votolimpo.cluster_articles (article_id)",
-            "CREATE INDEX IF NOT EXISTS idx_vl_score_history_politician ON votolimpo.score_history (politician_id, calculated_at DESC)",
+            "CREATE INDEX IF NOT EXISTS idx_politicians_slug ON votolimpo.politicians(slug)",
+            "CREATE INDEX IF NOT EXISTS idx_politicians_score ON votolimpo.politicians(score DESC)",
+            "CREATE INDEX IF NOT EXISTS idx_politicians_state ON votolimpo.politicians(state)",
+            "CREATE INDEX IF NOT EXISTS idx_articles_url_hash ON votolimpo.articles(url_hash)",
+            "CREATE INDEX IF NOT EXISTS idx_articles_published ON votolimpo.articles(published_at DESC)",
+            "CREATE INDEX IF NOT EXISTS idx_articles_source ON votolimpo.articles(source_id)",
+            "CREATE INDEX IF NOT EXISTS idx_articles_severity ON votolimpo.articles(severity)",
+            "CREATE INDEX IF NOT EXISTS idx_articles_status ON votolimpo.articles(processing_status)",
+            "CREATE INDEX IF NOT EXISTS idx_articles_keywords ON votolimpo.articles USING GIN(keywords)",
+            "CREATE INDEX IF NOT EXISTS idx_pa_politician ON votolimpo.politician_articles(politician_id)",
+            "CREATE INDEX IF NOT EXISTS idx_pa_article ON votolimpo.politician_articles(article_id)",
+            "CREATE INDEX IF NOT EXISTS idx_am_articles ON votolimpo.article_matches(article_a_id, article_b_id)",
+            "CREATE INDEX IF NOT EXISTS idx_milestones_politician ON votolimpo.milestones(politician_id, date DESC)",
+            "CREATE INDEX IF NOT EXISTS idx_milestones_type ON votolimpo.milestones(type)",
+            "CREATE INDEX IF NOT EXISTS idx_entities_normalized ON votolimpo.entities(normalized_name)",
+            "CREATE INDEX IF NOT EXISTS idx_entities_type ON votolimpo.entities(type)",
+            "CREATE INDEX IF NOT EXISTS idx_rel_source ON votolimpo.relationships(source_id, source_type)",
+            "CREATE INDEX IF NOT EXISTS idx_rel_target ON votolimpo.relationships(target_id, target_type)",
+            "CREATE INDEX IF NOT EXISTS idx_sh_politician ON votolimpo.score_history(politician_id, calculated_at DESC)",
+            "CREATE INDEX IF NOT EXISTS idx_pp_politician ON votolimpo.politician_parties(politician_id)",
         ]:
             await conn.execute(idx_sql)
 
         # pg_trgm indexes (best-effort — extension may not be available)
         try:
             await conn.execute("""
-                CREATE INDEX IF NOT EXISTS idx_vl_politicians_name_trgm
-                ON votolimpo.politicians USING gin (name gin_trgm_ops)
+                CREATE INDEX IF NOT EXISTS idx_politicians_trgm
+                ON votolimpo.politicians USING GIN(name gin_trgm_ops)
             """)
             await conn.execute("""
-                CREATE INDEX IF NOT EXISTS idx_vl_articles_title_trgm
-                ON votolimpo.articles USING gin (title gin_trgm_ops)
+                CREATE INDEX IF NOT EXISTS idx_entities_trgm
+                ON votolimpo.entities USING GIN(normalized_name gin_trgm_ops)
             """)
         except Exception:
             logger.warning("pg_trgm indexes skipped (extension may not be available)")
