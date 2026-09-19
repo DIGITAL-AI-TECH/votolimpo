@@ -456,8 +456,13 @@ async def _process_single_item(
         all_errors = []
         for v_type, validator, v_config in validators:
             result = validator.validate(output, clean_content, v_config)
-            if not result.valid:
-                all_errors.extend(result.errors)
+            if isinstance(result, list):
+                all_errors.extend(result)
+            elif hasattr(result, "valid"):
+                if not result.valid:
+                    all_errors.extend(result.errors)
+            else:
+                all_errors.append(str(result))
 
         # H1 fix: proper retry loop
         if all_errors:
@@ -480,8 +485,13 @@ async def _process_single_item(
                 all_errors = []
                 for v_type, validator, v_config in validators:
                     result = validator.validate(output, clean_content, v_config)
-                    if not result.valid:
-                        all_errors.extend(result.errors)
+                    if isinstance(result, list):
+                        all_errors.extend(result)
+                    elif hasattr(result, "valid"):
+                        if not result.valid:
+                            all_errors.extend(result.errors)
+                    else:
+                        all_errors.append(str(result))
                 if not all_errors:
                     break
 
