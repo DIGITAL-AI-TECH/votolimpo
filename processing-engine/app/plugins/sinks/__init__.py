@@ -127,6 +127,8 @@ class PostgreSQLSink:
             validate_sql_identifier(db_col, "item_field_column")
         if config.get("jsonb_fallback"):
             validate_sql_identifier(config["jsonb_fallback"], "jsonb_fallback_column")
+        for col in config.get("sql_defaults", {}):
+            validate_sql_identifier(col, "sql_defaults_column")
 
         # Auto-generate url_hash from source_url when conflict_column is url_hash
         # (required for ON CONFLICT to work — url_hash must be in the INSERT)
@@ -202,6 +204,17 @@ class PostgreSQLSink:
             columns.append(fallback_col)
             params.append(json.dumps(output))
             values.append(f"${len(params)}::jsonb")
+
+        # SQL defaults — columns with raw SQL expressions (whitelisted)
+        # Only safe expressions are allowed to prevent SQL injection.
+        _ALLOWED_SQL_EXPRESSIONS = {"NOW()", "CURRENT_TIMESTAMP", "CURRENT_DATE", "TRUE", "FALSE"}
+        for col, sql_expr in config.get("sql_defaults", {}).items():
+            if sql_expr.upper() not in _ALLOWED_SQL_EXPRESSIONS:
+                raise ValueError(
+                    f"sql_defaults expression '{sql_expr}' not in whitelist: {_ALLOWED_SQL_EXPRESSIONS}"
+                )
+            columns.append(col)
+            values.append(sql_expr)
 
         if not columns:
             return

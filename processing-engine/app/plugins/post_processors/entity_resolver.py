@@ -166,10 +166,14 @@ class EntityResolver:
         fuzzy_threshold: float,
         fuzzy_party_threshold: float,
     ) -> int:
-        """Resolve politician: exact → fuzzy → fuzzy+party → create."""
+        """Resolve politician: exact → substring containment → fuzzy → fuzzy+party → create.
+
+        Substring containment catches cases like "Lula" vs "Luiz Inácio Lula da Silva"
+        and "Janja da Silva" vs "Janja Lula da Silva" where pg_trgm similarity is too low.
+        """
         normalized = normalize_for_search(name)
 
-        # Exact match
+        # Exact match (case-insensitive)
         row = await conn.fetchrow(
             f"SELECT id FROM {table} WHERE lower(name) = lower($1)",
             name.strip(),
@@ -177,7 +181,30 @@ class EntityResolver:
         if row:
             return row["id"]
 
-        # Fuzzy match
+        # Substring containment match — catches short names vs full names
+        # e.g. "Lula" matches "Luiz Inácio Lula da Silva"
+        # Only match if the shorter name has at least 3 chars (avoid trivial matches)
+        if len(normalized) >= 3:
+            row = await conn.fetchrow(
+                f"""
+                SELECT id, name FROM {table}
+                WHERE (
+                    lower(name) LIKE '%' || $1 || '%'
+                    OR $1 LIKE '%' || lower(name) || '%'
+                )
+                AND length(name) >= 3
+                ORDER BY length(name) DESC LIMIT 1
+            """,
+                normalized,
+            )
+            if row:
+                logger.debug(
+                    "Politician substring match: '%s' → '%s' (id=%s)",
+                    name, row["name"], row["id"],
+                )
+                return row["id"]
+
+        # Fuzzy match (pg_trgm)
         row = await conn.fetchrow(
             f"""
             SELECT id, similarity(lower(name), $1) as sim
@@ -191,7 +218,7 @@ class EntityResolver:
         if row:
             return row["id"]
 
-        # Fuzzy + party
+        # Fuzzy + party (lower threshold when party matches)
         if party:
             row = await conn.fetchrow(
                 f"""
@@ -230,10 +257,13 @@ class EntityResolver:
         table: str,
         fuzzy_threshold: float,
     ) -> int:
-        """Resolve entity: exact normalized → fuzzy → create.
+        """Resolve entity: exact → acronym/substring → fuzzy → create.
 
         NC schema (002_create_tables.sql): entities uses 'type' column (not 'entity_type')
         with enum values: person, organization, location, event, concept.
+
+        Acronym matching catches cases like "TSE" vs "Tribunal Superior Eleitoral"
+        and "STF" vs "Supremo Tribunal Federal".
         """
         norm = normalize_for_search(name)
 
@@ -260,7 +290,99 @@ class EntityResolver:
             )
             return row["id"]
 
-        # Fuzzy match
+        # Acronym matching — if the input looks like an acronym (all uppercase, 2-6 chars),
+        # check if any existing entity's name words start with those letters.
+        # Also handles reverse: input is full name, existing is acronym.
+        stripped = name.strip()
+        if _is_acronym(stripped):
+            # Check all candidates for acronym match
+            candidates = await conn.fetch(
+                f"""
+                SELECT id, name FROM {table}
+                WHERE type = $2::votolimpo.entity_type
+                  AND length(name) > length($1)
+            """,
+                stripped,
+                nc_type,
+            )
+            for cand in candidates:
+                if _matches_acronym(stripped, cand["name"]):
+                    logger.debug(
+                        "Entity acronym match: '%s' → '%s' (id=%s)",
+                        stripped, cand["name"], cand["id"],
+                    )
+                    await conn.execute(
+                        f"""
+                        UPDATE {table}
+                        SET last_seen_at = NOW(), article_count = article_count + 1
+                        WHERE id = $1
+                    """,
+                        cand["id"],
+                    )
+                    return cand["id"]
+        else:
+            # Check if any existing acronym matches this full name
+            candidates = await conn.fetch(
+                f"""
+                SELECT id, name FROM {table}
+                WHERE type = $2::votolimpo.entity_type
+                  AND length(name) <= 6
+                  AND upper(name) = name
+            """,
+                stripped,
+                nc_type,
+            )
+            for cand in candidates:
+                if _matches_acronym(cand["name"], stripped):
+                    logger.debug(
+                        "Entity reverse acronym match: '%s' → '%s' (id=%s)",
+                        stripped, cand["name"], cand["id"],
+                    )
+                    await conn.execute(
+                        f"""
+                        UPDATE {table}
+                        SET last_seen_at = NOW(), article_count = article_count + 1,
+                            name = $2, normalized_name = $3
+                        WHERE id = $1
+                    """,
+                        cand["id"],
+                        normalize_entity_name(name),
+                        norm,
+                    )
+                    return cand["id"]
+
+        # Substring containment (for non-acronym cases, e.g. partial names)
+        if len(norm) >= 4:
+            row = await conn.fetchrow(
+                f"""
+                SELECT id, name FROM {table}
+                WHERE type = $2::votolimpo.entity_type
+                  AND (
+                      normalized_name LIKE '%' || $1 || '%'
+                      OR $1 LIKE '%' || normalized_name || '%'
+                  )
+                  AND length(normalized_name) >= 4
+                ORDER BY article_count DESC LIMIT 1
+            """,
+                norm,
+                nc_type,
+            )
+            if row:
+                logger.debug(
+                    "Entity substring match: '%s' → '%s' (id=%s)",
+                    name, row["name"], row["id"],
+                )
+                await conn.execute(
+                    f"""
+                    UPDATE {table}
+                    SET last_seen_at = NOW(), article_count = article_count + 1
+                    WHERE id = $1
+                """,
+                    row["id"],
+                )
+                return row["id"]
+
+        # Fuzzy match (pg_trgm)
         row = await conn.fetchrow(
             f"""
             SELECT id FROM {table}
@@ -296,6 +418,29 @@ class EntityResolver:
             nc_type,
         )
         return row["id"]
+
+
+def _is_acronym(s: str) -> bool:
+    """Check if a string looks like an acronym (2-6 uppercase letters)."""
+    stripped = s.strip()
+    return 2 <= len(stripped) <= 6 and stripped.isalpha() and stripped == stripped.upper()
+
+
+def _matches_acronym(acronym: str, full_name: str) -> bool:
+    """Check if an acronym matches the initial letters of a full name's words.
+
+    E.g. "TSE" matches "Tribunal Superior Eleitoral"
+         "STF" matches "Supremo Tribunal Federal"
+         "PF"  matches "Polícia Federal"
+
+    Ignores common prepositions/articles (de, do, da, dos, das, e, o, a).
+    """
+    skip_words = {"de", "do", "da", "dos", "das", "e", "o", "a", "os", "as", "em", "no", "na"}
+    words = [w for w in full_name.split() if w.lower() not in skip_words]
+    if len(words) < len(acronym):
+        return False
+    initials = "".join(w[0].upper() for w in words if w)
+    return initials == acronym.upper()
 
 
 # NC entity_type enum: person, organization, location, event, concept

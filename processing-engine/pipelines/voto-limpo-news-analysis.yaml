@@ -170,6 +170,7 @@ validator_config:
 # entity_resolver: resolves politician names to DB IDs (required by milestone_detector).
 # relationship_builder: disabled (fields removed from schema).
 post_processors:
+  # Phase 1 — Pre-sink: pure computation (no article_id needed)
   - type: score_calculator
     config:
       weights:
@@ -180,6 +181,28 @@ post_processors:
         temporality: 0.10
         emotional_language: 0.10
       output_field: veracity_score
+
+  # Phase 2 — Post-sink (all need article_id from sink RETURNING id):
+  # ORDER MATTERS: entity_resolver MUST run before article_matcher and
+  # cluster_updater because they query politician_articles which entity_resolver populates.
+  # milestone_detector needs resolved_politician_ids from entity_resolver.
+  # score_persister needs resolved_politician_ids from entity_resolver.
+  - type: entity_resolver
+    config:
+      politician_table: votolimpo.politicians
+      entity_table: votolimpo.entities
+      fuzzy_threshold: 0.80
+      fuzzy_party_threshold: 0.70
+
+  - type: score_persister
+    config:
+      history_table: votolimpo.score_history
+
+  - type: milestone_detector
+    config:
+      milestone_table: votolimpo.milestones
+      confidence_threshold: 0.70
+      dedup_window_days: 7
 
   - type: article_matcher
     config:
@@ -197,23 +220,6 @@ post_processors:
       cluster_articles_table: votolimpo.cluster_articles
       cluster_politicians_table: votolimpo.cluster_politicians
       similarity_threshold: 0.50
-
-  - type: entity_resolver
-    config:
-      politician_table: votolimpo.politicians
-      entity_table: votolimpo.entities
-      fuzzy_threshold: 0.80
-      fuzzy_party_threshold: 0.70
-
-  - type: score_persister
-    config:
-      history_table: votolimpo.score_history
-
-  - type: milestone_detector
-    config:
-      milestone_table: votolimpo.milestones
-      confidence_threshold: 0.70
-      dedup_window_days: 7
 
 # --- Sink ---
 # Persist directly to votolimpo.articles via column_mapping UPSERT.
@@ -240,6 +246,8 @@ sink_config:
     "veracity_signals.emotional_language": emotional_language
   static_columns:
     processing_status: completed
+  sql_defaults:
+    processed_at: "NOW()"
   item_field_mapping:
     source_url: source_url
     nc_article_id: nc_article_id
