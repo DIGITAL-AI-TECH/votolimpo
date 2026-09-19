@@ -191,8 +191,13 @@ class TestLoadRealYaml:
         count = load_pipelines(str(yaml_dir))
         assert count >= 1, "Should load at least the voto-limpo pipeline"
 
-        # Verify the pipeline loaded correctly
-        p = get_pipeline("voto-limpo-news-analysis")
+        # Verify the pipeline loaded correctly (registry key is config.id, not name)
+        # The YAML has an explicit UUID id field
+        p = None
+        for cfg in _registry.values():
+            if cfg.name == "voto-limpo-news-analysis":
+                p = cfg
+                break
         assert p is not None, "voto-limpo-news-analysis should be loadable"
         assert p.name == "voto-limpo-news-analysis"
         assert p.ingestor.type == "auto"
@@ -200,8 +205,8 @@ class TestLoadRealYaml:
         assert p.llm.provider == "openai"
         assert p.llm.model == "gpt-4.1-mini"
         assert len(p.validators) == 3
-        assert len(p.post_processors) == 6
-        assert len(p.crons) == 5
+        assert len(p.post_processors) == 6  # includes score_persister
+        assert len(p.crons) == 0  # crons managed by APScheduler, not YAML
         assert p.sink.type == "postgresql"
 
 
