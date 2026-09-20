@@ -277,10 +277,25 @@ async def init_votolimpo_schema():
         return
 
     clean_url = raw_url.replace("postgresql+asyncpg://", "postgresql://")
-    try:
-        conn = await asyncpg.connect(clean_url, timeout=10)
-    except Exception:
-        logger.exception("Failed to connect to votolimpo DB — skipping init")
+
+    # Retry connection — pe-postgres may still be starting up
+    conn = None
+    for attempt in range(1, 6):
+        try:
+            conn = await asyncpg.connect(clean_url, timeout=10)
+            break
+        except (ConnectionRefusedError, OSError) as exc:
+            delay = _CONNECT_BASE_DELAY * attempt
+            logger.warning(
+                "Votolimpo DB connection attempt %d/5 failed: %s — retrying in %ds",
+                attempt, exc, delay,
+            )
+            await asyncio.sleep(delay)
+        except Exception:
+            logger.exception("Failed to connect to votolimpo DB — skipping init")
+            return
+    if conn is None:
+        logger.error("All 5 votolimpo DB connection attempts failed — skipping init")
         return
 
     try:

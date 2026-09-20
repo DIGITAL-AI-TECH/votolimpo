@@ -13,33 +13,38 @@ logger = logging.getLogger(__name__)
 # votolimpo DB (managed by NC migrations + PE init_votolimpo_schema).
 _votolimpo_pool: asyncpg.Pool | None = None
 _votolimpo_dsn_resolved: str | None = None
-_votolimpo_dsn_checked = False
+_votolimpo_no_dsn = False  # True only when env var is absent (permanent)
 
 
 async def _get_votolimpo_pool() -> asyncpg.Pool | None:
-    """Get or create a pool for the votolimpo database."""
-    global _votolimpo_pool, _votolimpo_dsn_resolved, _votolimpo_dsn_checked
+    """Get or create a pool for the votolimpo database.
+
+    Retries on transient failures (connection refused) instead of giving up
+    permanently. Only gives up permanently if the DSN env var is absent.
+    """
+    global _votolimpo_pool, _votolimpo_dsn_resolved, _votolimpo_no_dsn
     if _votolimpo_pool is not None:
         return _votolimpo_pool
-    if _votolimpo_dsn_checked:
-        return None  # Already tried, no DSN available
+    if _votolimpo_no_dsn:
+        return None  # No DSN configured — permanent, no point retrying
 
-    _votolimpo_dsn_checked = True
     raw = os.environ.get("PE_VOTOLIMPO_DATABASE_URL") or os.environ.get(
         "VOTOLIMPO_DATABASE_URL", ""
     )
     if not raw:
+        _votolimpo_no_dsn = True
         logger.warning("No VOTOLIMPO_DATABASE_URL — source reputation lookup will use engine pool")
         return None
 
     dsn = raw.replace("postgresql+asyncpg://", "postgresql://")
     _votolimpo_dsn_resolved = dsn
     try:
-        _votolimpo_pool = await asyncpg.create_pool(dsn=dsn, min_size=1, max_size=3, timeout=5)
+        _votolimpo_pool = await asyncpg.create_pool(dsn=dsn, min_size=1, max_size=3, timeout=10)
         logger.info("Votolimpo pool created for source reputation lookups")
         return _votolimpo_pool
     except Exception as exc:
-        logger.warning("Failed to create votolimpo pool: %s — will use engine pool", exc)
+        # Do NOT set a permanent flag — allow retry on next call
+        logger.warning("Failed to create votolimpo pool: %s — will use engine pool this time", exc)
         return None
 
 
