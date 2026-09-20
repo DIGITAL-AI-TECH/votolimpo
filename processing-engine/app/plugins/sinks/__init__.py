@@ -60,26 +60,30 @@ class PostgreSQLSink:
             "VOTOLIMPO_DATABASE_URL",
         }
         db_env = config.get("database_url_env")
-        own_conn = None
         if db_env:
             if db_env not in ALLOWED_DB_ENVS:
                 raise ValueError(
                     f"database_url_env '{db_env}' not in whitelist: {ALLOWED_DB_ENVS}"
                 )
-            target_url = os.environ.get(db_env)
-            if target_url:
-                # asyncpg only accepts postgresql:// or postgres:// schemes
-                clean_url = target_url.replace("postgresql+asyncpg://", "postgresql://")
-                own_conn = await asyncpg.connect(clean_url, timeout=10)
-                conn = own_conn
+            # Use shared votolimpo pool (singleton, min=1 max=3) instead of
+            # creating a new ad-hoc connection per item.
+            from app.plugins.post_processors.score_calculator import _get_votolimpo_pool
+            vl_pool = await _get_votolimpo_pool()
+            if vl_pool is not None:
+                async with vl_pool.acquire() as pooled_conn:
+                    return await self._do_persist(pooled_conn, output, item_metadata, config)
+            else:
+                # Fallback: ad-hoc connection if pool unavailable (no env var)
+                target_url = os.environ.get(db_env)
+                if target_url:
+                    clean_url = target_url.replace("postgresql+asyncpg://", "postgresql://")
+                    own_conn = await asyncpg.connect(clean_url, timeout=10)
+                    try:
+                        return await self._do_persist(own_conn, output, item_metadata, config)
+                    finally:
+                        await own_conn.close()
 
-        try:
-            result = await self._do_persist(conn, output, item_metadata, config)
-        finally:
-            if own_conn:
-                await own_conn.close()
-
-        return result
+        return await self._do_persist(conn, output, item_metadata, config)
 
     async def _do_persist(self, conn, output, item_metadata, config) -> dict:
         """Route to the appropriate persistence mode."""
@@ -154,7 +158,12 @@ class PostgreSQLSink:
                 values.append(f"${len(params)}")
 
         # Type casts for enum/custom PostgreSQL types (e.g. {"severity": "votolimpo.severity_level"})
-        type_casts = config.get("type_casts", {})
+        # Validate all type_cast values to prevent SQL injection (P1-05 fix)
+        type_casts = {}
+        for tc_col, tc_type in config.get("type_casts", {}).items():
+            validate_sql_identifier(tc_col, "type_cast column")
+            validate_sql_identifier(tc_type, "type_cast type")
+            type_casts[tc_col] = tc_type
 
         # Columns that should be passed as native PostgreSQL arrays (not JSON strings)
         array_columns = set(config.get("array_columns", []))

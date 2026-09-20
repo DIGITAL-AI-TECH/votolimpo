@@ -801,35 +801,3 @@ def _validate_callback_url(url: str) -> bool:
             return host.lower() not in blocked
     except Exception:
         return False
-
-
-async def _send_callback(url: str, job_id: str, status: str):
-    """Send callback webhook when job completes."""
-    if not _validate_callback_url(url):
-        logger.warning("Callback URL blocked (SSRF protection): %s", url)
-        return
-    import socket
-
-    import httpx
-
-    # DNS resolution check — skip strict IP validation for hostnames.
-    # Inside Docker Swarm, public hostnames resolve to private Traefik
-    # overlay IPs (e.g. 10.0.x.x), which are safe and expected.
-    # The hostname-level SSRF check in _validate_callback_url already
-    # blocks localhost/link-local; requiring is_global here would break
-    # all Swarm-internal callbacks.
-    try:
-        parsed_host = urlparse(url).hostname
-        socket.getaddrinfo(parsed_host, None)  # ensure DNS resolves
-    except Exception as e:
-        logger.warning("Callback DNS resolution failed for %s: %s", url, e)
-        return
-    try:
-        headers = {"x-api-key": settings.api_key}
-        async with httpx.AsyncClient(timeout=10, follow_redirects=False) as client:
-            await client.post(
-                url, json={"job_id": str(job_id), "status": status}, headers=headers
-            )
-        logger.info("Callback sent: %s → %s", job_id, url)
-    except Exception as e:
-        logger.warning("Callback failed for job %s: %s", job_id, e)

@@ -1,7 +1,6 @@
 """Post-processor plugins — execute after LLM validation, before sink persistence."""
 
 import logging
-import os
 import re
 import unicodedata
 from contextlib import asynccontextmanager
@@ -22,28 +21,21 @@ VOTOLIMPO_DB_ENV_VARS = ("PE_VOTOLIMPO_DATABASE_URL", "VOTOLIMPO_DATABASE_URL")
 
 @asynccontextmanager
 async def acquire_votolimpo_conn(pe_pool: asyncpg.Pool):
-    """Acquire a connection to the VotoLimpo database.
+    """Acquire a connection to the VotoLimpo database via shared pool.
 
-    Checks PE_VOTOLIMPO_DATABASE_URL / VOTOLIMPO_DATABASE_URL env vars first.
-    If neither is set, falls back to the PE pool (backward compatibility).
+    Uses the shared votolimpo pool from score_calculator (singleton, min=1 max=3).
+    If the pool is unavailable, falls back to the PE pool (backward compatibility).
 
     Usage:
         async with acquire_votolimpo_conn(pool) as conn:
             await conn.execute(...)
     """
-    target_url = None
-    for env_var in VOTOLIMPO_DB_ENV_VARS:
-        target_url = os.environ.get(env_var)
-        if target_url:
-            break
+    from .score_calculator import _get_votolimpo_pool
 
-    if target_url:
-        clean_url = target_url.replace("postgresql+asyncpg://", "postgresql://")
-        own_conn = await asyncpg.connect(clean_url, timeout=10)
-        try:
-            yield own_conn
-        finally:
-            await own_conn.close()
+    vl_pool = await _get_votolimpo_pool()
+    if vl_pool is not None:
+        async with vl_pool.acquire() as conn:
+            yield conn
     else:
         # Fallback: use PE pool (same DB or env var not configured)
         async with pe_pool.acquire() as conn:
