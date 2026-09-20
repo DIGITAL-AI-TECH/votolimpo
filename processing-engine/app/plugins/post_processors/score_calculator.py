@@ -59,15 +59,24 @@ class ScoreCalculator:
                     )
                     if row and row["reputation_score"] is not None:
                         source_reputation = float(row["reputation_score"])
-                        logger.debug(
+                        logger.info(
                             "Source reputation from DB for '%s': %.2f (LLM was %.2f)",
                             source_domain,
                             source_reputation,
                             llm_source_reputation,
                         )
-            except Exception:
-                logger.debug(
-                    "Source reputation table not available, using LLM value %.2f",
+                    else:
+                        logger.info(
+                            "Source '%s' not found in %s, using LLM value %.2f",
+                            source_domain,
+                            sources_table,
+                            llm_source_reputation,
+                        )
+            except Exception as exc:
+                logger.info(
+                    "Source reputation lookup failed for '%s': %s — using LLM value %.2f",
+                    source_domain,
+                    exc,
                     llm_source_reputation,
                 )
 
