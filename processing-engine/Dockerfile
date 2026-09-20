@@ -11,7 +11,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 COPY pyproject.toml .
 RUN pip install --no-cache-dir .
 
-# App code
+# App code — cache-bust: 2026-09-19
 COPY app/ app/
 COPY pipelines/ pipelines/
 COPY prompts/ prompts/
