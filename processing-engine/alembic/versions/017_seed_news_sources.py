@@ -91,15 +91,47 @@ SOURCES = [
 
 def upgrade() -> None:
     conn = op.get_bind()
+
+    # Ensure votolimpo schema, ENUM and table exist (idempotent).
+    # In production these are created by NC migrations; in CI they may not exist.
+    conn.execute(text("CREATE SCHEMA IF NOT EXISTS votolimpo"))
+    conn.execute(
+        text(
+            """
+            DO $$ BEGIN
+                CREATE TYPE votolimpo.source_category
+                    AS ENUM ('mainstream','regional','portal','blog','govt','agency','international');
+            EXCEPTION WHEN duplicate_object THEN NULL;
+            END $$
+            """
+        )
+    )
+    conn.execute(
+        text(
+            """
+            CREATE TABLE IF NOT EXISTS votolimpo.sources (
+                id SERIAL PRIMARY KEY,
+                name TEXT NOT NULL UNIQUE,
+                domain TEXT UNIQUE,
+                reputation_score DECIMAL(3,2) DEFAULT 0.50,
+                category votolimpo.source_category DEFAULT 'portal',
+                article_count INTEGER DEFAULT 0,
+                created_at TIMESTAMPTZ DEFAULT NOW(),
+                updated_at TIMESTAMPTZ DEFAULT NOW()
+            )
+            """
+        )
+    )
+
     for name, domain, score, category in SOURCES:
         conn.execute(
             text(
                 """
                 INSERT INTO votolimpo.sources (name, domain, reputation_score, category)
-                VALUES (:name, :domain, :score, :category::votolimpo.source_category)
+                VALUES (:name, :domain, :score, :category)
                 ON CONFLICT (name) DO UPDATE SET
                     reputation_score = EXCLUDED.reputation_score,
-                    category = EXCLUDED.category::votolimpo.source_category,
+                    category = EXCLUDED.category,
                     domain = EXCLUDED.domain,
                     updated_at = NOW()
                 """
