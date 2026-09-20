@@ -1,11 +1,46 @@
 """Score Calculator — compute veracity score from weighted signals."""
 
 import logging
+import os
 from typing import Any
 
 import asyncpg
 
 logger = logging.getLogger(__name__)
+
+# Votolimpo DB pool for source reputation lookups.
+# The main pool connects to processing_engine DB, but sources live in the
+# votolimpo DB (managed by NC migrations + PE init_votolimpo_schema).
+_votolimpo_pool: asyncpg.Pool | None = None
+_votolimpo_dsn_resolved: str | None = None
+_votolimpo_dsn_checked = False
+
+
+async def _get_votolimpo_pool() -> asyncpg.Pool | None:
+    """Get or create a pool for the votolimpo database."""
+    global _votolimpo_pool, _votolimpo_dsn_resolved, _votolimpo_dsn_checked
+    if _votolimpo_pool is not None:
+        return _votolimpo_pool
+    if _votolimpo_dsn_checked:
+        return None  # Already tried, no DSN available
+
+    _votolimpo_dsn_checked = True
+    raw = os.environ.get("PE_VOTOLIMPO_DATABASE_URL") or os.environ.get(
+        "VOTOLIMPO_DATABASE_URL", ""
+    )
+    if not raw:
+        logger.warning("No VOTOLIMPO_DATABASE_URL — source reputation lookup will use engine pool")
+        return None
+
+    dsn = raw.replace("postgresql+asyncpg://", "postgresql://")
+    _votolimpo_dsn_resolved = dsn
+    try:
+        _votolimpo_pool = await asyncpg.create_pool(dsn=dsn, min_size=1, max_size=3, timeout=5)
+        logger.info("Votolimpo pool created for source reputation lookups")
+        return _votolimpo_pool
+    except Exception as exc:
+        logger.warning("Failed to create votolimpo pool: %s — will use engine pool", exc)
+        return None
 
 
 class ScoreCalculator:
@@ -49,29 +84,35 @@ class ScoreCalculator:
                 from . import validate_sql_identifier
 
                 validate_sql_identifier(sources_table, "sources_table")
-                async with pool.acquire() as conn:
-                    # Match by exact domain, or source_domain contains the registered domain
+
+                # Use votolimpo DB pool (separate from engine pool) for source lookups.
+                # The engine pool connects to processing_engine DB where votolimpo
+                # schema may not have seed data (migration 017 only runs in CI).
+                vl_pool = await _get_votolimpo_pool()
+                lookup_pool = vl_pool or pool  # fallback to engine pool
+                async with lookup_pool.acquire() as conn:
                     row = await conn.fetchrow(
                         f"SELECT reputation_score FROM {sources_table}"
                         f" WHERE domain = $1 OR $1 LIKE '%%' || domain || '%%'"
                         f" ORDER BY length(domain) DESC LIMIT 1",
                         source_domain,
                     )
-                    if row and row["reputation_score"] is not None:
-                        source_reputation = float(row["reputation_score"])
-                        logger.info(
-                            "Source reputation from DB for '%s': %.2f (LLM was %.2f)",
-                            source_domain,
-                            source_reputation,
-                            llm_source_reputation,
-                        )
-                    else:
-                        logger.info(
-                            "Source '%s' not found in %s, using LLM value %.2f",
-                            source_domain,
-                            sources_table,
-                            llm_source_reputation,
-                        )
+
+                if row and row["reputation_score"] is not None:
+                    source_reputation = float(row["reputation_score"])
+                    logger.info(
+                        "Source reputation from DB for '%s': %.2f (LLM was %.2f)",
+                        source_domain,
+                        source_reputation,
+                        llm_source_reputation,
+                    )
+                else:
+                    logger.info(
+                        "Source '%s' not found in %s, using LLM value %.2f",
+                        source_domain,
+                        sources_table,
+                        llm_source_reputation,
+                    )
             except Exception as exc:
                 logger.info(
                     "Source reputation lookup failed for '%s': %s — using LLM value %.2f",
