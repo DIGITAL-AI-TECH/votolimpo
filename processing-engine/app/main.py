@@ -51,6 +51,10 @@ async def lifespan(app: FastAPI):
     """Application lifespan: init DB, load pipelines, start worker + cron."""
     global _worker_task
 
+    # Configure root logger level from settings (uvicorn CMD doesn't set this)
+    logging.basicConfig(level=getattr(logging, settings.log_level.upper(), logging.INFO))
+    logging.getLogger("app").setLevel(getattr(logging, settings.log_level.upper(), logging.INFO))
+
     # Init DB pool + schema
     pool = await get_pool()
     await init_engine_schema(pool)
