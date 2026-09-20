@@ -208,6 +208,7 @@ class PostgreSQLSink:
         # SQL defaults — columns with raw SQL expressions (whitelisted)
         # Only safe expressions are allowed to prevent SQL injection.
         _ALLOWED_SQL_EXPRESSIONS = {"NOW()", "CURRENT_TIMESTAMP", "CURRENT_DATE", "TRUE", "FALSE"}
+        sql_default_cols = {}  # col → sql_expr for special UPSERT handling
         for col, sql_expr in config.get("sql_defaults", {}).items():
             if sql_expr.upper() not in _ALLOWED_SQL_EXPRESSIONS:
                 raise ValueError(
@@ -215,14 +216,22 @@ class PostgreSQLSink:
                 )
             columns.append(col)
             values.append(sql_expr)
+            sql_default_cols[col] = sql_expr
 
         if not columns:
             return
 
         if conflict_column:
-            # UPSERT
+            # UPSERT — sql_defaults use the raw SQL expression directly in UPDATE
+            # (not EXCLUDED.col) to guarantee the expression is re-evaluated on conflict.
             update_cols = [c for c in columns if c != conflict_column]
-            update_clause = ", ".join(f"{c} = EXCLUDED.{c}" for c in update_cols)
+            update_parts = []
+            for c in update_cols:
+                if c in sql_default_cols:
+                    update_parts.append(f"{c} = {sql_default_cols[c]}")
+                else:
+                    update_parts.append(f"{c} = EXCLUDED.{c}")
+            update_clause = ", ".join(update_parts)
             query = f"""
                 INSERT INTO {table} ({", ".join(columns)})
                 VALUES ({", ".join(values)})

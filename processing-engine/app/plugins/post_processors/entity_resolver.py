@@ -181,25 +181,26 @@ class EntityResolver:
         if row:
             return row["id"]
 
-        # Substring containment match — catches short names vs full names
+        # Word boundary match — catches short names vs full names
         # e.g. "Lula" matches "Luiz Inácio Lula da Silva"
-        # Only match if the shorter name has at least 3 chars (avoid trivial matches)
-        if len(normalized) >= 3:
+        # Uses word boundary regex (\m...\M) to avoid "Ana" matching "Mariana"
+        # Minimum 4 chars for safety; bidirectional check.
+        if len(normalized) >= 4:
             row = await conn.fetchrow(
                 f"""
                 SELECT id, name FROM {table}
                 WHERE (
-                    lower(name) LIKE '%' || $1 || '%'
-                    OR $1 LIKE '%' || lower(name) || '%'
+                    lower(name) ~* ('\m' || $1 || '\M')
+                    OR $1 ~* ('\m' || lower(name) || '\M')
                 )
-                AND length(name) >= 3
+                AND length(name) >= 4
                 ORDER BY length(name) DESC LIMIT 1
             """,
                 normalized,
             )
             if row:
                 logger.debug(
-                    "Politician substring match: '%s' → '%s' (id=%s)",
+                    "Politician word-boundary match: '%s' → '%s' (id=%s)",
                     name, row["name"], row["id"],
                 )
                 return row["id"]
@@ -351,15 +352,16 @@ class EntityResolver:
                     )
                     return cand["id"]
 
-        # Substring containment (for non-acronym cases, e.g. partial names)
+        # Word boundary containment (for non-acronym cases, e.g. partial names)
+        # Uses word boundary regex to avoid "Meta" matching "Metaverso"
         if len(norm) >= 4:
             row = await conn.fetchrow(
                 f"""
                 SELECT id, name FROM {table}
                 WHERE type = $2::votolimpo.entity_type
                   AND (
-                      normalized_name LIKE '%' || $1 || '%'
-                      OR $1 LIKE '%' || normalized_name || '%'
+                      normalized_name ~* ('\m' || $1 || '\M')
+                      OR $1 ~* ('\m' || normalized_name || '\M')
                   )
                   AND length(normalized_name) >= 4
                 ORDER BY article_count DESC LIMIT 1

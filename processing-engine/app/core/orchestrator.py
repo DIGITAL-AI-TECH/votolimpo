@@ -22,6 +22,16 @@ from .pipeline_config import PipelineConfig, get_pipeline
 
 logger = logging.getLogger(__name__)
 
+# Post-processors that need article_id (from sink RETURNING id) run AFTER the sink.
+# Single source of truth — used in BOTH normal and cache-hit paths.
+_POST_SINK_PROCESSORS = {
+    "entity_resolver",
+    "article_matcher",
+    "cluster_updater",
+    "score_persister",
+    "milestone_detector",
+}
+
 
 async def submit_job(job_data: dict) -> str:
     """Submit a new processing job. Returns job_id."""
@@ -307,17 +317,13 @@ async def _process_single_item(
                 )
 
                 # Classify post-processors into pre-sink and post-sink
-                _POST_SINK_CACHED = {
-                    "entity_resolver", "article_matcher", "cluster_updater",
-                    "score_persister", "milestone_detector",
-                }
                 pre_sink_pps = [
                     (t, p, c) for t, p, c in post_processors
-                    if t not in _POST_SINK_CACHED
+                    if t not in _POST_SINK_PROCESSORS
                 ]
                 post_sink_pps = [
                     (t, p, c) for t, p, c in post_processors
-                    if t in _POST_SINK_CACHED
+                    if t in _POST_SINK_PROCESSORS
                 ]
 
                 # Run pre-sink post-processors (e.g. score_calculator)
@@ -531,15 +537,9 @@ async def _process_single_item(
         # AFTER the sink persist. Pre-sink processors enrich the output (scores,
         # entity resolution) before persistence.
         #
-        # Pre-sink:  score_calculator, entity_resolver (enrich output, no article_id needed)
-        # Post-sink: article_matcher, cluster_updater, score_persister, milestone_detector
-        _POST_SINK_PROCESSORS = {
-            "entity_resolver",
-            "article_matcher",
-            "cluster_updater",
-            "score_persister",
-            "milestone_detector",
-        }
+        # Pre-sink:  score_calculator (enrich output, no article_id needed)
+        # Post-sink: entity_resolver, article_matcher, cluster_updater, score_persister, milestone_detector
+        # (uses module-level _POST_SINK_PROCESSORS constant)
 
         metadata = (
             json.loads(item["metadata"])
