@@ -184,7 +184,7 @@ class TestScoreCalculator:
         conn.fetchrow = AsyncMock(return_value={"reputation_score": 0.90})
 
         output = {"veracity_signals": {}}
-        metadata = {"source_name": "g1.globo.com"}
+        metadata = {"source_domain": "g1.globo.com"}
 
         result = await ScoreCalculator().process(output, metadata, pool, {})
         assert result["score_components"]["source_reputation"] == 0.90

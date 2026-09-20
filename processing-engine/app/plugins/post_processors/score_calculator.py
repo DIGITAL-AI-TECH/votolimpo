@@ -43,22 +43,25 @@ class ScoreCalculator:
 
         # Try to get source reputation from DB (overrides LLM if available)
         source_reputation = llm_source_reputation
-        source_name = item_metadata.get("source_name")
-        if source_name:
+        source_domain = item_metadata.get("source_domain") or item_metadata.get("source_name")
+        if source_domain:
             try:
                 from . import validate_sql_identifier
 
                 validate_sql_identifier(sources_table, "sources_table")
                 async with pool.acquire() as conn:
+                    # Match by exact domain, or source_domain contains the registered domain
                     row = await conn.fetchrow(
-                        f"SELECT reputation_score FROM {sources_table} WHERE name = $1",
-                        source_name,
+                        f"SELECT reputation_score FROM {sources_table}"
+                        f" WHERE domain = $1 OR $1 LIKE '%%' || domain || '%%'"
+                        f" ORDER BY length(domain) DESC LIMIT 1",
+                        source_domain,
                     )
                     if row and row["reputation_score"] is not None:
                         source_reputation = float(row["reputation_score"])
                         logger.debug(
                             "Source reputation from DB for '%s': %.2f (LLM was %.2f)",
-                            source_name,
+                            source_domain,
                             source_reputation,
                             llm_source_reputation,
                         )
