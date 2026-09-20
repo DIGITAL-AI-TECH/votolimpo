@@ -17,6 +17,7 @@ from ..plugins.llm import get_llm_provider, load_output_schema, load_system_prom
 from ..plugins.post_processors import get_post_processor
 from ..plugins.sinks import get_sink
 from ..plugins.validators import get_validator
+from ..services.callback import CallbackService
 from ..storage.database import get_pool
 from .pipeline_config import PipelineConfig, get_pipeline
 
@@ -241,13 +242,23 @@ async def _process_job_items(job_id: str, pipeline: PipelineConfig, *, skip_cach
         total_cost,
     )
 
-    # Callback if configured
+    # Callback if configured — uses CallbackService with retry + exponential backoff
     async with pool.acquire() as conn:
         row = await conn.fetchrow(
             "SELECT callback_url FROM processing_engine.jobs WHERE id = $1", job_id
         )
         if row and row["callback_url"]:
-            await _send_callback(row["callback_url"], job_id, status)
+            url = row["callback_url"]
+            if _validate_callback_url(url):
+                cb = CallbackService(
+                    timeout=30.0,
+                    max_retries=3,
+                    backoff_base=2.0,
+                    api_key=settings.api_key,
+                )
+                await cb.send(url, {"job_id": str(job_id), "status": status})
+            else:
+                logger.warning("Callback URL blocked (SSRF protection): %s", url)
 
 
 async def _process_single_item(
