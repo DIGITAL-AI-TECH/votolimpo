@@ -227,10 +227,32 @@ jobs:
 
           COMPOSE_CONTENT=$(cat processing-engine/docker-stack.yml | python3 -c "import sys,json; print(json.dumps(sys.stdin.read()))")
 
+          # Preserve existing env vars from Portainer stack (PUT without Env wipes them)
+          EXISTING_ENV=$(curl -sf "${PORTAINER_URL}/api/stacks/${STACK_ID}" \
+            -H "X-API-Key: ${PORTAINER_API_KEY}" | python3 -c "
+          import json,sys
+          data = json.load(sys.stdin)
+          env = data.get('Env') or []
+          if not env:
+              # Env vars missing from Portainer — ABORT deploy to prevent data loss.
+              # Env vars must be restored manually via Portainer UI first.
+              print('ERROR: Stack has no env vars — aborting to prevent wipe', file=sys.stderr)
+              sys.exit(1)
+          # Update IMAGE_TAG to current SHA
+          found = False
+          for e in env:
+              if e.get('name') == 'IMAGE_TAG':
+                  e['value'] = '${SHORT_SHA}'
+                  found = True
+          if not found:
+              env.append({'name': 'IMAGE_TAG', 'value': '${SHORT_SHA}'})
+          print(json.dumps(env))
+          ")
+
           curl -sf -X PUT "${PORTAINER_URL}/api/stacks/${STACK_ID}?endpointId=4" \
             -H "X-API-Key: ${PORTAINER_API_KEY}" \
             -H "Content-Type: application/json" \
-            -d "{\"StackFileContent\": ${COMPOSE_CONTENT}, \"Prune\": false}"
+            -d "{\"StackFileContent\": ${COMPOSE_CONTENT}, \"Env\": ${EXISTING_ENV}, \"Prune\": false}"
 
       - name: Notify — Deploy Concluido
         if: success()
