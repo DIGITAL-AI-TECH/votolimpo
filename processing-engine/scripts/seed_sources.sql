@@ -15,7 +15,7 @@ INSERT INTO votolimpo.sources (name, domain, reputation_score, category) VALUES
 ('r7.com',                 'r7.com',                   0.70, 'mainstream'),
 ('band.uol.com.br',        'band.uol.com.br',         0.75, 'mainstream'),
 ('cnn.com.br',             'cnn.com.br',               0.75, 'mainstream'),
-('bbc.com/portuguese',      'bbc.com',                 0.90, 'mainstream'),
+('bbc.com/portuguese',      'bbc.com/portuguese',      0.90, 'mainstream'),
 ('metropoles.com',          'metropoles.com',          0.75, 'mainstream'),
 ('poder360.com.br',         'poder360.com.br',         0.80, 'mainstream'),
 ('infomoney.com.br',        'infomoney.com.br',        0.80, 'mainstream'),
