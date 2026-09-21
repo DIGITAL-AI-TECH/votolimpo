@@ -71,16 +71,25 @@ class PostProcessor(Protocol):
 # ─── SQL safety ───
 
 _SQL_IDENT_RE = re.compile(r"^[a-zA-Z_][a-zA-Z0-9_.]*$")
+_ALLOWED_SCHEMAS = frozenset({"votolimpo", "processing_engine", "public", "news_collector"})
 
 
 def validate_sql_identifier(name: str, context: str = "identifier") -> str:
     """Validate that a string is a safe SQL identifier (table/column name).
 
     Allows: letters, digits, underscores, dots (for schema.table).
-    Raises ValueError if the name contains dangerous characters.
+    When a dot is present (schema-qualified), the schema must be in the allowlist.
+    Raises ValueError if the name contains dangerous characters or disallowed schema.
     """
     if not name or not _SQL_IDENT_RE.match(name):
         raise ValueError(f"Invalid SQL {context}: {name!r}")
+    if "." in name:
+        parts = name.split(".")
+        if len(parts) != 2:
+            raise ValueError(f"Invalid SQL {context} (too many dots): {name!r}")
+        schema = parts[0].lower()
+        if schema not in _ALLOWED_SCHEMAS:
+            raise ValueError(f"Invalid SQL {context} (disallowed schema '{schema}'): {name!r}")
     return name
 
 

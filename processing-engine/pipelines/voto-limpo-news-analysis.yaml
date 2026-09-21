@@ -250,7 +250,7 @@ sink_config:
     processed_at: "NOW()"
   item_field_mapping:
     source_url: source_url
-    nc_article_id: nc_article_id
+    article_id: nc_article_id
     title: title
   jsonb_fallback: raw_output
   type_casts:

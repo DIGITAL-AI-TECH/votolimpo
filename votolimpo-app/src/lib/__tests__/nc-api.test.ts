@@ -361,20 +361,20 @@ describe('ncStatsToStats', () => {
     expect(result.totalPoliticians).toBe(19514);
     expect(result.totalArticles).toBe(120000);
     expect(result.totalEntities).toBe(19514);
-    expect(result.totalRelationships).toBe(42);
+    expect(result.totalSources).toBe(42);
   });
 
-  it('totalRelationships vem de total_sources', () => {
+  it('totalSources vem de total_sources', () => {
     const ncStats = makeNCStats({ total_sources: 99 });
     const result = ncStatsToStats(ncStats);
-    expect(result.totalRelationships).toBe(99);
+    expect(result.totalSources).toBe(99);
   });
 
-  it('sem vlStats -> avgScore 0 e criticalCount 0 (hardcoded fallback)', () => {
+  it('sem vlStats -> avgScore null e criticalCount 0', () => {
     const ncStats = makeNCStats();
     const result = ncStatsToStats(ncStats);
-    // Documenta o comportamento hardcoded: sem vlStats, ambos sao 0
-    expect(result.avgScore).toBe(0);
+    // Sem vlStats, avgScore é null (não 0 — 0 seria um score válido)
+    expect(result.avgScore).toBeNull();
     expect(result.criticalCount).toBe(0);
   });
 
@@ -390,7 +390,7 @@ describe('ncStatsToStats', () => {
     expect(result.criticalCount).toBe(5);
   });
 
-  it('vlStats com avg_score null -> avgScore 0', () => {
+  it('vlStats com avg_score null -> avgScore null', () => {
     const ncStats = makeNCStats();
     const vlStats: NCVotoLimpoStats = {
       avg_score: null,
@@ -398,7 +398,7 @@ describe('ncStatsToStats', () => {
       entities_with_articles: 50,
     };
     const result = ncStatsToStats(ncStats, vlStats);
-    expect(result.avgScore).toBe(0);
+    expect(result.avgScore).toBeNull();
   });
 });
 

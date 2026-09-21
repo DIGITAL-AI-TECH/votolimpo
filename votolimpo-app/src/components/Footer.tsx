@@ -18,7 +18,7 @@ const Footer: FC<FooterProps> = ({ stats: serverStats }) => {
       (serverStats.totalPoliticians === 0 &&
         serverStats.totalArticles === 0 &&
         serverStats.totalEntities === 0 &&
-        serverStats.totalRelationships === 0 &&
+        serverStats.totalSources === 0 &&
         serverStats.criticalCount === 0);
 
     if (allZero) {
@@ -47,11 +47,11 @@ const Footer: FC<FooterProps> = ({ stats: serverStats }) => {
               <p className="mt-1 text-xs text-[#6B7280]">Entidades</p>
             </div>
             <div className="text-center">
-              <p className="font-mono text-2xl font-bold text-yellow-400">{stats.totalRelationships}</p>
-              <p className="mt-1 text-xs text-[#6B7280]">Vínculos</p>
+              <p className="font-mono text-2xl font-bold text-yellow-400">{stats.totalSources}</p>
+              <p className="mt-1 text-xs text-[#6B7280]">Fontes</p>
             </div>
             <div className="text-center">
-              <p className="font-mono text-2xl font-bold text-[#FAFAFA]">{stats.avgScore}</p>
+              <p className="font-mono text-2xl font-bold text-[#FAFAFA]">{stats.avgScore !== null ? stats.avgScore : "N/D"}</p>
               <p className="mt-1 text-xs text-[#6B7280]">Score Médio</p>
             </div>
             <div className="text-center">

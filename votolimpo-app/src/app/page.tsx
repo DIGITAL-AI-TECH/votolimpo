@@ -66,8 +66,8 @@ export default async function HomePage() {
       totalPoliticians: 0,
       totalArticles: 0,
       totalEntities: 0,
-      totalRelationships: 0,
-      avgScore: 0,
+      totalSources: 0,
+      avgScore: null,
       criticalCount: 0,
     };
     top10 = [];
@@ -139,7 +139,7 @@ export default async function HomePage() {
             {[
               { value: new Intl.NumberFormat("pt-BR").format(stats.totalPoliticians), label: "Políticos monitorados" },
               { value: new Intl.NumberFormat("pt-BR").format(stats.totalArticles), label: "Artigos indexados" },
-              { value: new Intl.NumberFormat("pt-BR").format(stats.totalRelationships), label: "Fontes de notícias" },
+              { value: new Intl.NumberFormat("pt-BR").format(stats.totalSources), label: "Fontes de notícias" },
             ].map((stat) => (
               <div key={stat.label} className="text-center">
                 <p className="font-mono text-3xl font-bold text-[#FAFAFA]">

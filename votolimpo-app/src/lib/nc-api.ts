@@ -5,7 +5,7 @@
  * to the NC backend without exposing the internal URL or token.
  */
 
-import type { LegalMilestone } from "@/types";
+import type { LegalMilestone, Severity } from "@/types";
 
 const NC_API_URL =
   process.env.NC_API_URL || "https://api.news-collector.digital-ai.tech";
@@ -363,13 +363,70 @@ export async function getEntityMilestones(entityId: number): Promise<NCMilestone
   });
 }
 
-/** Map NC milestone to frontend LegalMilestone type */
+/** Map NC milestone to frontend LegalMilestone type.
+ *
+ * The Processing Engine (PE) emits types that don't always match the
+ * frontend's allowed set 1:1.  This mapping bridges PE → frontend:
+ *
+ *   PE type        → Frontend type
+ *   ─────────────────────────────────
+ *   inquiry        → investigation
+ *   complaint      → indictment
+ *   arrest         → indictment
+ *   plea_deal      → settlement
+ *   fine           → settlement
+ *   conviction     → conviction       (1:1)
+ *   acquittal      → acquittal        (1:1)
+ *   impeachment    → impeachment      (1:1)
+ *
+ * Any unrecognised type falls back to "investigation".
+ */
 export function ncMilestoneToLegalMilestone(m: NCMilestone): LegalMilestone {
   const validTypes = ["indictment", "conviction", "acquittal", "investigation", "appeal", "settlement", "impeachment", "election"] as const;
   type MilestoneType = typeof validTypes[number];
-  const milestoneType: MilestoneType = validTypes.includes(m.type as MilestoneType)
-    ? (m.type as MilestoneType)
-    : "investigation";
+
+  // Explicit PE → frontend type mapping
+  const peTypeMap: Record<string, MilestoneType> = {
+    inquiry: "investigation",
+    complaint: "indictment",
+    arrest: "indictment",
+    plea_deal: "settlement",
+    fine: "settlement",
+    // 1:1 mappings (PE type already matches frontend type)
+    conviction: "conviction",
+    acquittal: "acquittal",
+    impeachment: "impeachment",
+    // Frontend-native types that may come from other sources
+    indictment: "indictment",
+    investigation: "investigation",
+    appeal: "appeal",
+    settlement: "settlement",
+    election: "election",
+  };
+
+  const milestoneType: MilestoneType =
+    peTypeMap[m.type] ??
+    (validTypes.includes(m.type as MilestoneType)
+      ? (m.type as MilestoneType)
+      : "investigation");
+
+  // Map milestone type to severity level
+  const severityMap: Record<string, Severity> = {
+    conviction: "critical",
+    impeachment: "critical",
+    indictment: "high",
+    arrest: "high",
+    complaint: "high",
+    investigation: "medium",
+    inquiry: "medium",
+    appeal: "medium",
+    settlement: "low",
+    plea_deal: "low",
+    fine: "low",
+    acquittal: "info",
+    election: "info",
+  };
+
   return {
     id: String(m.id),
     politicianId: String(m.politician_id),
@@ -377,7 +434,7 @@ export function ncMilestoneToLegalMilestone(m: NCMilestone): LegalMilestone {
     description: m.description || "",
     type: milestoneType,
     date: m.date || new Date().toISOString().slice(0, 10),
-    severity: "info",
+    severity: severityMap[m.type] ?? "info",
   };
 }
 
@@ -409,7 +466,7 @@ export async function getVotoLimpoStats(): Promise<NCVotoLimpoStats> {
 // Transformation helpers — NC data -> frontend types
 // ---------------------------------------------------------------------------
 
-import type { Politician, Article, Severity, Stats } from "@/types";
+import type { Politician, Article, Stats } from "@/types";
 
 /** Parse the metadata_json string from an NC entity */
 function parseMetadata(
@@ -491,7 +548,7 @@ export function entityToPolitician(
     uf: entity.state || (meta.uf_candidatura as string) || "BR",
     role: entity.role || "Candidato",
     photoUrl,
-    bio: undefined,
+    bio: undefined,  // TODO: NC API doesn't serve bio/ai_summary yet (PE writes to politicians table but NC reads from entities)
     score: score ?? null,  // null = sem artigos processados (N/D)
     articleCount,
     maxSeverity,
@@ -608,8 +665,8 @@ export function ncStatsToStats(
     totalPoliticians: ncStats.database.total_entities,
     totalArticles: ncStats.database.total_articles,
     totalEntities: ncStats.database.total_entities,
-    totalRelationships: ncStats.database.total_sources,
-    avgScore: vlStats?.avg_score ?? 0,
+    totalSources: ncStats.database.total_sources,
+    avgScore: vlStats?.avg_score ?? null,
     criticalCount: vlStats?.critical_count ?? 0,
   };
 }

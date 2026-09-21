@@ -138,8 +138,8 @@ export interface Stats {
   totalPoliticians: number;
   totalArticles: number;
   totalEntities: number;
-  totalRelationships: number;
-  avgScore: number;
+  totalSources: number;
+  avgScore: number | null;
   criticalCount: number;
 }
 

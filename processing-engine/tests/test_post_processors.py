@@ -79,6 +79,18 @@ class TestSqlIdentifierValidation:
         with pytest.raises(ValueError):
             validate_sql_identifier("table-name", "test")
 
+    def test_rejects_disallowed_schema(self):
+        with pytest.raises(ValueError, match="disallowed schema"):
+            validate_sql_identifier("pg_catalog.pg_authid", "test")
+
+    def test_rejects_too_many_dots(self):
+        with pytest.raises(ValueError, match="too many dots"):
+            validate_sql_identifier("a.b.c", "test")
+
+    def test_allowed_schemas(self):
+        assert validate_sql_identifier("processing_engine.jobs", "test") == "processing_engine.jobs"
+        assert validate_sql_identifier("public.something", "test") == "public.something"
+
 
 class TestProtocolCompliance:
     def test_entity_resolver_implements_protocol(self):

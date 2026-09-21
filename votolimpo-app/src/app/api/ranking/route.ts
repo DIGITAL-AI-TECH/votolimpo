@@ -54,13 +54,19 @@ export async function GET(request: Request) {
     ]);
 
     // Map entities to Politician objects
+    // listEntities returns NCEntityWithScore (includes score subqueries)
     const politicians: Politician[] = entities.map((e) => {
-      const enriched = e as unknown as NCEntityWithScore;
+      const enriched: NCEntityWithScore = {
+        ...e,
+        score: (e as NCEntityWithScore).score ?? null,
+        max_severity: (e as NCEntityWithScore).max_severity ?? "info",
+        article_count: (e as NCEntityWithScore).article_count ?? 0,
+      };
       return entityToPolitician(enriched, {
         entity_id: enriched.id,
-        score: enriched.score ?? null,
-        max_severity: enriched.max_severity ?? "info",
-        article_count: enriched.article_count ?? 0,
+        score: enriched.score,
+        max_severity: enriched.max_severity,
+        article_count: enriched.article_count,
       });
     });
 

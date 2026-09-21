@@ -88,8 +88,8 @@ export default async function RootLayout({
       totalPoliticians: 0,
       totalArticles: 0,
       totalEntities: 0,
-      totalRelationships: 0,
-      avgScore: 0,
+      totalSources: 0,
+      avgScore: null,
       criticalCount: 0,
     };
   }
