@@ -305,9 +305,9 @@ class TestJsonbFallbackMode:
         conn = _make_conn()
         sink = PostgreSQLSink()
 
-        await sink._do_persist(conn, {}, {"item_id": "x"}, {"table": "custom.results"})
+        await sink._do_persist(conn, {}, {"item_id": "x"}, {"table": "public.results"})
         call_sql = conn.execute.call_args[0][0]
-        assert "custom.results" in call_sql
+        assert "public.results" in call_sql
 
 
 # ─── Mode routing ───
