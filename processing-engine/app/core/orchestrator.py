@@ -519,13 +519,16 @@ async def _process_single_item(
                         """
                         UPDATE processing_engine.job_items
                         SET status = 'failed', validation_errors = $1,
-                            cost_usd = $2, duration_ms = $3, updated_at = NOW()
+                            cost_usd = $2, duration_ms = $3,
+                            prompt_tokens = $5, completion_tokens = $6, updated_at = NOW()
                         WHERE id = $4
                     """,
                         json.dumps(all_errors),
                         cost,
                         duration_ms,
                         item_id,
+                        llm_result["usage"].get("prompt_tokens", 0),
+                        llm_result["usage"].get("completion_tokens", 0),
                     )
                     await _log_step(
                         conn,
@@ -680,7 +683,8 @@ async def _process_single_item(
                 """
                 UPDATE processing_engine.job_items
                 SET status = 'completed', output = $1, dedup_result = $2,
-                    usage = $3, cost_usd = $4, duration_ms = $5, updated_at = NOW()
+                    usage = $3, cost_usd = $4, duration_ms = $5,
+                    prompt_tokens = $7, completion_tokens = $8, updated_at = NOW()
                 WHERE id = $6
             """,
                 json.dumps(output),
@@ -689,6 +693,8 @@ async def _process_single_item(
                 cost,
                 duration_ms,
                 item_id,
+                llm_result["usage"].get("prompt_tokens", 0),
+                llm_result["usage"].get("completion_tokens", 0),
             )
             await _log_step(
                 conn,
