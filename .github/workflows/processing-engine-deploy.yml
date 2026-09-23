@@ -4,7 +4,12 @@ on:
   push:
     branches: [main]
     paths:
-      - 'processing-engine/**'
+      - 'processing-engine/app/**'
+      - 'processing-engine/alembic/**'
+      - 'processing-engine/pipelines/**'
+      - 'processing-engine/Dockerfile'
+      - 'processing-engine/pyproject.toml'
+      - 'processing-engine/requirements*.txt'
       - '.github/workflows/processing-engine-deploy.yml'
   workflow_dispatch:
 
