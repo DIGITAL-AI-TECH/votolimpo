@@ -1,8 +1,9 @@
 "use client";
 
 import Link from "next/link";
+import Image from "next/image";
 import { usePathname } from "next/navigation";
-import type { FC } from "react";
+import { useState, type FC } from "react";
 
 const NAV_LINKS = [
   { href: "/", label: "Início" },
@@ -14,6 +15,7 @@ const NAV_LINKS = [
 
 const Header: FC = () => {
   const pathname = usePathname();
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   return (
     <header className="sticky top-0 z-50 border-b border-[#2E2E2E] bg-[#0A0A0A]/95 backdrop-blur-md">
@@ -24,27 +26,19 @@ const Header: FC = () => {
           className="flex items-center gap-2 group"
           aria-label="Voto Limpo — Página inicial"
         >
-          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-emerald-500/10 border border-emerald-500/30 group-hover:bg-emerald-500/20 transition-colors">
-            <svg
-              className="h-4 w-4 text-emerald-400"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"
-              />
-            </svg>
-          </div>
+          <Image
+            src="/favicon.png"
+            alt="Voto Limpo"
+            width={32}
+            height={32}
+            className="rounded-lg"
+          />
           <span className="text-lg font-bold tracking-tight text-[#FAFAFA]">
             Voto<span className="text-emerald-400">Limpo</span>
           </span>
         </Link>
 
-        {/* Navigation */}
+        {/* Desktop Navigation */}
         <nav className="hidden md:flex items-center gap-1">
           {NAV_LINKS.map((link) => {
             const isActive = pathname === link.href || (link.href !== "/" && pathname.startsWith(link.href));
@@ -64,50 +58,49 @@ const Header: FC = () => {
           })}
         </nav>
 
-        {/* Mobile nav button */}
-        <div className="flex md:hidden">
-          <Link
-            href="/busca"
-            className="rounded-lg p-2 text-[#6B7280] hover:bg-[#1A1A1A] hover:text-[#FAFAFA] transition-colors"
-            aria-label="Buscar"
-          >
+        {/* Mobile hamburger button */}
+        <button
+          onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+          className="flex md:hidden rounded-lg p-2 text-[#6B7280] hover:bg-[#1A1A1A] hover:text-[#FAFAFA] transition-colors"
+          aria-label={mobileMenuOpen ? "Fechar menu" : "Abrir menu"}
+          aria-expanded={mobileMenuOpen}
+        >
+          {mobileMenuOpen ? (
             <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
             </svg>
-          </Link>
-        </div>
-
-        {/* Mobile bottom nav hint */}
-        <div className="hidden">
-          {NAV_LINKS.map((link) => (
-            <Link key={link.href} href={link.href}>
-              {link.label}
-            </Link>
-          ))}
-        </div>
+          ) : (
+            <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
+            </svg>
+          )}
+        </button>
       </div>
 
-      {/* Mobile navigation */}
-      <div className="md:hidden border-t border-[#1A1A1A]">
-        <div className="flex items-center gap-1 px-4 py-2 overflow-x-auto">
-          {NAV_LINKS.map((link) => {
-            const isActive = pathname === link.href || (link.href !== "/" && pathname.startsWith(link.href));
-            return (
-              <Link
-                key={link.href}
-                href={link.href}
-                className={`flex-shrink-0 rounded-lg px-3 py-1.5 text-xs font-medium transition-colors ${
-                  isActive
-                    ? "bg-emerald-500/10 text-emerald-400"
-                    : "text-[#6B7280] hover:text-[#FAFAFA]"
-                }`}
-              >
-                {link.label}
-              </Link>
-            );
-          })}
-        </div>
-      </div>
+      {/* Mobile menu overlay */}
+      {mobileMenuOpen && (
+        <nav className="md:hidden border-t border-[#1A1A1A] bg-[#0A0A0A]">
+          <div className="flex flex-col px-4 py-3 space-y-1">
+            {NAV_LINKS.map((link) => {
+              const isActive = pathname === link.href || (link.href !== "/" && pathname.startsWith(link.href));
+              return (
+                <Link
+                  key={link.href}
+                  href={link.href}
+                  onClick={() => setMobileMenuOpen(false)}
+                  className={`rounded-lg px-4 py-3 text-sm font-medium transition-colors ${
+                    isActive
+                      ? "bg-emerald-500/10 text-emerald-400"
+                      : "text-[#FAFAFA] hover:bg-[#141414]"
+                  }`}
+                >
+                  {link.label}
+                </Link>
+              );
+            })}
+          </div>
+        </nav>
+      )}
     </header>
   );
 };

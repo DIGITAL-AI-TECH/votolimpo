@@ -18,12 +18,12 @@ interface RankingTableProps {
 }
 
 const COLUMNS: { key: SortField; label: string }[] = [
-  { key: "name", label: "Nome" },
+  { key: "name", label: "Candidato" },
   { key: "party", label: "Partido" },
-  { key: "uf", label: "UF" },
-  { key: "score", label: "Score" },
-  { key: "articleCount", label: "Artigos" },
-  { key: "maxSeverity", label: "Severidade" },
+  { key: "uf", label: "Estado" },
+  { key: "score", label: "Transparência" },
+  { key: "articleCount", label: "Notícias" },
+  { key: "maxSeverity", label: "Gravidade" },
 ];
 
 const RankingTable: FC<RankingTableProps> = ({
@@ -48,8 +48,57 @@ const RankingTable: FC<RankingTableProps> = ({
 
   return (
     <div className="flex flex-col gap-4">
-      {/* Table */}
-      <div className="overflow-x-auto rounded-xl border border-[#2E2E2E]">
+      {/* Mobile cards (visible below md) */}
+      <div className="flex flex-col gap-3 md:hidden">
+        {politicians.map((politician, index) => {
+          const rowNum = (page - 1) * pageSize + index + 1;
+          return (
+            <Link
+              key={politician.id}
+              href={`/politico/${politician.slug}`}
+              className="block rounded-xl border border-[#2E2E2E] bg-[#141414] p-4 transition-colors hover:border-emerald-500/50"
+            >
+              <div className="flex items-start gap-3">
+                <span className="flex-shrink-0 font-mono text-lg font-bold text-[#2E2E2E]">
+                  {rowNum < 10 ? `0${rowNum}` : rowNum}
+                </span>
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="min-w-0">
+                      <p className="truncate text-sm font-semibold text-[#FAFAFA]">{politician.name}</p>
+                      <p className="truncate text-xs text-[#6B7280]">{politician.role}</p>
+                    </div>
+                    <ScoreBadge score={politician.score} size="sm" />
+                  </div>
+                  <div className="mt-2 flex flex-wrap items-center gap-2">
+                    <span
+                      className="inline-flex items-center rounded px-2 py-0.5 text-xs font-bold text-white"
+                      style={{ backgroundColor: politician.partyColor + "CC" }}
+                    >
+                      {politician.party}
+                    </span>
+                    <span className="rounded bg-[#2E2E2E] px-2 py-0.5 text-xs text-[#6B7280]">
+                      {politician.uf}
+                    </span>
+                    <SeverityBadge severity={politician.maxSeverity} size="sm" />
+                    <span className="text-xs text-[#6B7280]">
+                      {politician.articleCount} {politician.articleCount === 1 ? "notícia" : "notícias"}
+                    </span>
+                  </div>
+                </div>
+              </div>
+            </Link>
+          );
+        })}
+        {politicians.length === 0 && (
+          <div className="flex items-center justify-center py-12">
+            <p className="text-sm text-[#6B7280]">Nenhum resultado encontrado.</p>
+          </div>
+        )}
+      </div>
+
+      {/* Desktop table (hidden below md) */}
+      <div className="hidden md:block overflow-x-auto rounded-xl border border-[#2E2E2E]">
         <table className="w-full min-w-[640px]" aria-label="Ranking de candidatos">
           <thead>
             <tr className="border-b border-[#2E2E2E] bg-[#141414]">
@@ -136,7 +185,7 @@ const RankingTable: FC<RankingTableProps> = ({
       {totalPages > 1 && (
         <div className="flex items-center justify-between px-1">
           <p className="text-xs text-[#6B7280]">
-            {total} políticos · Página {page} de {totalPages}
+            <span className="hidden sm:inline">{total} políticos · </span>Página {page} de {totalPages}
           </p>
           <div className="flex items-center gap-2">
             <button
@@ -147,22 +196,26 @@ const RankingTable: FC<RankingTableProps> = ({
             >
               Anterior
             </button>
-            {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
-              const p = Math.max(1, Math.min(page - 2 + i, totalPages - 4 + i));
-              return (
-                <button
-                  key={p}
-                  onClick={() => onPageChange(p)}
-                  className={`rounded-lg px-3 py-1.5 text-xs font-medium transition-colors ${
-                    p === page
-                      ? "bg-emerald-500 text-white"
-                      : "border border-[#2E2E2E] bg-[#141414] text-[#FAFAFA] hover:bg-[#1A1A1A]"
-                  }`}
-                >
-                  {p}
-                </button>
-              );
-            })}
+            {(() => {
+              const count = Math.min(5, totalPages);
+              const startPage = Math.max(1, Math.min(page - 2, totalPages - count + 1));
+              return Array.from({ length: count }, (_, i) => {
+                const p = startPage + i;
+                return (
+                  <button
+                    key={p}
+                    onClick={() => onPageChange(p)}
+                    className={`rounded-lg px-3 py-1.5 text-xs font-medium transition-colors ${
+                      p === page
+                        ? "bg-emerald-500 text-white"
+                        : "border border-[#2E2E2E] bg-[#141414] text-[#FAFAFA] hover:bg-[#1A1A1A]"
+                    }`}
+                  >
+                    {p}
+                  </button>
+                );
+              });
+            })()}
             <button
               onClick={() => onPageChange(page + 1)}
               disabled={page === totalPages}

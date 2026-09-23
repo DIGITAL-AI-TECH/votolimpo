@@ -23,6 +23,7 @@ const GraphVisualization: FC<GraphVisualizationProps> = ({ data }) => {
   const router = useRouter();
   const [tooltip, setTooltip] = useState<{ x: number; y: number; label: string } | null>(null);
   const [mounted, setMounted] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     setMounted(true);
@@ -150,7 +151,7 @@ const GraphVisualization: FC<GraphVisualizationProps> = ({ data }) => {
         .attr("r", 20)
         .attr("fill", (d) => (d.partyColor || "#10B981") + "33")
         .attr("stroke", (d) => {
-          const score = d.score || 50;
+          const score = d.score ?? 50;
           if (score >= 80) return "#10B981";
           if (score >= 60) return "#3B82F6";
           if (score >= 40) return "#EAB308";
@@ -224,7 +225,11 @@ const GraphVisualization: FC<GraphVisualizationProps> = ({ data }) => {
       return () => simulation.stop();
     };
 
-    const cleanup = loadD3();
+    const cleanup = loadD3().catch((err) => {
+      console.error("[GraphVisualization] D3 load error:", err);
+      setError("Não foi possível carregar o gráfico. Tente recarregar a página.");
+      return undefined;
+    });
     return () => {
       cleanup.then((fn) => fn?.());
     };
@@ -234,6 +239,22 @@ const GraphVisualization: FC<GraphVisualizationProps> = ({ data }) => {
     return (
       <div className="flex h-full items-center justify-center">
         <div className="h-8 w-8 animate-spin rounded-full border-2 border-[#2E2E2E] border-t-emerald-500" />
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="flex h-full items-center justify-center">
+        <div className="text-center">
+          <p className="text-[#6B7280]">{error}</p>
+          <button
+            onClick={() => { setError(null); window.location.reload(); }}
+            className="mt-4 rounded-lg bg-emerald-500/10 px-4 py-2 text-sm text-emerald-400 hover:bg-emerald-500/20 transition-colors"
+          >
+            Recarregar
+          </button>
+        </div>
       </div>
     );
   }

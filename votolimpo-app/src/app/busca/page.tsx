@@ -1,13 +1,16 @@
 "use client";
 
 import { useState, useEffect, useCallback, type ChangeEvent } from "react";
+import { useSearchParams } from "next/navigation";
 import type { Politician, Article } from "@/types";
 import PoliticianCard from "@/components/PoliticianCard";
 import ArticleCard from "@/components/ArticleCard";
 
 export default function BuscaPage() {
-  const [query, setQuery] = useState("");
-  const [debouncedQuery, setDebouncedQuery] = useState("");
+  const searchParams = useSearchParams();
+  const initialQuery = searchParams.get("q") || "";
+  const [query, setQuery] = useState(initialQuery);
+  const [debouncedQuery, setDebouncedQuery] = useState(initialQuery);
   const [results, setResults] = useState<Politician[]>([]);
   const [articles, setArticles] = useState<Article[]>([]);
   const [loading, setLoading] = useState(true);
@@ -62,7 +65,13 @@ export default function BuscaPage() {
     setQuery("");
   };
 
+  const [visibleCount, setVisibleCount] = useState(12);
   const totalFound = results.length + (isSearchMode ? articles.length : 0);
+
+  // Reset visible count when results change
+  useEffect(() => {
+    setVisibleCount(12);
+  }, [debouncedQuery]);
 
   const getResultsLabel = () => {
     if (loading) return "Buscando...";
@@ -140,10 +149,20 @@ export default function BuscaPage() {
                 <h2 className="mb-4 text-lg font-semibold text-[#FAFAFA]">Candidatos</h2>
               )}
               <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-                {results.map((politician) => (
+                {results.slice(0, visibleCount).map((politician) => (
                   <PoliticianCard key={politician.id} politician={politician} />
                 ))}
               </div>
+              {results.length > visibleCount && (
+                <div className="mt-4 flex justify-center">
+                  <button
+                    onClick={() => setVisibleCount((v) => v + 12)}
+                    className="rounded-lg border border-[#2E2E2E] bg-[#141414] px-6 py-2 text-sm text-[#FAFAFA] hover:bg-[#1A1A1A] transition-colors"
+                  >
+                    Ver mais ({results.length - visibleCount} restantes)
+                  </button>
+                </div>
+              )}
             </section>
           ) : !isSearchMode ? (
             <div className="flex flex-col items-center justify-center py-20 text-center">

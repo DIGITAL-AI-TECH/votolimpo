@@ -1,5 +1,8 @@
+"use client";
+
 import Link from "next/link";
-import type { FC } from "react";
+import Image from "next/image";
+import { type FC, useState } from "react";
 import type { Politician } from "@/types";
 import ScoreBadge from "./ScoreBadge";
 import SeverityBadge from "./SeverityBadge";
@@ -9,7 +12,17 @@ interface PoliticianCardProps {
   rank?: number;
 }
 
+function getInitials(name: string): string {
+  const parts = name.split(" ").filter(Boolean);
+  if (parts.length === 0) return "?";
+  if (parts.length === 1) return parts[0][0].toUpperCase();
+  return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+}
+
 const PoliticianCard: FC<PoliticianCardProps> = ({ politician, rank }) => {
+  const [imgError, setImgError] = useState(false);
+  const hasPhoto = politician.photoUrl && !imgError;
+
   return (
     <Link
       href={`/politico/${politician.slug}`}
@@ -21,6 +34,28 @@ const PoliticianCard: FC<PoliticianCardProps> = ({ politician, rank }) => {
             {rank < 10 ? `0${rank}` : rank}
           </span>
         )}
+
+        {/* Foto do candidato */}
+        <div className="flex-shrink-0">
+          {hasPhoto ? (
+            <Image
+              src={politician.photoUrl!}
+              alt={politician.name}
+              width={44}
+              height={44}
+              className="h-11 w-11 rounded-full object-cover border border-[#2E2E2E]"
+              onError={() => setImgError(true)}
+              unoptimized
+            />
+          ) : (
+            <div
+              className="flex h-11 w-11 items-center justify-center rounded-full border border-[#2E2E2E] text-sm font-bold text-white"
+              style={{ backgroundColor: politician.partyColor + "CC" }}
+            >
+              {getInitials(politician.name)}
+            </div>
+          )}
+        </div>
 
         <div className="min-w-0 flex-1">
           <div className="flex items-start justify-between gap-2">
@@ -53,13 +88,13 @@ const PoliticianCard: FC<PoliticianCardProps> = ({ politician, rank }) => {
               <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 20H5a2 2 0 01-2-2V6a2 2 0 012-2h10a2 2 0 012 2v1m2 13a2 2 0 01-2-2V7m2 13a2 2 0 002-2V9a2 2 0 00-2-2h-2m-4-3H9M7 16h6M7 8h6v4H7V8z" />
               </svg>
-              {politician.articleCount} artigos
+              {politician.articleCount} {politician.articleCount === 1 ? "notícia" : "notícias"}
             </span>
             <span className="flex items-center gap-1">
               <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 6l3 1m0 0l-3 9a5.002 5.002 0 006.001 0M6 7l3 9M6 7l6-2m6 2l3-1m-3 1l-3 9a5.002 5.002 0 006.001 0M18 7l3 9m-3-9l-6-2m0-2v2m0 16V5m0 16H9m3 0h3" />
               </svg>
-              {politician.milestoneCount} ocorrências
+              {politician.milestoneCount} {politician.milestoneCount === 1 ? "registro" : "registros"}
             </span>
           </div>
         </div>

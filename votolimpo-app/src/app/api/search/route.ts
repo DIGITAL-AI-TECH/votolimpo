@@ -30,6 +30,20 @@ export async function GET(request: Request) {
     const politicians = entities.map((e) => entityToPolitician(e));
     const articles = articlesRes.items.map(ncArticleToArticle);
 
+    // Sort politicians by relevance: exact > starts-with > article count
+    const qLower = q.toLowerCase();
+    politicians.sort((a, b) => {
+      const aName = a.name.toLowerCase();
+      const bName = b.name.toLowerCase();
+      const aExact = aName === qLower ? 0 : 1;
+      const bExact = bName === qLower ? 0 : 1;
+      if (aExact !== bExact) return aExact - bExact;
+      const aStarts = aName.startsWith(qLower) ? 0 : 1;
+      const bStarts = bName.startsWith(qLower) ? 0 : 1;
+      if (aStarts !== bStarts) return aStarts - bStarts;
+      return (b.articleCount ?? 0) - (a.articleCount ?? 0);
+    });
+
     return NextResponse.json({
       politicians,
       articles,

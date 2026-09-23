@@ -1,5 +1,6 @@
 import { notFound } from "next/navigation";
 import Link from "next/link";
+import Image from "next/image";
 import type { Metadata } from "next";
 import {
   getEntityBySlug,
@@ -18,7 +19,7 @@ import SeverityBadge from "@/components/SeverityBadge";
 import ShareButton from "@/components/ShareButton";
 import Timeline, { buildTimelineItems } from "@/components/Timeline";
 
-export const revalidate = 0;
+export const revalidate = 120;
 
 interface PageProps {
   params: Promise<{ slug: string }>;
@@ -170,30 +171,51 @@ export default async function PoliticoPage({ params }: PageProps) {
           {/* Header Card */}
           <div className="rounded-2xl border border-[#2E2E2E] bg-[#141414] p-6">
             <div className="flex items-start justify-between gap-4 flex-wrap">
-              <div className="flex-1 min-w-0">
-                <div className="flex flex-wrap items-center gap-2 mb-3">
-                  <span
-                    className="inline-flex items-center rounded-lg px-3 py-1 text-sm font-bold text-white"
+              <div className="flex items-start gap-4 flex-1 min-w-0">
+                {/* Foto do candidato */}
+                {politician.photoUrl ? (
+                  <Image
+                    src={politician.photoUrl}
+                    alt={politician.name}
+                    width={80}
+                    height={80}
+                    className="h-20 w-20 flex-shrink-0 rounded-xl object-cover border border-[#2E2E2E]"
+                    unoptimized
+                  />
+                ) : (
+                  <div
+                    className="flex h-20 w-20 flex-shrink-0 items-center justify-center rounded-xl border border-[#2E2E2E] text-2xl font-bold text-white"
                     style={{ backgroundColor: politician.partyColor + "CC" }}
                   >
-                    {politician.party}
-                  </span>
-                  <span className="rounded-lg bg-[#2E2E2E] px-3 py-1 text-sm font-medium text-[#FAFAFA]">
-                    {politician.uf}
-                  </span>
-                  <SeverityBadge severity={politician.maxSeverity} size="md" />
-                </div>
-
-                <h1 className="text-3xl font-bold text-[#FAFAFA] md:text-4xl">
-                  {politician.name}
-                </h1>
-                <p className="mt-2 text-[#6B7280]">{politician.role}</p>
-
-                {politician.bio && (
-                  <p className="mt-4 text-sm text-[#6B7280] leading-relaxed border-l-2 border-[#2E2E2E] pl-4">
-                    {politician.bio}
-                  </p>
+                    {politician.name.split(" ").filter(Boolean).map(p => p[0]).slice(0, 2).join("").toUpperCase()}
+                  </div>
                 )}
+
+                <div className="min-w-0">
+                  <div className="flex flex-wrap items-center gap-2 mb-3">
+                    <span
+                      className="inline-flex items-center rounded-lg px-3 py-1 text-sm font-bold text-white"
+                      style={{ backgroundColor: politician.partyColor + "CC" }}
+                    >
+                      {politician.party}
+                    </span>
+                    <span className="rounded-lg bg-[#2E2E2E] px-3 py-1 text-sm font-medium text-[#FAFAFA]">
+                      {politician.uf}
+                    </span>
+                    <SeverityBadge severity={politician.maxSeverity} size="md" />
+                  </div>
+
+                  <h1 className="text-3xl font-bold text-[#FAFAFA] md:text-4xl">
+                    {politician.name}
+                  </h1>
+                  <p className="mt-2 text-[#6B7280]">{politician.role}</p>
+
+                  {politician.bio && (
+                    <p className="mt-4 text-sm text-[#6B7280] leading-relaxed border-l-2 border-[#2E2E2E] pl-4">
+                      {politician.bio}
+                    </p>
+                  )}
+                </div>
               </div>
 
               <div className="flex flex-col items-end gap-3">

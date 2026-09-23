@@ -7,11 +7,11 @@ interface SeverityBadgeProps {
 }
 
 const SEVERITY_CONFIG: Record<Severity, { label: string; classes: string }> = {
-  critical: { label: "Crítico", classes: "bg-red-400/10 text-red-400 border-red-400/30" },
-  high: { label: "Alto", classes: "bg-orange-400/10 text-orange-400 border-orange-400/30" },
-  medium: { label: "Médio", classes: "bg-yellow-400/10 text-yellow-400 border-yellow-400/30" },
-  low: { label: "Baixo", classes: "bg-blue-400/10 text-blue-400 border-blue-400/30" },
-  info: { label: "Info", classes: "bg-gray-400/10 text-gray-400 border-gray-400/30" },
+  critical: { label: "Grave", classes: "bg-red-400/10 text-red-400 border-red-400/30" },
+  high: { label: "Importante", classes: "bg-orange-400/10 text-orange-400 border-orange-400/30" },
+  medium: { label: "Moderado", classes: "bg-yellow-400/10 text-yellow-400 border-yellow-400/30" },
+  low: { label: "Leve", classes: "bg-blue-400/10 text-blue-400 border-blue-400/30" },
+  info: { label: "Informativo", classes: "bg-gray-400/10 text-gray-400 border-gray-400/30" },
 };
 
 const SeverityBadge: FC<SeverityBadgeProps> = ({ severity, size = "sm" }) => {

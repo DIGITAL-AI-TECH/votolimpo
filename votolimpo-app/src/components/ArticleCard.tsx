@@ -1,3 +1,4 @@
+import Link from "next/link";
 import type { FC } from "react";
 import type { Article } from "@/types";
 import SeverityBadge from "./SeverityBadge";
@@ -56,12 +57,13 @@ const ArticleCard: FC<ArticleCardProps> = ({ article }) => {
       <div className="mt-3 flex items-center justify-between">
         <div className="flex flex-wrap gap-1.5">
           {article.tags.slice(0, 4).map((tag) => (
-            <span
+            <Link
               key={tag}
-              className="rounded bg-[#2E2E2E] px-1.5 py-0.5 text-xs text-[#6B7280]"
+              href={`/busca?q=${encodeURIComponent(tag)}`}
+              className="rounded bg-[#2E2E2E] px-1.5 py-0.5 text-xs text-[#6B7280] hover:bg-[#3E3E3E] hover:text-[#FAFAFA] transition-colors"
             >
               #{tag}
-            </span>
+            </Link>
           ))}
         </div>
         <div className="flex items-center gap-1 flex-shrink-0">

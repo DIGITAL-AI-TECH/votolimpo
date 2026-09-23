@@ -1,4 +1,6 @@
-import type { FC } from "react";
+"use client";
+
+import { type FC, useState } from "react";
 import type { Article, LegalMilestone, Severity } from "@/types";
 import SeverityBadge from "./SeverityBadge";
 
@@ -17,6 +19,7 @@ interface TimelineItem {
 
 interface TimelineProps {
   items: TimelineItem[];
+  initialCount?: number;
 }
 
 function formatDate(dateStr: string): string {
@@ -178,7 +181,11 @@ export function buildTimelineItems(
   );
 }
 
-const Timeline: FC<TimelineProps> = ({ items }) => {
+const STEP = 10;
+
+const Timeline: FC<TimelineProps> = ({ items, initialCount = 10 }) => {
+  const [visibleCount, setVisibleCount] = useState(initialCount);
+
   if (items.length === 0) {
     return (
       <div className="flex items-center justify-center py-12">
@@ -187,11 +194,24 @@ const Timeline: FC<TimelineProps> = ({ items }) => {
     );
   }
 
+  const visible = items.slice(0, visibleCount);
+  const remaining = items.length - visibleCount;
+
   return (
     <div className="relative">
-      {items.map((item) => (
+      {visible.map((item) => (
         <TimelineItemComponent key={item.id} item={item} />
       ))}
+      {remaining > 0 && (
+        <div className="flex justify-center pt-4">
+          <button
+            onClick={() => setVisibleCount((v) => v + STEP)}
+            className="rounded-lg border border-[#2E2E2E] bg-[#141414] px-6 py-2 text-sm text-[#FAFAFA] hover:bg-[#1A1A1A] transition-colors"
+          >
+            Ver mais ({remaining} restantes)
+          </button>
+        </div>
+      )}
     </div>
   );
 };
