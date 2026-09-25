@@ -31,11 +31,11 @@ const ArticleCard: FC<ArticleCardProps> = ({ article }) => {
             <SeverityBadge severity={article.severity} size="sm" />
             {article.isPolitical && (
               <span className="rounded bg-blue-500/20 px-1.5 py-0.5 text-xs font-medium text-blue-400">
-                Pol\u00edtico
+                Político
               </span>
             )}
             <span className="text-xs text-[#6B7280]">{article.source.name}</span>
-            <span className="text-xs text-[#6B7280]">\u00b7</span>
+            <span className="text-xs text-[#6B7280]">·</span>
             <span className="text-xs text-[#6B7280]">{formatDate(article.publishedAt)}</span>
           </div>
 
