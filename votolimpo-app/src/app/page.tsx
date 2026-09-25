@@ -13,6 +13,7 @@ import {
 import PoliticianCard from "@/components/PoliticianCard";
 import ArticleCard from "@/components/ArticleCard";
 import SearchBar from "@/components/SearchBar";
+import HomeClient from "@/components/HomeClient";
 import type { Politician, Article, Stats } from "@/types";
 
 export const revalidate = 60; // ISR: regenerate every 60s
@@ -116,7 +117,7 @@ export default async function HomePage() {
         dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd).replace(/</g, '\\u003c') }}
       />
     <div className="min-h-screen">
-      {/* Hero Section */}
+      {/* Hero Section — always visible */}
       <section className="relative overflow-hidden border-b border-[#1A1A1A] py-16 md:py-28">
         {/* Background gradient */}
         <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_50%_0%,_#10B98115_0%,_transparent_70%)]" />
@@ -168,6 +169,9 @@ export default async function HomePage() {
           </div>
         </div>
       </section>
+
+      {/* Journey-aware client wrapper: shows dashboard if context exists, or quiz CTA + default content */}
+      <HomeClient>
 
       {/* How it works — IA Section */}
       <section className="border-b border-[#1A1A1A] py-14">
@@ -363,6 +367,8 @@ export default async function HomePage() {
           </div>
         </div>
       </section>
+
+      </HomeClient>
     </div>
     </>
   );
