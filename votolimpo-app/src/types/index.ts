@@ -18,6 +18,9 @@ export interface Politician {
   milestoneCount: number;
   createdAt: string;
   updatedAt: string;
+  cargo?: string;
+  nomeUrna?: string;
+  numeroCandidato?: number;
 }
 
 export interface Article {

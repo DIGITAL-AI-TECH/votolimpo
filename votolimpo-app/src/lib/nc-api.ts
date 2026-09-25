@@ -91,6 +91,10 @@ export interface NCEntity {
   updated_at: string;
   tse_id?: string | null;
   photo_url?: string | null;
+  cargo?: string | null;
+  cargo_id?: number | null;
+  nome_urna?: string | null;
+  numero_candidato?: number | null;
 }
 
 export interface NCArticle {
@@ -221,6 +225,7 @@ export async function listEntities(params?: {
   active?: boolean;
   party?: string;
   state?: string;
+  cargo?: string;
   order_by?: string;
   order_dir?: string;
   skip?: number;
@@ -240,6 +245,7 @@ export async function countEntities(params?: {
   active?: boolean;
   party?: string;
   state?: string;
+  cargo?: string;
 }): Promise<number> {
   const res = await ncFetch<{ count: number }>({
     path: "/entities/count",
@@ -253,8 +259,8 @@ export async function countEntities(params?: {
 export async function getEntityFilters(params?: {
   type?: string;
   active?: boolean;
-}): Promise<{ parties: string[]; states: string[] }> {
-  return ncFetch<{ parties: string[]; states: string[] }>({
+}): Promise<{ parties: string[]; states: string[]; cargos: string[] }> {
+  return ncFetch<{ parties: string[]; states: string[]; cargos: string[] }>({
     path: "/entities/filters",
     params: params as Record<string, string | number | boolean | undefined>,
     revalidate: 600, // 10 min cache — filters change rarely
@@ -555,6 +561,9 @@ export function entityToPolitician(
     milestoneCount: 0,  // will be enriched by the caller when milestones are fetched
     createdAt: entity.created_at,
     updatedAt: entity.updated_at,
+    cargo: entity.cargo || undefined,
+    nomeUrna: entity.nome_urna || undefined,
+    numeroCandidato: entity.numero_candidato || undefined,
   };
 }
 

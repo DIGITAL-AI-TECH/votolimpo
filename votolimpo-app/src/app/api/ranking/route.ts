@@ -17,6 +17,7 @@ export async function GET(request: Request) {
     const searchQuery = searchParams.get("search") || undefined;
     const party = searchParams.get("party") || undefined;
     const uf = searchParams.get("uf") || undefined;
+    const cargo = searchParams.get("cargo") || undefined;
 
     // Map frontend sort fields to backend order_by params
     const orderByMap: Record<string, string> = {
@@ -41,6 +42,7 @@ export async function GET(request: Request) {
         search: searchQuery,
         party,
         state: uf,
+        cargo,
         order_by: effectiveOrderBy,
         order_dir: sortOrder,
       }),
@@ -50,6 +52,7 @@ export async function GET(request: Request) {
         search: searchQuery,
         party,
         state: uf,
+        cargo,
       }),
     ]);
 
