@@ -17,7 +17,8 @@ import type { LegalMilestone } from "@/types";
 import ScoreBadge from "@/components/ScoreBadge";
 import SeverityBadge from "@/components/SeverityBadge";
 import ShareButton from "@/components/ShareButton";
-import Timeline, { buildTimelineItems } from "@/components/Timeline";
+import Timeline from "@/components/Timeline";
+import { buildTimelineItems } from "@/lib/timeline-utils";
 
 export const revalidate = 120;
 
