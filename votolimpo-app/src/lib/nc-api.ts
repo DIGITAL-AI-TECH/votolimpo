@@ -554,16 +554,16 @@ export function entityToPolitician(
     uf: entity.state || (meta.uf_candidatura as string) || "BR",
     role: entity.role || "Candidato",
     photoUrl,
-    bio: undefined,  // TODO: NC API doesn't serve bio/ai_summary yet (PE writes to politicians table but NC reads from entities)
-    score: score ?? null,  // null = sem artigos processados (N/D)
+    bio: null,
+    score: score ?? null,
     articleCount,
     maxSeverity,
-    milestoneCount: 0,  // will be enriched by the caller when milestones are fetched
+    milestoneCount: 0,
     createdAt: entity.created_at,
     updatedAt: entity.updated_at,
-    cargo: entity.cargo || undefined,
-    nomeUrna: entity.nome_urna || undefined,
-    numeroCandidato: entity.numero_candidato || undefined,
+    cargo: entity.cargo || null,
+    nomeUrna: entity.nome_urna || null,
+    numeroCandidato: entity.numero_candidato ?? null,
   };
 }
 

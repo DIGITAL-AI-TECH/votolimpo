@@ -10,17 +10,17 @@ export interface Politician {
   partyColor: string;
   uf: string;
   role: string;
-  photoUrl?: string;
-  bio?: string;
-  score: number | null; // 0-100 transparency score, null = sem artigos processados
+  photoUrl?: string | null;
+  bio?: string | null;
+  score: number | null;
   articleCount: number;
   maxSeverity: Severity;
   milestoneCount: number;
   createdAt: string;
   updatedAt: string;
-  cargo?: string;
-  nomeUrna?: string;
-  numeroCandidato?: number;
+  cargo?: string | null;
+  nomeUrna?: string | null;
+  numeroCandidato?: number | null;
 }
 
 export interface Article {
