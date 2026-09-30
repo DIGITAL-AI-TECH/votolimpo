@@ -33,7 +33,7 @@ dependencies = [
     "jsonschema>=4.20.0",
     # Migrations & ORM (models only)
     "alembic>=1.13.0",
-    "sqlalchemy>=2.0.0",
+    "sqlalchemy[asyncio]>=2.0.0",
     # Vector support
     "pgvector>=0.3.0",
 ]
