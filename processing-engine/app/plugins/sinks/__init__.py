@@ -330,7 +330,7 @@ class PostgreSQLSink:
                 updated_at = NOW()
             RETURNING id
         """,
-            metadata.get("title", article.get("title", "")),
+            metadata.get("title") or article.get("title") or output.get("summary", "")[:120] or "Sem título",
             url,
             url_hash,
             source_id,
