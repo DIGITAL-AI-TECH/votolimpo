@@ -179,6 +179,7 @@ export interface NCEntityWithScore extends NCEntity {
   article_count: number;
   score: number | null;
   max_severity: string;
+  milestone_count?: number;
 }
 
 export interface NCEntityStats {
@@ -452,18 +453,92 @@ export async function getEntityScore(entityId: number): Promise<NCEntityScore> {
   });
 }
 
-/** Lookup entity by slug and get score data in one request */
+/** Lookup entity by slug and get score data in one request.
+ *
+ * Falls back to a name search when the exact slug is not found.  This handles
+ * cases where the NC slug was generated from nome_urna (ballot name) while the
+ * URL was built from the full name, or when TSE data updates changed a slug.
+ *
+ * Fallback strategy:
+ *  1. GET /entities/by-slug/{slug}         — exact match (fast path)
+ *  2. GET /entities/?search={humanized}    — name search, pick closest slug match
+ */
 export async function getEntityBySlug(slug: string): Promise<NCEntityWithScore> {
-  return ncFetch<NCEntityWithScore>({
-    path: `/entities/by-slug/${slug}`,
-    revalidate: 120,
-  });
+  try {
+    return await ncFetch<NCEntityWithScore>({
+      path: `/entities/by-slug/${slug}`,
+      revalidate: 120,
+    });
+  } catch (primaryError) {
+    // Only attempt fallback when the primary call produced a 404-style error.
+    // Other errors (network timeouts, 5xx) should propagate as-is.
+    const isNotFound =
+      primaryError instanceof Error &&
+      primaryError.message.includes(" 404 ");
+
+    if (!isNotFound) throw primaryError;
+
+    // Convert slug to a human-readable search term: "raquel-teixeira-lyra-lucena" → "raquel teixeira lyra lucena"
+    const searchTerm = slug.replace(/-/g, " ");
+
+    let candidates: NCEntity[];
+    try {
+      candidates = await ncFetch<NCEntity[]>({
+        path: "/entities/",
+        params: { search: searchTerm, limit: 10 },
+        revalidate: 120,
+      });
+    } catch {
+      // If the fallback search itself fails, re-throw the original error so
+      // the caller gets a meaningful 404 rather than a confusing 5xx.
+      throw primaryError;
+    }
+
+    if (!candidates || candidates.length === 0) throw primaryError;
+
+    // Pick the candidate whose slug is most similar to the requested one.
+    // Priority: exact slug match > slug starts-with > first result.
+    const exact = candidates.find((e) => e.slug === slug);
+    if (exact) {
+      // Fetch the enriched version (with score fields)
+      return ncFetch<NCEntityWithScore>({
+        path: `/entities/by-slug/${exact.slug}`,
+        revalidate: 120,
+      });
+    }
+
+    const startsWith = candidates.find((e) => e.slug.startsWith(slug.split("-")[0]));
+    const best = startsWith ?? candidates[0];
+
+    return ncFetch<NCEntityWithScore>({
+      path: `/entities/by-slug/${best.slug}`,
+      revalidate: 120,
+    });
+  }
 }
 
 /** Get VotoLimpo aggregated stats (avgScore, criticalCount) */
 export async function getVotoLimpoStats(): Promise<NCVotoLimpoStats> {
   return ncFetch<NCVotoLimpoStats>({
     path: "/stats/votolimpo",
+    revalidate: 120,
+  });
+}
+
+export interface NCScoreDistributionBand {
+  range: string;
+  min: number;
+  max: number;
+  count: number;
+}
+
+export async function getScoreDistribution(params?: {
+  cargo?: string;
+  state?: string;
+}): Promise<NCScoreDistributionBand[]> {
+  return ncFetch<NCScoreDistributionBand[]>({
+    path: "/stats/score-distribution",
+    params: params as Record<string, string>,
     revalidate: 120,
   });
 }
@@ -558,7 +633,7 @@ export function entityToPolitician(
     score: score ?? null,
     articleCount,
     maxSeverity,
-    milestoneCount: 0,
+    milestoneCount: (entity as NCEntityWithScore).milestone_count ?? 0,
     createdAt: entity.created_at,
     updatedAt: entity.updated_at,
     cargo: entity.cargo || null,
@@ -609,22 +684,15 @@ export function getSourceReliability(domain: string | null): number {
 
 /** Convert NC article to frontend Article type */
 export function ncArticleToArticle(ncArt: NCArticle): Article {
-  // Use PE-calculated severity when available, fallback to sentiment-based inference
+  // Use PE-calculated severity only; fallback "info" when PE has no data
   const severity: Severity = ncArt.severity
     ? mapSeverity(ncArt.severity)
-    : ncArt.sentiment_score !== null
-      ? ncArt.sentiment_score < 0.2 ? "critical"
-        : ncArt.sentiment_score < 0.35 ? "high"
-        : ncArt.sentiment_score < 0.5 ? "medium"
-        : ncArt.sentiment_score < 0.65 ? "low"
-        : "info"
-      : "info";
+    : "info";
 
-  // Use PE veracity score (0-10) converted to 0-1, with float precision fix
-  // score field uses 0-10 scale from PE
+  // Use PE veracity score (0-10) converted to 0-1, clamped to [0, 1]
   const truthScore = ncArt.score !== null
-    ? Math.round(ncArt.score * 10) / 100
-    : ncArt.sentiment_score ?? 0.5;
+    ? Math.min(1, Math.max(0, Math.round(ncArt.score * 10) / 100))
+    : 0.5;
 
   // Extract clean title (strip HTML from content if title missing)
   let title = ncArt.title || "";
@@ -670,8 +738,15 @@ export function ncStatsToStats(
   ncStats: NCStats,
   vlStats?: NCVotoLimpoStats | null
 ): Stats {
+  // NCStats.database does not have a dedicated field for politicians only.
+  // Use entities_with_articles (from vlStats) when available — it represents
+  // entities that have at least one processed article, which is the meaningful
+  // count for "monitored politicians". Fall back to total_entities (all entities
+  // of all types) only when vlStats is unavailable.
+  const totalPoliticians = vlStats?.entities_with_articles ?? ncStats.database.total_entities;
+
   return {
-    totalPoliticians: ncStats.database.total_entities,
+    totalPoliticians,
     totalArticles: ncStats.database.total_articles,
     totalEntities: ncStats.database.total_entities,
     totalSources: ncStats.database.total_sources,

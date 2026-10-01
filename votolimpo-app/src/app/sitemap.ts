@@ -43,10 +43,13 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
 
   try {
     // Paginate — NC API max limit is 100 per request
+    // Cap at 200 pages (20k entities) to prevent timeout on sitemap generation
     const PAGE_SIZE = 100;
+    const MAX_PAGES = 200;
     let allEntities: Awaited<ReturnType<typeof listEntities>> = [];
     let skip = 0;
     let batch: Awaited<ReturnType<typeof listEntities>>;
+    let pages = 0;
 
     do {
       batch = await listEntities({
@@ -57,7 +60,8 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
       });
       allEntities = allEntities.concat(batch);
       skip += PAGE_SIZE;
-    } while (batch.length === PAGE_SIZE);
+      pages++;
+    } while (batch.length === PAGE_SIZE && pages < MAX_PAGES);
 
     politicianUrls = allEntities.map((entity) => ({
       url: `${BASE_URL}/politico/${entity.slug}`,

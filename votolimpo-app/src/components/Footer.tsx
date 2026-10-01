@@ -36,7 +36,7 @@ const Footer: FC<FooterProps> = ({ stats: serverStats }) => {
           <div className="mb-8 grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-6 rounded-xl border border-[#1A1A1A] bg-[#141414] p-4">
             <div className="text-center">
               <p className="font-mono text-2xl font-bold text-emerald-400">{stats.totalPoliticians}</p>
-              <p className="mt-1 text-xs text-[#6B7280]">Políticos</p>
+              <p className="mt-1 text-xs text-[#6B7280]">Com dados</p>
             </div>
             <div className="text-center">
               <p className="font-mono text-2xl font-bold text-blue-400">{stats.totalArticles}</p>
@@ -44,14 +44,14 @@ const Footer: FC<FooterProps> = ({ stats: serverStats }) => {
             </div>
             <div className="text-center">
               <p className="font-mono text-2xl font-bold text-purple-400">{stats.totalEntities}</p>
-              <p className="mt-1 text-xs text-[#6B7280]">Entidades</p>
+              <p className="mt-1 text-xs text-[#6B7280]">Monitorados</p>
             </div>
             <div className="text-center">
               <p className="font-mono text-2xl font-bold text-yellow-400">{stats.totalSources}</p>
               <p className="mt-1 text-xs text-[#6B7280]">Fontes</p>
             </div>
             <div className="text-center">
-              <p className="font-mono text-2xl font-bold text-[#FAFAFA]">{stats.avgScore !== null ? stats.avgScore : "N/D"}</p>
+              <p className="font-mono text-2xl font-bold text-[#FAFAFA]">{stats.avgScore !== null ? `${stats.avgScore}/100` : "N/D"}</p>
               <p className="mt-1 text-xs text-[#6B7280]">Score Médio</p>
             </div>
             <div className="text-center">

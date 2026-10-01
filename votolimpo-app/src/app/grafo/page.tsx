@@ -1,7 +1,6 @@
 import type { Metadata } from "next";
-import { listEntities, entityToPolitician } from "@/lib/nc-api";
 import GraphVisualization from "@/components/GraphVisualization";
-import type { GraphData, GraphNode, GraphEdge } from "@/types";
+import type { GraphData } from "@/types";
 
 export const revalidate = 0;
 
@@ -10,57 +9,32 @@ export const metadata: Metadata = {
   description: "Visualizacao dos candidatos agrupados por partido",
 };
 
+async function fetchGraphData(): Promise<GraphData> {
+  const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || process.env.VERCEL_URL
+    ? `https://${process.env.VERCEL_URL}`
+    : "http://localhost:3000";
+
+  const res = await fetch(`${baseUrl}/api/graph`, {
+    next: { revalidate: 0 },
+  });
+
+  if (!res.ok) throw new Error(`Graph API error: ${res.status}`);
+  return res.json();
+}
+
 export default async function GrafoPage() {
   let graphData: GraphData;
   let politicians = 0;
-  let entities = 0;
+  let parties = 0;
   let totalEdges = 0;
 
   try {
-    const ncEntities = await listEntities({
-      type: "candidate",
-      active: true,
-      limit: 100,
-    });
-
-    const pols = ncEntities.map((e) => entityToPolitician(e));
-
-    const politicianNodes: GraphNode[] = pols.map((p) => ({
-      id: p.id,
-      type: "politician" as const,
-      label: p.name,
-      slug: p.slug,
-      party: p.party,
-      partyColor: p.partyColor,
-      score: p.score,
-    }));
-
-    const partySet = new Set(pols.map((p) => p.party));
-    const partyNodes: GraphNode[] = [...partySet].map((party) => ({
-      id: `party-${party}`,
-      type: "entity" as const,
-      label: party,
-      entityType: "organization",
-    }));
-
-    const edges: GraphEdge[] = pols.map((p) => ({
-      id: `rel-${p.id}-${p.party}`,
-      source: p.id,
-      target: `party-${p.party}`,
-      type: "business_partner" as const,
-      label: "filiado",
-    }));
-
-    graphData = {
-      nodes: [...politicianNodes, ...partyNodes],
-      edges,
-    };
-
-    politicians = politicianNodes.length;
-    entities = partyNodes.length;
-    totalEdges = edges.length;
+    graphData = await fetchGraphData();
+    politicians = graphData.nodes.filter((n) => n.type === "politician").length;
+    parties = graphData.nodes.filter((n) => n.type === "entity").length;
+    totalEdges = graphData.edges.length;
   } catch (error) {
-    console.error("[GrafoPage] NC API error:", error);
+    console.error("[GrafoPage] Graph API error:", error);
     graphData = { nodes: [], edges: [] };
   }
 
@@ -83,7 +57,7 @@ export default async function GrafoPage() {
             </div>
             <div className="flex items-center gap-1.5 rounded-lg border border-[#2E2E2E] bg-[#141414] px-3 py-1.5">
               <div className="h-3 w-3 rounded border border-[#6B7280] bg-[#1A1A1A]" />
-              <span className="text-xs text-[#6B7280]">{entities} partidos</span>
+              <span className="text-xs text-[#6B7280]">{parties} partidos</span>
             </div>
             <div className="flex items-center gap-1.5 rounded-lg border border-[#2E2E2E] bg-[#141414] px-3 py-1.5">
               <div className="h-px w-4 bg-[#6B7280]" />

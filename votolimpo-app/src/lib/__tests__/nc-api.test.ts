@@ -238,28 +238,28 @@ describe('ncArticleToArticle', () => {
     expect(result.severity).toBe('info');
   });
 
-  it('sem PE severity, sentiment_score 0.1 -> "critical"', () => {
+  it('sem PE severity, sentiment_score qualquer -> "info" (H-08: sem fallback sentiment)', () => {
     const article = makeArticle({ severity: null, sentiment_score: 0.1 });
     const result = ncArticleToArticle(article);
-    expect(result.severity).toBe('critical');
+    expect(result.severity).toBe('info');
   });
 
-  it('sem PE severity, sentiment_score 0.3 -> "high"', () => {
+  it('sem PE severity, sentiment_score 0.3 -> "info" (H-08: sem fallback sentiment)', () => {
     const article = makeArticle({ severity: null, sentiment_score: 0.3 });
     const result = ncArticleToArticle(article);
-    expect(result.severity).toBe('high');
+    expect(result.severity).toBe('info');
   });
 
-  it('sem PE severity, sentiment_score 0.45 -> "medium"', () => {
+  it('sem PE severity, sentiment_score 0.45 -> "info" (H-08: sem fallback sentiment)', () => {
     const article = makeArticle({ severity: null, sentiment_score: 0.45 });
     const result = ncArticleToArticle(article);
-    expect(result.severity).toBe('medium');
+    expect(result.severity).toBe('info');
   });
 
-  it('sem PE severity, sentiment_score 0.55 -> "low"', () => {
+  it('sem PE severity, sentiment_score 0.55 -> "info" (H-08: sem fallback sentiment)', () => {
     const article = makeArticle({ severity: null, sentiment_score: 0.55 });
     const result = ncArticleToArticle(article);
-    expect(result.severity).toBe('low');
+    expect(result.severity).toBe('info');
   });
 
   it('sem PE severity, sentiment_score 0.8 -> "info"', () => {
@@ -280,10 +280,10 @@ describe('ncArticleToArticle', () => {
     expect(result.truthScore).toBe(0.7);
   });
 
-  it('PE score null, sentiment_score 0.65 -> truthScore 0.65', () => {
+  it('PE score null, sentiment_score 0.65 -> truthScore 0.5 (H-02: no sentiment fallback)', () => {
     const article = makeArticle({ score: null, sentiment_score: 0.65 });
     const result = ncArticleToArticle(article);
-    expect(result.truthScore).toBe(0.65);
+    expect(result.truthScore).toBe(0.5);
   });
 
   it('PE score null, sentiment null -> truthScore 0.5', () => {

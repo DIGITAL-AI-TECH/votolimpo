@@ -3,6 +3,7 @@ import {
   listEntities,
   countEntities,
   listArticles,
+  getScoreDistribution,
   entityToPolitician,
   ncArticleToArticle,
   type NCEntityWithScore,
@@ -23,7 +24,7 @@ const SCORE_RANGES = [
   { label: "Bom", min: 60, max: 79, color: "#6EE7B7" },
   { label: "Regular", min: 40, max: 59, color: "#FBBF24" },
   { label: "Preocupante", min: 20, max: 39, color: "#F97316" },
-  { label: "Critico", min: 0, max: 19, color: "#EF4444" },
+  { label: "Crítico", min: 0, max: 19, color: "#EF4444" },
 ];
 
 export async function GET(request: Request) {
@@ -36,8 +37,8 @@ export async function GET(request: Request) {
       return NextResponse.json({ error: "cargo is required" }, { status: 400 });
     }
 
-    // Fetch top candidates (by score desc, fallback article_count), total count, and articles in parallel
-    const [topEntities, total, articlesRes] = await Promise.all([
+    // Fetch top candidates, total count, score distribution, and articles in parallel
+    const [topEntities, total, distBands, articlesRes] = await Promise.all([
       listEntities({
         type: "candidate",
         active: true,
@@ -53,6 +54,7 @@ export async function GET(request: Request) {
         cargo,
         state: uf,
       }),
+      getScoreDistribution({ cargo, state: uf }).catch(() => null),
       listArticles({ status: "processed", page_size: 6 }),
     ]);
 
@@ -72,14 +74,21 @@ export async function GET(request: Request) {
       });
     });
 
-    // Build score distribution from the top 20 (approximation — good enough for viz)
-    // For a precise distribution we'd need a dedicated endpoint, but this works for MVP
-    const distribution = SCORE_RANGES.map((range) => ({
-      ...range,
-      count: top.filter(
-        (p) => p.score !== null && p.score >= range.min && p.score <= range.max,
-      ).length,
-    }));
+    // Use real score distribution from backend when available, fallback to top-20 approximation
+    const distribution = distBands
+      ? SCORE_RANGES.map((range) => {
+          // Match by overlapping min/max (NC uses 0-20/21-40/..., frontend uses 0-19/20-39/...)
+          const band = distBands.find(
+            (b) => Math.abs(b.min - range.min) <= 1 && Math.abs(b.max - range.max) <= 1,
+          );
+          return { ...range, count: band?.count ?? 0 };
+        })
+      : SCORE_RANGES.map((range) => ({
+          ...range,
+          count: top.filter(
+            (p) => p.score !== null && p.score >= range.min && p.score <= range.max,
+          ).length,
+        }));
 
     const articles = articlesRes.items.map(ncArticleToArticle);
 

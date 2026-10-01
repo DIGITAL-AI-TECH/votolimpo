@@ -17,7 +17,9 @@ interface RateLimitEntry {
   resetAt: number;
 }
 
-// Map<"ip:routeKey", entry>
+// In-memory rate limiter — MVP limitation: resets on deploy/restart,
+// does not share state across replicas. Sufficient for current traffic.
+// For production scale, replace with Redis-based limiter.
 const store = new Map<string, RateLimitEntry>();
 
 // Cleanup de entries expiradas a cada 60s para evitar memory leak

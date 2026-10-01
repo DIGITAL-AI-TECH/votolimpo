@@ -1,5 +1,5 @@
 import { ImageResponse } from "next/og";
-import { listEntities, entityToPolitician } from "@/lib/nc-api";
+import { getEntityBySlug, entityToPolitician } from "@/lib/nc-api";
 
 export const runtime = "edge";
 export const size = { width: 1200, height: 630 };
@@ -24,28 +24,20 @@ function getScoreLabel(score: number | null): string {
   if (score >= 60) return "Bom";
   if (score >= 40) return "Regular";
   if (score >= 20) return "Preocupante";
-  return "Critico";
+  return "Crítico";
 }
 
 export default async function OGImage({ params }: Props) {
   const { slug } = await params;
 
-  let name = "Politico";
+  let name = "Político";
   let party = "";
   let uf = "";
   let role = "Candidato";
   let score: number | null = null;
 
   try {
-    const firstWord = slug.split("-")[0];
-    const entities = await listEntities({
-      search: firstWord,
-      type: "candidate",
-      active: true,
-      limit: 100,
-    });
-
-    const entity = entities.find((e) => e.slug === slug);
+    const entity = await getEntityBySlug(slug);
     if (entity) {
       const politician = entityToPolitician(entity);
       name = politician.name;
@@ -131,7 +123,7 @@ export default async function OGImage({ params }: Props) {
               />
             </svg>
             <span style={{ color: "#6B7280", fontSize: 18, fontWeight: 500 }}>
-              Voto Limpo · Transparencia Politica
+              Voto Limpo · Transparência Política
             </span>
           </div>
 
@@ -245,7 +237,7 @@ export default async function OGImage({ params }: Props) {
                   {scoreLabel}
                 </span>
                 <span style={{ fontSize: 14, color: "#6B7280" }}>
-                  Indice de Transparencia
+                  Índice de Transparência
                 </span>
               </div>
             </div>
