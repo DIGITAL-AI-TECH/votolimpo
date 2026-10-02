@@ -6,6 +6,7 @@ import {
   getVotoLimpoStats,
   listEntities,
   listArticles,
+  countEntities,
   ncStatsToStats,
   entityToPolitician,
   ncArticleToArticle,
@@ -51,20 +52,78 @@ function formatNumber(n: number): string {
   return new Intl.NumberFormat("pt-BR").format(n);
 }
 
-export default async function HomePage() {
+async function fetchHomeData(cargo?: string, uf?: string) {
+  for (let attempt = 0; attempt < 2; attempt++) {
+    try {
+      // When cargo filter is active, fetch filtered stats and entities
+      const entityParams: Parameters<typeof listEntities>[0] = {
+        type: "candidate",
+        active: true,
+        limit: 50,
+        order_by: "article_count",
+        order_dir: "desc",
+      };
+      if (cargo) {
+        entityParams.cargo = cargo;
+        if (uf) entityParams.state = uf;
+      }
+
+      const [ncStats, vlStats, entities, articlesRes, filteredCount] = await Promise.all([
+        getGlobalStats(),
+        getVotoLimpoStats(),
+        listEntities(entityParams),
+        listArticles({ status: "processed", page_size: 6 }),
+        cargo
+          ? countEntities({ type: "candidate", active: true, cargo, state: uf })
+          : Promise.resolve(null),
+      ]);
+      return { ncStats, vlStats, entities, articlesRes, filteredCount };
+    } catch (error) {
+      if (attempt === 0) {
+        console.warn("[HomePage] NC API error on attempt 1, retrying in 2s:", error);
+        await new Promise((r) => setTimeout(r, 2000));
+        continue;
+      }
+      throw error;
+    }
+  }
+  // Unreachable but satisfies TypeScript
+  throw new Error("unreachable");
+}
+
+export default async function HomePage({
+  searchParams,
+}: {
+  searchParams: Promise<{ [key: string]: string | string[] | undefined }>;
+}) {
+  const params = await searchParams;
+  const cargoParm = typeof params.cargo === "string" ? params.cargo : undefined;
+  const ufParam = typeof params.uf === "string" ? params.uf : undefined;
+
   let stats: Stats;
   let top10: Politician[];
   let recentArticles: Article[];
+  let hasCargo = false;
 
   try {
-    const [ncStats, vlStats, entities, articlesRes] = await Promise.all([
-      getGlobalStats(),
-      getVotoLimpoStats(),
-      listEntities({ type: "candidate", active: true, limit: 50, order_by: "article_count", order_dir: "desc" }),
-      listArticles({ status: "processed", page_size: 6 }),
-    ]);
+    const { ncStats, vlStats, entities, articlesRes, filteredCount } =
+      await fetchHomeData(cargoParm, ufParam);
 
     stats = ncStatsToStats(ncStats, vlStats);
+
+    // When cargo is active, override totalPoliticians with filtered count
+    if (cargoParm && filteredCount !== null) {
+      hasCargo = true;
+      stats.totalPoliticians = filteredCount;
+
+      // Compute avgScore from the filtered entities (they come with score data)
+      const scores = entities
+        .map((e) => (e as { score?: number | null }).score)
+        .filter((s): s is number => s !== null && s !== undefined);
+      stats.avgScore = scores.length > 0
+        ? Math.round(scores.reduce((a, b) => a + b, 0) / scores.length)
+        : null;
+    }
 
     top10 = entities
       .map((e) => entityToPolitician(e))
@@ -73,7 +132,7 @@ export default async function HomePage() {
 
     recentArticles = articlesRes.items.map(ncArticleToArticle);
   } catch (error) {
-    console.error("[HomePage] NC API error:", error);
+    console.error("[HomePage] NC API error after retry:", error);
     stats = {
       totalPoliticians: 0,
       totalArticles: 0,
@@ -154,10 +213,10 @@ export default async function HomePage() {
           {/* Quick stats */}
           <div className="mt-10 grid grid-cols-2 gap-4 sm:flex sm:flex-wrap sm:items-center sm:justify-center sm:gap-8">
             {[
-              { value: formatNumber(stats.totalPoliticians), label: "Candidatos monitorados" },
+              { value: formatNumber(stats.totalPoliticians), label: hasCargo ? `Candidatos a ${cargoParm}` : "Candidatos monitorados" },
               { value: formatNumber(stats.totalArticles), label: "Notícias analisadas por IA" },
               { value: formatNumber(stats.totalSources), label: "Fontes de notícias" },
-              { value: stats.avgScore !== null ? `${stats.avgScore.toFixed(0)}/100` : "N/D", label: "Índice médio de transparência" },
+              { value: stats.avgScore !== null ? `${stats.avgScore.toFixed(0)}/100` : "N/D", label: hasCargo ? "Índice médio (filtrado)" : "Índice médio de transparência" },
             ].map((stat) => (
               <div key={stat.label} className="text-center">
                 <p className="font-mono text-2xl font-bold text-[#FAFAFA] sm:text-3xl">

@@ -1,22 +1,49 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, Suspense } from "react";
+import { useSearchParams, useRouter } from "next/navigation";
 import type { Politician, SortField, SortOrder } from "@/types";
 import RankingTable from "@/components/RankingTable";
 
 const PAGE_SIZE = 20;
 
-export default function RankingPage() {
+const CARGO_OPTIONS = [
+  { value: "", label: "Todos os cargos" },
+  { value: "presidente", label: "Presidente" },
+  { value: "governador", label: "Governador" },
+  { value: "senador", label: "Senador" },
+  { value: "deputado federal", label: "Deputado Federal" },
+  { value: "deputado estadual", label: "Deputado Estadual" },
+];
+
+function RankingPageInner() {
+  const searchParams = useSearchParams();
+  const router = useRouter();
+
   const [page, setPage] = useState(1);
   const [sortBy, setSortBy] = useState<SortField>("name");
   const [sortOrder, setSortOrder] = useState<SortOrder>("asc");
   const [selectedParty, setSelectedParty] = useState("");
   const [selectedUF, setSelectedUF] = useState("");
+  const [selectedCargo, setSelectedCargo] = useState("");
   const [politicians, setPoliticians] = useState<Politician[]>([]);
   const [total, setTotal] = useState(0);
   const [parties, setParties] = useState<string[]>([]);
   const [ufs, setUfs] = useState<string[]>([]);
+  const [, setCargos] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
+
+  // Initialize cargo from URL param on mount
+  useEffect(() => {
+    const urlCargo = searchParams.get("cargo");
+    if (urlCargo) {
+      setSelectedCargo(urlCargo.toLowerCase());
+    }
+    const urlUf = searchParams.get("uf");
+    if (urlUf) {
+      setSelectedUF(urlUf.toUpperCase());
+    }
+  }, [searchParams]);
 
   // Fetch filter options once from dedicated endpoint
   useEffect(() => {
@@ -25,6 +52,7 @@ export default function RankingPage() {
       .then((data) => {
         setParties(data.parties || []);
         setUfs(data.states || []);
+        setCargos(data.cargos || []);
       })
       .catch((err) => console.error("Failed to fetch filters:", err));
   }, []);
@@ -40,6 +68,7 @@ export default function RankingPage() {
       });
       if (selectedParty) params.set("party", selectedParty);
       if (selectedUF) params.set("uf", selectedUF);
+      if (selectedCargo) params.set("cargo", selectedCargo);
 
       const res = await fetch(`/api/ranking?${params}`);
       if (!res.ok) throw new Error("Failed to fetch");
@@ -52,11 +81,29 @@ export default function RankingPage() {
     } finally {
       setLoading(false);
     }
-  }, [page, sortBy, sortOrder, selectedParty, selectedUF]);
+  }, [page, sortBy, sortOrder, selectedParty, selectedUF, selectedCargo]);
 
   useEffect(() => {
     fetchData();
   }, [fetchData]);
+
+  // Sync selected cargo to URL
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (selectedCargo) {
+      params.set("cargo", selectedCargo);
+    } else {
+      params.delete("cargo");
+    }
+    if (selectedUF) {
+      params.set("uf", selectedUF);
+    } else {
+      params.delete("uf");
+    }
+    const qs = params.toString();
+    const newUrl = qs ? `?${qs}` : window.location.pathname;
+    router.replace(newUrl, { scroll: false });
+  }, [selectedCargo, selectedUF, router]);
 
   const handleSortChange = (field: SortField, order: SortOrder) => {
     setSortBy(field);
@@ -64,19 +111,21 @@ export default function RankingPage() {
     setPage(1);
   };
 
-  const handleFilterChange = (type: "party" | "uf", value: string) => {
+  const handleFilterChange = (type: "party" | "uf" | "cargo", value: string) => {
     if (type === "party") setSelectedParty(value);
     if (type === "uf") setSelectedUF(value);
+    if (type === "cargo") setSelectedCargo(value);
     setPage(1);
   };
 
   const clearFilters = () => {
     setSelectedParty("");
     setSelectedUF("");
+    setSelectedCargo("");
     setPage(1);
   };
 
-  const hasFilters = selectedParty || selectedUF;
+  const hasFilters = selectedParty || selectedUF || selectedCargo;
 
   return (
     <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
@@ -90,6 +139,17 @@ export default function RankingPage() {
 
       {/* Filters */}
       <div className="mb-6 flex flex-wrap items-center gap-3 rounded-xl border border-[#2E2E2E] bg-[#141414] p-4">
+        <select
+          value={selectedCargo}
+          onChange={(e) => handleFilterChange("cargo", e.target.value)}
+          aria-label="Filtrar por cargo"
+          className="rounded-lg border border-[#2E2E2E] bg-[#0A0A0A] px-3 py-2 text-sm text-[#FAFAFA] outline-none focus:border-emerald-500/50"
+        >
+          {CARGO_OPTIONS.map((opt) => (
+            <option key={opt.value} value={opt.value}>{opt.label}</option>
+          ))}
+        </select>
+
         <select
           value={selectedParty}
           onChange={(e) => handleFilterChange("party", e.target.value)}
@@ -174,5 +234,19 @@ export default function RankingPage() {
         </div>
       </div>
     </div>
+  );
+}
+
+export default function RankingPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="flex items-center justify-center py-20">
+          <div className="h-8 w-8 animate-spin rounded-full border-2 border-emerald-500 border-t-transparent" />
+        </div>
+      }
+    >
+      <RankingPageInner />
+    </Suspense>
   );
 }
