@@ -3,6 +3,22 @@ import type { NextConfig } from "next";
 const nextConfig: NextConfig = {
   output: "standalone",
   poweredByHeader: false,
+  images: {
+    remotePatterns: [
+      {
+        protocol: "https",
+        hostname: "divulgacandcontas.tse.jus.br",
+      },
+      {
+        protocol: "https",
+        hostname: "api.news-collector.digital-ai.tech",
+      },
+      {
+        protocol: "http",
+        hostname: "news-collector_news-collector-api",
+      },
+    ],
+  },
   experimental: {
     // Server Actions enabled by default in Next.js 15
   },
