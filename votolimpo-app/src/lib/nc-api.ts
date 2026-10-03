@@ -42,7 +42,7 @@ async function ncFetch<T>(opts: FetchOptions): Promise<T> {
   }
 
   const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 15_000); // 15s timeout
+  const timeout = setTimeout(() => controller.abort(), 5_000); // 5s timeout
 
   try {
     const res = await fetch(url.toString(), {
@@ -64,7 +64,7 @@ async function ncFetch<T>(opts: FetchOptions): Promise<T> {
     return res.json() as Promise<T>;
   } catch (error) {
     if (error instanceof DOMException && error.name === "AbortError") {
-      throw new Error(`NC API timeout on ${opts.path} (15s exceeded)`);
+      throw new Error(`NC API timeout on ${opts.path} (5s exceeded)`);
     }
     throw error;
   } finally {
