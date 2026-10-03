@@ -147,7 +147,12 @@ export default async function PoliticoPage({ params }: PageProps) {
   }
 
   // Extract metadata for additional info
-  const meta = entityData.metadata_json ? JSON.parse(entityData.metadata_json) : {};
+  const rawMeta = entityData.metadata_json;
+  const meta = rawMeta
+    ? typeof rawMeta === "string"
+      ? JSON.parse(rawMeta)
+      : rawMeta
+    : {};
   const coligacao = (meta.coligacao as string) || null;
   const situacao = (meta.situacao as string) || null;
 

@@ -1,7 +1,7 @@
 import { ImageResponse } from "next/og";
 
 export const runtime = "edge";
-export const alt = "Voto Limpo — Transparencia Politica Brasileira";
+export const alt = "Voto Limpo — Transparência Política Brasileira";
 export const size = { width: 1200, height: 630 };
 export const contentType = "image/png";
 
@@ -69,6 +69,7 @@ export default function OGImage() {
         {/* Title */}
         <div
           style={{
+            display: "flex",
             fontSize: 60,
             fontWeight: 800,
             color: "#FAFAFA",
@@ -93,7 +94,7 @@ export default function OGImage() {
             marginBottom: 40,
           }}
         >
-          Transparencia politica ao alcance de todos
+          Transparência política ao alcance de todos
         </div>
 
         {/* Stats row */}
@@ -106,9 +107,9 @@ export default function OGImage() {
           }}
         >
           {[
-            { label: "Politicos monitorados", icon: "👤" },
+            { label: "Políticos monitorados", icon: "👤" },
             { label: "Artigos indexados", icon: "📰" },
-            { label: "Fontes de noticias", icon: "🔗" },
+            { label: "Fontes de notícias", icon: "🔗" },
           ].map((item) => (
             <div
               key={item.label}
