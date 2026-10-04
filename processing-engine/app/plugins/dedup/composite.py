@@ -19,7 +19,10 @@ class CompositeDedupStrategy:
         São executadas na ordem fornecida.
     """
 
-    def __init__(self, strategies: list[DedupStrategy]) -> None:
+    def __init__(self, strategies: list[DedupStrategy] | None = None) -> None:
+        if strategies is None:
+            from app.plugins.dedup.hash import HashDedupStrategy
+            strategies = [HashDedupStrategy()]
         self.strategies = strategies
 
     async def check(

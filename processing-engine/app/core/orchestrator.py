@@ -393,14 +393,18 @@ async def _process_single_item(
                 }
 
         # Step 3: Dedup (short acquire for DB check)
+        # Pass current_item_id to prevent self-match: the AutoBatcher inserts
+        # the item (with url_hash/content_hash) BEFORE the worker processes it,
+        # so the dedup query would find the item itself without this exclusion.
         async with pool.acquire() as conn:
             dedup_result = await dedup.check(
                 clean_content,
                 item["source_url"],
-                pipeline.dedup.config,
+                str(pipeline_uuid),
                 conn,
+                str(item_id),
             )
-        if dedup_result == "duplicate":
+        if dedup_result.is_duplicate:
             duration_ms = int((time.time() - t0) * 1000)
             async with pool.acquire() as conn:
                 await conn.execute(
@@ -422,6 +426,9 @@ async def _process_single_item(
                     metadata={"result": "duplicate"},
                 )
             return {"completed": 1, "failed": 0, "cost": 0.0, "duration": duration_ms}
+
+        # Reaching here means item is NOT a duplicate — convert to string for DB
+        dedup_result = "new"
 
         # Step 4: LLM Process (NO DB connection held — C2 fix)
         # Apply user_prompt_template if defined (inline YAML)

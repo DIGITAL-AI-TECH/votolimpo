@@ -42,12 +42,14 @@ WHERE id = $1
 CHECK_URL_HASH = """
 SELECT id FROM processing_engine.job_items
 WHERE url_hash = $1 AND pipeline_id = $2 AND status = 'completed'
+  AND ($3::uuid IS NULL OR id != $3::uuid)
 LIMIT 1
 """
 
 CHECK_CONTENT_HASH = """
 SELECT id FROM processing_engine.job_items
 WHERE content_hash = $1 AND pipeline_id = $2 AND status = 'completed'
+  AND ($3::uuid IS NULL OR id != $3::uuid)
 LIMIT 1
 """
 
