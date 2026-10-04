@@ -1,0 +1,91 @@
+id: helpcore-inventory
+name: helpcore-inventory
+description: >
+  Classificacao e inventario de artigos da base de conhecimento Help Bradesco.
+  Extrai tipo, categoria, publico-alvo, qualidade textual e metadados.
+
+ingestor_type: auto
+dedup_strategy: hash
+dedup_config:
+  url_normalize: true
+
+llm_provider: openai
+llm_model: gpt-4.1-mini
+llm_temperature: 0.0
+llm_max_tokens: 8192
+
+system_prompt: |
+  Voce e um especialista em gestao de conhecimento corporativo do setor bancario brasileiro.
+  Analise o artigo da base de conhecimento do Bradesco e extraia informacoes estruturadas.
+
+  Classifique o artigo segundo:
+  - doc_type: tipo do documento (procedimento, passo_a_passo, checklist, faq, referencia, politica, outro)
+  - category: categoria tematica (ex: cancelamento, bloqueio, credito, fraude, cadastro, contestacao, cartao, pix, transferencia, emprestimo, investimento, seguro, conta, atendimento, outro)
+  - target_audience: publico-alvo principal (operador, supervisor, tecnico, cliente, multiplo)
+  - quality_score: qualidade textual de 0-100 (clareza, organizacao, linguagem profissional)
+  - completeness_score: completude de 0-100 (passos claros, informacoes completas, sem lacunas)
+  - key_topics: lista de 3-8 topicos principais do artigo
+  - summary: resumo factual de 1-2 frases do procedimento/conteudo
+  - requires_update: true se houver indicios de conteudo desatualizado (datas antigas, sistemas obsoletos, referencias quebradas)
+
+  REGRAS:
+  - Se o artigo for apenas um link sem conteudo textual, retorne doc_type="referencia", quality_score=10, completeness_score=5
+  - Se o artigo for muito curto (menos de 50 palavras), ajuste quality_score proporcionalmente
+  - Responda EXCLUSIVAMENTE com JSON valido no formato do schema
+
+output_schema:
+  type: object
+  required: [doc_type, category, target_audience, quality_score, completeness_score, key_topics, summary, requires_update]
+  additionalProperties: false
+  properties:
+    doc_type:
+      type: string
+      enum: [procedimento, passo_a_passo, checklist, faq, referencia, politica, outro]
+    category:
+      type: string
+    target_audience:
+      type: string
+      enum: [operador, supervisor, tecnico, cliente, multiplo]
+    quality_score:
+      type: number
+      minimum: 0
+      maximum: 100
+    completeness_score:
+      type: number
+      minimum: 0
+      maximum: 100
+    key_topics:
+      type: array
+      items:
+        type: string
+    summary:
+      type: string
+    requires_update:
+      type: boolean
+
+validators: [schema]
+
+sink_type: postgresql
+sink_config:
+  database_url_env: VOTOLIMPO_DATABASE_URL
+  table: help_core.inventory
+  conflict_column: pe_item_id
+  column_mapping:
+    doc_type: doc_type
+    category: category
+    target_audience: target_audience
+    quality_score: quality_score
+    completeness_score: completeness_score
+  item_field_mapping:
+    source_url: source_url
+    title: title
+  jsonb_fallback: metadata
+
+max_concurrent: 5
+rate_limit_rpm: 60
+max_retries: 2
+budget_limit_usd: 100.0
+budget_period: month
+cache:
+  enabled: true
+  ttl_hours: 720
