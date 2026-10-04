@@ -34,11 +34,28 @@ _POST_SINK_PROCESSORS = {
 }
 
 
+async def _resolve_pipeline_id(pool, raw_id: str) -> _uuid.UUID:
+    """Resolve pipeline_id: accept UUID or name (lookup in DB)."""
+    try:
+        return _uuid.UUID(raw_id)
+    except ValueError:
+        pass
+    # Lookup by name
+    async with pool.acquire() as conn:
+        row = await conn.fetchrow(
+            "SELECT id FROM processing_engine.pipelines WHERE name = $1",
+            raw_id,
+        )
+    if row:
+        return row["id"]
+    raise ValueError(f"Pipeline not found: {raw_id}")
+
+
 async def submit_job(job_data: dict) -> str:
     """Submit a new processing job. Returns job_id."""
     pool = await get_pool()
     job_id = _uuid.UUID(job_data["job_id"])
-    pipeline_id = _uuid.UUID(job_data["pipeline_id"])
+    pipeline_id = await _resolve_pipeline_id(pool, job_data["pipeline_id"])
     items = job_data["items"]
     raw_priority = job_data.get("priority", "normal")
     priority = (
