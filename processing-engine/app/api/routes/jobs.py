@@ -1,9 +1,12 @@
 """Job submission and status endpoints."""
 
 import json
+import logging
 import uuid
 
 from fastapi import APIRouter, HTTPException
+
+logger = logging.getLogger(__name__)
 
 from ...core.models import ProcessingJob
 from ...core.orchestrator import submit_job
@@ -80,7 +83,14 @@ async def create_job(job: ProcessingJob):
         "idempotency_key": job.idempotency_key,
     }
 
-    result_id = await submit_job(job_data)
+    try:
+        result_id = await submit_job(job_data)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    except Exception as exc:
+        logger.exception("submit_job failed for pipeline=%s", job.pipeline_id)
+        raise HTTPException(status_code=500, detail=f"submit_job error: {type(exc).__name__}: {exc}")
+
     return {"job_id": result_id, "status": "pending", "total_items": len(job.items)}
 
 
