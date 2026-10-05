@@ -35,20 +35,43 @@ _POST_SINK_PROCESSORS = {
 
 
 async def _resolve_pipeline_id(pool, raw_id: str) -> _uuid.UUID:
-    """Resolve pipeline_id: accept UUID or name (lookup in DB)."""
+    """Resolve pipeline_id: accept UUID or name (lookup/create in DB).
+
+    When a non-UUID pipeline name is provided, looks it up in the DB.
+    If not found but it exists in the YAML registry, auto-creates the
+    DB record (the YAML is the source of truth per project gotchas).
+    """
     try:
         return _uuid.UUID(raw_id)
     except ValueError:
         pass
-    # Lookup by name
+    # Lookup by name in DB
     async with pool.acquire() as conn:
         row = await conn.fetchrow(
             "SELECT id FROM processing_engine.pipelines WHERE name = $1",
             raw_id,
         )
-    if row:
-        return row["id"]
-    raise ValueError(f"Pipeline not found: {raw_id}")
+        if row:
+            return row["id"]
+        # Not in DB — check YAML registry and auto-create
+        from .pipeline_config import get_pipeline as _get_yaml_pipeline
+        yaml_pipeline = _get_yaml_pipeline(raw_id)
+        if yaml_pipeline is None:
+            raise ValueError(f"Pipeline not found: {raw_id}")
+        # Insert minimal record so FK constraint is satisfied
+        new_row = await conn.fetchrow(
+            """
+            INSERT INTO processing_engine.pipelines (name, description, llm_provider, llm_model)
+            VALUES ($1, $2, $3, $4)
+            ON CONFLICT (name) DO UPDATE SET name = EXCLUDED.name
+            RETURNING id
+            """,
+            yaml_pipeline.name,
+            yaml_pipeline.description,
+            yaml_pipeline.llm.provider,
+            yaml_pipeline.llm.model,
+        )
+        return new_row["id"]
 
 
 async def submit_job(job_data: dict) -> str:
