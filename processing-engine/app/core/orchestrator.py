@@ -58,18 +58,48 @@ async def _resolve_pipeline_id(pool, raw_id: str) -> _uuid.UUID:
         yaml_pipeline = _get_yaml_pipeline(raw_id)
         if yaml_pipeline is None:
             raise ValueError(f"Pipeline not found: {raw_id}")
-        # Insert minimal record so FK constraint is satisfied
+        # Insert full record from YAML config so FK constraint is satisfied
+        import json as _json
         new_row = await conn.fetchrow(
             """
-            INSERT INTO processing_engine.pipelines (name, description, llm_provider, llm_model)
-            VALUES ($1, $2, $3, $4)
+            INSERT INTO processing_engine.pipelines (
+                name, description, ingestor_type, max_content_chars,
+                dedup_strategy, dedup_threshold,
+                llm_provider, llm_model, llm_temperature, llm_seed, llm_max_tokens,
+                system_prompt, output_schema, validators, sink_type, sink_config,
+                max_concurrent, rate_limit_rpm, budget_limit_usd, budget_period,
+                max_retries, retry_backoff_base, cache_ttl_hours
+            ) VALUES (
+                $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11,
+                $12, $13::jsonb, $14, $15, $16::jsonb,
+                $17, $18, $19, $20, $21, $22, $23
+            )
             ON CONFLICT (name) DO UPDATE SET name = EXCLUDED.name
             RETURNING id
             """,
             yaml_pipeline.name,
             yaml_pipeline.description,
+            yaml_pipeline.ingestor.type,
+            100000,  # max_content_chars
+            yaml_pipeline.dedup.strategy,
+            yaml_pipeline.dedup.config.get("threshold", 0.85) if isinstance(yaml_pipeline.dedup.config, dict) else 0.85,
             yaml_pipeline.llm.provider,
             yaml_pipeline.llm.model,
+            yaml_pipeline.llm.temperature,
+            yaml_pipeline.llm.seed if hasattr(yaml_pipeline.llm, "seed") else 42,
+            yaml_pipeline.llm.max_tokens,
+            yaml_pipeline.system_prompt or "",
+            _json.dumps(yaml_pipeline.output_schema or {}),
+            [v.type for v in yaml_pipeline.validators],
+            yaml_pipeline.sink.type,
+            _json.dumps(yaml_pipeline.sink.config or {}),
+            yaml_pipeline.max_concurrent,
+            yaml_pipeline.rate_limit_rpm,
+            yaml_pipeline.budget_limit_usd,
+            yaml_pipeline.budget_period,
+            yaml_pipeline.max_retries,
+            2.0,  # retry_backoff_base
+            yaml_pipeline.cache_ttl_hours,
         )
         return new_row["id"]
 
