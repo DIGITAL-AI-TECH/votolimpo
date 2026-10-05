@@ -60,7 +60,7 @@ async def lifespan(app: FastAPI):
     pool = await get_pool()
     await init_engine_schema(pool)
     await init_votolimpo_schema()
-    await init_help_core_schema(pool)
+    await init_help_core_schema()
     logger.info("Database pool initialized")
 
     # Load pipeline configs

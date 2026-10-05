@@ -170,13 +170,42 @@ async def init_engine_schema(pool: asyncpg.Pool | None = None):
 
 
 async def init_help_core_schema(pool: asyncpg.Pool | None = None):
-    """Ensure the help_core schema and inventory table exist.
+    """Ensure the help_core schema and inventory table exist in the VOTOLIMPO database.
+
+    The sink writes to help_core.inventory via VOTOLIMPO_DATABASE_URL, so the table
+    MUST exist in the votolimpo database — NOT in the PE database.
 
     Uses CREATE IF NOT EXISTS — safe to run on every startup.
     """
-    if pool is None:
-        pool = await get_pool()
-    async with pool.acquire() as conn:
+    raw_url = os.environ.get("PE_VOTOLIMPO_DATABASE_URL") or os.environ.get(
+        "VOTOLIMPO_DATABASE_URL", ""
+    )
+    if not raw_url:
+        logger.info("No VOTOLIMPO_DATABASE_URL configured — skipping help_core init")
+        return
+
+    clean_url = raw_url.replace("postgresql+asyncpg://", "postgresql://")
+
+    conn = None
+    for attempt in range(1, 6):
+        try:
+            conn = await asyncpg.connect(clean_url, timeout=10)
+            break
+        except (ConnectionRefusedError, OSError) as exc:
+            delay = _CONNECT_BASE_DELAY * attempt
+            logger.warning(
+                "Help Core DB connection attempt %d/5 failed: %s — retrying in %ds",
+                attempt, exc, delay,
+            )
+            await asyncio.sleep(delay)
+        except Exception:
+            logger.exception("Failed to connect to votolimpo DB for help_core — skipping init")
+            return
+    if conn is None:
+        logger.error("All 5 help_core DB connection attempts failed — skipping init")
+        return
+
+    try:
         await conn.execute("CREATE SCHEMA IF NOT EXISTS help_core")
         await conn.execute("""
             CREATE TABLE IF NOT EXISTS help_core.inventory (
@@ -204,7 +233,9 @@ async def init_help_core_schema(pool: asyncpg.Pool | None = None):
             CREATE INDEX IF NOT EXISTS idx_hc_inventory_category
                 ON help_core.inventory (category)
         """)
-    logger.info("help_core schema initialized")
+        logger.info("help_core schema initialized in votolimpo database")
+    finally:
+        await conn.close()
 
 
 _SEED_SOURCES = [
