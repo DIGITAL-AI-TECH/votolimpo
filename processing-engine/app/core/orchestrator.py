@@ -220,11 +220,11 @@ async def process_next_job():
         await _fail_job(job_id, f"Pipeline not found: {pipeline_uuid}")
         return job_id
 
-    await _process_job_items(job_id, pipeline, skip_cache=skip_cache)
+    await _process_job_items(job_id, pipeline, skip_cache=skip_cache, db_pipeline_uuid=row["pipeline_id"])
     return job_id
 
 
-async def _process_job_items(job_id: str, pipeline: PipelineConfig, *, skip_cache: bool = False):
+async def _process_job_items(job_id: str, pipeline: PipelineConfig, *, skip_cache: bool = False, db_pipeline_uuid: _uuid.UUID | None = None):
     """Process all items through the pipeline (C2 fix: LLM outside pool.acquire)."""
     pool = await get_pool()
 
@@ -290,6 +290,7 @@ async def _process_job_items(job_id: str, pipeline: PipelineConfig, *, skip_cach
                 output_schema,
                 pool,
                 skip_cache=skip_cache,
+                db_pipeline_uuid=db_pipeline_uuid,
             )
 
     results = await asyncio.gather(*[_process_one(item) for item in items])
@@ -361,6 +362,7 @@ async def _process_single_item(
     pool,
     *,
     skip_cache: bool = False,
+    db_pipeline_uuid: _uuid.UUID | None = None,
 ) -> dict:
     """Process a single item through the pipeline. Returns stats dict.
 
@@ -369,11 +371,20 @@ async def _process_single_item(
     """
     t0 = time.time()
     item_id = item["id"]
-    pipeline_uuid = (
-        _uuid.UUID(pipeline.id)
-        if not isinstance(pipeline.id, _uuid.UUID)
-        else pipeline.id
-    )
+    # Use the DB UUID passed from the worker; fall back to converting pipeline.id
+    if db_pipeline_uuid is not None:
+        pipeline_uuid = db_pipeline_uuid
+    else:
+        try:
+            pipeline_uuid = (
+                _uuid.UUID(pipeline.id)
+                if not isinstance(pipeline.id, _uuid.UUID)
+                else pipeline.id
+            )
+        except ValueError:
+            # pipeline.id is a YAML string name (e.g. "helpcore-inventory"), not a UUID
+            # Use a deterministic UUID5 so cache/dedup queries still work consistently
+            pipeline_uuid = _uuid.uuid5(_uuid.NAMESPACE_DNS, f"pipeline.{pipeline.id}")
     cost = 0.0
 
     try:

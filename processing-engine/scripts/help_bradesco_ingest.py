@@ -256,7 +256,7 @@ def main():
             try:
                 result = send_batch(batch, batch_num, pe_url, api_key, pipeline_id)
                 results.append(result)
-                print(f"  Batch {batch_num}: job_id={result['id']}, items={len(batch)}")
+                print(f"  Batch {batch_num}: job_id={result.get('job_id', result.get('id', '?'))}, items={len(batch)}")
             except Exception as e:
                 errors.append({"batch": batch_num, "error": str(e)})
                 print(f"  Batch {batch_num}: ERRO — {e}")
@@ -267,7 +267,7 @@ def main():
         try:
             result = send_batch(batch, batch_num, pe_url, api_key, pipeline_id)
             results.append(result)
-            print(f"  Batch {batch_num}: job_id={result['id']}, items={len(batch)}")
+            print(f"  Batch {batch_num}: job_id={result.get('job_id', result.get('id', '?'))}, items={len(batch)}")
         except Exception as e:
             errors.append({"batch": batch_num, "error": str(e)})
             print(f"  Batch {batch_num}: ERRO — {e}")
@@ -275,7 +275,7 @@ def main():
     print(f"\n=== Resultado da Ingestao ===")
     print(f"Batches enviados: {len(results)}")
     print(f"Batches com erro: {len(errors)}")
-    print(f"Jobs criados: {[r['id'] for r in results]}")
+    print(f"Jobs criados: {[r.get('job_id', r.get('id', '?')) for r in results]}")
 
     if errors:
         print(f"\nErros:")
