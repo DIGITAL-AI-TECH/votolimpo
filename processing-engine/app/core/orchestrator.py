@@ -19,7 +19,7 @@ from ..plugins.sinks import get_sink
 from ..plugins.validators import get_validator
 from ..services.callback import CallbackService
 from ..storage.database import get_pool
-from .pipeline_config import PipelineConfig, get_pipeline
+from .pipeline_config import PipelineConfig, get_pipeline, get_pipeline_by_uuid, register_uuid_mapping
 
 logger = logging.getLogger(__name__)
 
@@ -52,6 +52,7 @@ async def _resolve_pipeline_id(pool, raw_id: str) -> _uuid.UUID:
             raw_id,
         )
         if row:
+            register_uuid_mapping(str(row["id"]), raw_id)
             return row["id"]
         # Not in DB — check YAML registry and auto-create
         from .pipeline_config import get_pipeline as _get_yaml_pipeline
@@ -101,7 +102,9 @@ async def _resolve_pipeline_id(pool, raw_id: str) -> _uuid.UUID:
             2.0,  # retry_backoff_base
             yaml_pipeline.cache_ttl_hours,
         )
-        return new_row["id"]
+        db_uuid = new_row["id"]
+        register_uuid_mapping(str(db_uuid), yaml_pipeline.name)
+        return db_uuid
 
 
 async def submit_job(job_data: dict) -> str:
@@ -195,14 +198,26 @@ async def process_next_job():
         )
 
     job_id = row["id"]  # UUID from DB
-    pipeline_id = str(row["pipeline_id"])  # str for get_pipeline lookup
+    pipeline_uuid = str(row["pipeline_id"])
     skip_cache = row.get("skip_cache", False)
 
-    logger.info("Processing job: %s (pipeline: %s, skip_cache: %s)", job_id, pipeline_id, skip_cache)
+    logger.info("Processing job: %s (pipeline: %s, skip_cache: %s)", job_id, pipeline_uuid, skip_cache)
 
-    pipeline = get_pipeline(pipeline_id)
+    # Try YAML registry: by UUID cache, by ID, or by DB name lookup
+    pipeline = get_pipeline_by_uuid(pipeline_uuid) or get_pipeline(pipeline_uuid)
     if not pipeline:
-        await _fail_job(job_id, f"Pipeline not found: {pipeline_id}")
+        # Last resort: lookup pipeline name from DB and try YAML registry
+        pool2 = await get_pool()
+        async with pool2.acquire() as conn2:
+            name_row = await conn2.fetchrow(
+                "SELECT name FROM processing_engine.pipelines WHERE id = $1",
+                row["pipeline_id"],
+            )
+        if name_row:
+            register_uuid_mapping(pipeline_uuid, name_row["name"])
+            pipeline = get_pipeline(name_row["name"])
+    if not pipeline:
+        await _fail_job(job_id, f"Pipeline not found: {pipeline_uuid}")
         return job_id
 
     await _process_job_items(job_id, pipeline, skip_cache=skip_cache)

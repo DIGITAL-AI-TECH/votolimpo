@@ -193,8 +193,42 @@ def load_pipelines(directory: str | None = None) -> int:
 
 
 def get_pipeline(pipeline_id: str) -> PipelineConfig | None:
-    """Get a pipeline config by ID."""
-    return _registry.get(pipeline_id)
+    """Get a pipeline config by ID or name.
+
+    Checks the registry by exact ID first, then falls back to searching
+    by name. This allows lookup by both YAML ID (e.g. 'helpcore-inventory')
+    and DB UUID (matched via pipeline name).
+    """
+    result = _registry.get(pipeline_id)
+    if result:
+        return result
+    # Fallback: search by name (handles DB UUID → YAML name mismatch)
+    for p in _registry.values():
+        if p.name == pipeline_id:
+            return p
+    return None
+
+
+# Maps DB UUID → YAML pipeline name (populated lazily by worker)
+_uuid_name_cache: dict[str, str] = {}
+
+
+def register_uuid_mapping(db_uuid: str, pipeline_name: str) -> None:
+    """Cache a DB UUID → pipeline name mapping for worker lookups."""
+    _uuid_name_cache[db_uuid] = pipeline_name
+
+
+def get_pipeline_by_uuid(db_uuid: str) -> PipelineConfig | None:
+    """Get pipeline by DB UUID, using cached name mapping."""
+    # Direct registry hit (YAML id == UUID, rare)
+    result = _registry.get(db_uuid)
+    if result:
+        return result
+    # Cached UUID → name mapping
+    name = _uuid_name_cache.get(db_uuid)
+    if name:
+        return _registry.get(name)
+    return None
 
 
 def list_pipelines() -> list[PipelineConfig]:
