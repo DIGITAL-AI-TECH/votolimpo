@@ -169,6 +169,44 @@ async def init_engine_schema(pool: asyncpg.Pool | None = None):
     logger.info("Engine schema initialized (fallback DDL)")
 
 
+async def init_help_core_schema(pool: asyncpg.Pool | None = None):
+    """Ensure the help_core schema and inventory table exist.
+
+    Uses CREATE IF NOT EXISTS — safe to run on every startup.
+    """
+    if pool is None:
+        pool = await get_pool()
+    async with pool.acquire() as conn:
+        await conn.execute("CREATE SCHEMA IF NOT EXISTS help_core")
+        await conn.execute("""
+            CREATE TABLE IF NOT EXISTS help_core.inventory (
+                id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+                source_url TEXT,
+                title TEXT,
+                content TEXT,
+                content_type VARCHAR(50),
+                doc_type VARCHAR(50),
+                category TEXT,
+                target_audience VARCHAR(50),
+                quality_score NUMERIC(5,2),
+                completeness_score NUMERIC(5,2),
+                metadata JSONB,
+                pe_item_id UUID,
+                processed_at TIMESTAMPTZ DEFAULT now(),
+                created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+            )
+        """)
+        await conn.execute("""
+            CREATE INDEX IF NOT EXISTS idx_hc_inventory_doc_type
+                ON help_core.inventory (doc_type)
+        """)
+        await conn.execute("""
+            CREATE INDEX IF NOT EXISTS idx_hc_inventory_category
+                ON help_core.inventory (category)
+        """)
+    logger.info("help_core schema initialized")
+
+
 _SEED_SOURCES = [
     # BRASIL — Mainstream
     ("g1.globo.com", "g1.globo.com", 0.85, "mainstream"),
