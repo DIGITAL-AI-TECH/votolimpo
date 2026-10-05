@@ -220,10 +220,23 @@ async def init_help_core_schema(pool: asyncpg.Pool | None = None):
                 quality_score NUMERIC(5,2),
                 completeness_score NUMERIC(5,2),
                 metadata JSONB,
-                pe_item_id UUID,
+                pe_item_id UUID UNIQUE,
                 processed_at TIMESTAMPTZ DEFAULT now(),
                 created_at TIMESTAMPTZ NOT NULL DEFAULT now()
             )
+        """)
+        # Add UNIQUE constraint on pe_item_id if table already exists without it
+        await conn.execute("""
+            DO $$ BEGIN
+                IF NOT EXISTS (
+                    SELECT 1 FROM pg_constraint
+                    WHERE conname = 'help_core_inventory_pe_item_id_key'
+                      AND conrelid = 'help_core.inventory'::regclass
+                ) THEN
+                    ALTER TABLE help_core.inventory
+                        ADD CONSTRAINT help_core_inventory_pe_item_id_key UNIQUE (pe_item_id);
+                END IF;
+            END $$;
         """)
         await conn.execute("""
             CREATE INDEX IF NOT EXISTS idx_hc_inventory_doc_type
