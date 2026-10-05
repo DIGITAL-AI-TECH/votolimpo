@@ -8,6 +8,7 @@ from typing import Any, Protocol
 from openai import AsyncOpenAI
 
 from ...config import settings
+from .anthropic_provider import AnthropicProvider
 
 logger = logging.getLogger(__name__)
 
@@ -111,6 +112,10 @@ MODEL_PRICING: dict[str, tuple[float, float]] = {
     "gpt-4.1": (2.00, 8.00),
     "gpt-4o": (2.50, 10.00),
     "gpt-4o-mini": (0.15, 0.60),
+    # Anthropic Claude
+    "claude-sonnet-4-20250514": (3.00, 15.00),
+    "claude-haiku-3-5-20241022": (0.80, 4.00),
+    "claude-opus-4-20250514": (15.00, 75.00),
 }
 
 
@@ -124,6 +129,7 @@ def _estimate_cost(model: str, prompt_tokens: int, completion_tokens: int) -> fl
 
 LLM_PROVIDERS: dict[str, type] = {
     "openai": OpenAIProvider,
+    "anthropic": AnthropicProvider,
 }
 
 

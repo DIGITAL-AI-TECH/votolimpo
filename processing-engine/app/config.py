@@ -27,6 +27,9 @@ class Settings(BaseSettings):
     # OpenAI
     openai_api_key: str = ""
 
+    # Anthropic (opcional — necessário somente para pipelines com llm_provider: anthropic)
+    anthropic_api_key: str = ""
+
     # Worker
     worker_concurrency: int = 3
     worker_poll_interval: float = 2.0
