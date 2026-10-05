@@ -71,7 +71,7 @@ class PostProcessor(Protocol):
 # ─── SQL safety ───
 
 _SQL_IDENT_RE = re.compile(r"^[a-zA-Z_][a-zA-Z0-9_.]*$")
-_ALLOWED_SCHEMAS = frozenset({"votolimpo", "processing_engine", "public", "news_collector"})
+_ALLOWED_SCHEMAS = frozenset({"votolimpo", "processing_engine", "public", "news_collector", "help_core"})
 
 
 def validate_sql_identifier(name: str, context: str = "identifier") -> str:
