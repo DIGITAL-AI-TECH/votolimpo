@@ -451,7 +451,7 @@ async def _process_single_item(
 
                 # Inject article_id for post-sink processors
                 if persist_result and persist_result.get("article_id"):
-                    output["article_id"] = persist_result["article_id"]
+                    output["article_id"] = str(persist_result["article_id"])
 
                 # Run post-sink post-processors (entity_resolver, milestone_detector, etc.)
                 for pp_type, processor, pp_config in post_sink_pps:
@@ -727,7 +727,7 @@ async def _process_single_item(
 
         # Inject article_id from sink RETURNING id into output for post-sink processors
         if persist_result.get("article_id"):
-            output["article_id"] = persist_result["article_id"]
+            output["article_id"] = str(persist_result["article_id"])
 
         # Phase 2: Post-sink post-processors (need article_id)
         for pp_type, processor, pp_config in post_sink_pps:

@@ -78,7 +78,7 @@ sink_config:
     completeness_score: completeness_score
   item_field_mapping:
     source_url: source_url
-    title: title
+    titulo: title
   jsonb_fallback: metadata
 
 max_concurrent: 5
