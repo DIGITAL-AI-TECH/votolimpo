@@ -1,0 +1,120 @@
+version: "3.8"
+
+# docker-stack.helpcore.yml
+# Instância PE dedicada ao Help Core (Bradesco) — produção Docker Swarm.
+#
+# DEPLOY (via Portainer API — NUNCA via CLI diretamente):
+#   Stack name recomendado: helpcore
+#   Portainer mostrará: helpcore_hc-api, helpcore_hc-postgres
+#
+# HOSTNAME: pe-helpcore.digital-ai.tech
+#
+# IMPORTANTE — Bind-mount dos pipelines:
+#   Os YAMLs helpcore-*.yaml devem estar presentes no host oraculus-server-2
+#   no path relativo ao working directory da stack.
+#   O DevOps deve garantir que os arquivos estejam copiados antes do deploy.
+#
+# NOMES DE SERVIÇOS: prefixo hc- para evitar colisão com serviços do VotoLimpo
+#   VotoLimpo: pe-postgres, api, pgdata, pe-net
+#   Help Core: hc-postgres, hc-api, hc-pgdata, hc-net
+
+services:
+  hc-postgres:
+    image: pgvector/pgvector:pg16
+    command:
+      - "postgres"
+      - "-c"
+      - "max_connections=200"
+    environment:
+      POSTGRES_PASSWORD: "${HC_POSTGRES_PASSWORD}"
+    volumes:
+      - hc-pgdata:/var/lib/postgresql/data
+    networks:
+      - hc-net
+    deploy:
+      replicas: 1
+      placement:
+        constraints:
+          - node.hostname == oraculus-server-2
+      resources:
+        limits:
+          memory: 2G
+        reservations:
+          memory: 512M
+      restart_policy:
+        condition: on-failure
+        delay: 5s
+
+  hc-api:
+    image: registry.digital-ai.tech/processing-engine:${IMAGE_TAG:-latest}
+    environment:
+      API_KEY: "${HC_API_KEY}"
+      DATABASE_URL: "${HC_DATABASE_URL}"
+      HELPCORE_DATABASE_URL: "${HC_HELPCORE_DATABASE_URL}"
+      # VOTOLIMPO_DATABASE_URL mapeado para help_core — compatibilidade com sink do PE
+      VOTOLIMPO_DATABASE_URL: "${HC_HELPCORE_DATABASE_URL}"
+      OPENAI_API_KEY: "${HC_OPENAI_API_KEY}"
+      # ANTHROPIC_API_KEY: "${HC_ANTHROPIC_API_KEY}"  # descomente quando Frente 2 estiver disponível
+      ENGINE_ROLE: "both"
+      WORKER_CONCURRENCY: "4"
+      WORKER_POLL_INTERVAL: "2"
+      BATCHER_ENABLED: "true"
+      BATCHER_POLL_INTERVAL_SECONDS: "5"
+      BATCHER_DEFAULT_BATCH_SIZE: "50"
+      LOG_LEVEL: "info"
+    healthcheck:
+      # Usar curl (não wget — python:3.12-slim não tem wget; gotcha documentado)
+      test: ["CMD", "curl", "-sf", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 120s
+    volumes:
+      # Bind-mount dos pipelines helpcore — os YAMLs devem estar no host
+      # O DevOps deve garantir que ./pipelines exista no host antes do deploy
+      - type: bind
+        source: ./pipelines
+        target: /app/pipelines
+        read_only: true
+    networks:
+      - oraculusnet
+      - hc-net
+    deploy:
+      replicas: 1
+      placement:
+        constraints:
+          - node.hostname == oraculus-server-2
+      update_config:
+        parallelism: 1
+        delay: 10s
+        order: start-first
+      labels:
+        - "traefik.enable=true"
+        - "traefik.http.routers.processing-engine-helpcore.rule=Host(`pe-helpcore.digital-ai.tech`)"
+        - "traefik.http.routers.processing-engine-helpcore.entrypoints=websecure"
+        - "traefik.http.routers.processing-engine-helpcore.tls.certresolver=letsencryptresolver"
+        - "traefik.http.routers.processing-engine-helpcore-http.rule=Host(`pe-helpcore.digital-ai.tech`)"
+        - "traefik.http.routers.processing-engine-helpcore-http.entrypoints=web"
+        - "traefik.http.routers.processing-engine-helpcore-http.middlewares=redirect-to-https"
+        - "traefik.http.services.processing-engine-helpcore.loadbalancer.server.port=8000"
+        - "traefik.docker.network=oraculusnet"
+      resources:
+        limits:
+          memory: 1G
+        reservations:
+          memory: 512M
+      restart_policy:
+        condition: on-failure
+        delay: 15s
+        max_attempts: 10
+
+networks:
+  oraculusnet:
+    external: true
+  hc-net:
+    driver: overlay
+
+volumes:
+  hc-pgdata:
+    # Volume nomeado gerenciado pelo Swarm — não é external (criado automaticamente)
+    # Não compartilha com o volume pgdata do VotoLimpo (processing-engine_pgdata)

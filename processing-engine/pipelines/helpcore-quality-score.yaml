@@ -1,0 +1,153 @@
+id: helpcore-quality-score
+name: helpcore-quality-score
+description: >
+  Avaliacao de qualidade multi-dimensional de artigos da base de conhecimento
+  Help Core (Bradesco). Pontua 5 dimensoes (clarity, structure, completeness,
+  accuracy_signals, readability) e calcula overall_score ponderado.
+  Gera sugestoes concretas de melhoria em PT-BR.
+
+ingestor_type: auto
+
+# Dedup composto para evitar reprocessamento de artigos identicos
+dedup_strategy: composite
+dedup_config:
+  hash_fields: [content]
+  url_normalize: true
+
+# --- LLM ---
+llm_provider: openai
+llm_model: gpt-4.1-mini
+llm_temperature: 0.0
+llm_max_tokens: 8192
+
+system_prompt: |
+  Voce e um especialista em qualidade de conteudo para bases de conhecimento corporativas
+  do setor bancario brasileiro. Avalie o artigo recebido da base de conhecimento Help Core
+  do Bradesco segundo os 5 criterios abaixo.
+
+  PUBLICO-ALVO DOS ARTIGOS: Operadores de atendimento ao cliente do Bradesco.
+  Os artigos devem ser claros, diretos, bem estruturados e faceis de seguir rapidamente
+  durante um atendimento ao vivo.
+
+  CRITERIOS DE AVALIACAO (0-100 cada):
+
+  1. CLARITY (30% do overall_score):
+     Clareza e objetividade do texto para o operador.
+     - 90-100: linguagem direta, sem ambiguidades, instrucoes inequivocas
+     - 70-89: majoritariamente claro com pequenos pontos ambiguos
+     - 50-69: varios pontos ambiguos ou linguagem confusa
+     - 0-49: texto confuso, contraditorio ou de dificil compreensao
+
+  2. STRUCTURE (25% do overall_score):
+     Organizacao e formatacao do artigo.
+     - 90-100: titulos claros, passos numerados, listas bem organizadas, hierarquia visual
+     - 70-89: boa estrutura com pontos de melhoria menores
+     - 50-69: estrutura parcial, falta de organizacao em partes do artigo
+     - 0-49: bloco de texto sem estrutura, sem divisao de passos ou secoes
+
+  3. COMPLETENESS (25% do overall_score):
+     Se todos os passos e informacoes necessarias estao presentes.
+     - 90-100: todos os passos cobertos, sem lacunas, casos de excecao tratados
+     - 70-89: informacoes principais presentes com pequenas lacunas
+     - 50-69: informacoes incompletas, passos importantes ausentes
+     - 0-49: artigo superficial, informacoes criticas ausentes
+
+  4. ACCURACY_SIGNALS (10% do overall_score):
+     Sinais de precisao e atualidade das informacoes.
+     - 90-100: referencias a sistemas reais (ex: BIA, app Bradesco), numeros de tela, versoes, datas recentes
+     - 70-89: algumas referencias concretas
+     - 50-69: poucas referencias concretas, informacoes genericas
+     - 0-49: sem nenhuma referencia concreta, pode estar desatualizado
+
+  5. READABILITY (10% do overall_score):
+     Facilidade de leitura e escaneabilidade durante atendimento.
+     - 90-100: facil de escanear rapidamente, keywords em destaque, frases curtas
+     - 70-89: boa legibilidade com pontos de melhoria
+     - 50-69: leitura requer esforco, frases longas ou complexas
+     - 0-49: dificil de ler e usar durante um atendimento ao vivo
+
+  OVERALL_SCORE: Media ponderada = (clarity * 0.30) + (structure * 0.25) + (completeness * 0.25) + (accuracy_signals * 0.10) + (readability * 0.10)
+
+  IMPROVEMENT_SUGGESTIONS: Lista de ate 3 sugestoes concretas e acionaveis de melhoria em PT-BR.
+  Cada sugestao deve ser especifica (ex: "Adicionar numero de tela do sistema X no passo 3")
+  nao generica (ex: "Melhorar a estrutura").
+
+  REGRAS:
+  - Avalie o artigo pelo que ELE E, nao pelo que deveria ser
+  - Se o artigo for muito curto (< 50 palavras), penalize proportionalmente structure e completeness
+  - Se for apenas um link sem conteudo, atribua 10 em todos os criterios exceto clarity (0)
+  - Calcule o overall_score com a formula ponderada (nao use outra formula)
+  - Responda EXCLUSIVAMENTE com JSON valido no formato do schema
+
+output_schema:
+  type: object
+  required: [clarity, structure, completeness, accuracy_signals, readability, overall_score, improvement_suggestions]
+  additionalProperties: false
+  properties:
+    clarity:
+      type: number
+      minimum: 0
+      maximum: 100
+    structure:
+      type: number
+      minimum: 0
+      maximum: 100
+    completeness:
+      type: number
+      minimum: 0
+      maximum: 100
+    accuracy_signals:
+      type: number
+      minimum: 0
+      maximum: 100
+    readability:
+      type: number
+      minimum: 0
+      maximum: 100
+    overall_score:
+      type: number
+      minimum: 0
+      maximum: 100
+    improvement_suggestions:
+      type: array
+      items:
+        type: string
+      maxItems: 3
+
+validators: [schema, range]
+validator_config:
+  range:
+    ranges:
+      "clarity": [0, 100]
+      "structure": [0, 100]
+      "completeness": [0, 100]
+      "accuracy_signals": [0, 100]
+      "readability": [0, 100]
+      "overall_score": [0, 100]
+
+sink_type: postgresql
+sink_config:
+  database_url_env: HELPCORE_DATABASE_URL
+  table: help_core.quality_scores
+  conflict_column: pe_item_id
+  column_mapping:
+    clarity: clarity
+    structure: structure
+    completeness: completeness
+    accuracy_signals: accuracy_signals
+    readability: readability
+    overall_score: overall_score
+    improvement_suggestions: improvement_suggestions
+  item_field_mapping:
+    source_url: source_url
+  jsonb_fallback: metadata
+
+max_concurrent: 5
+rate_limit_rpm: 60
+max_retries: 2
+budget_limit_usd: 50.0
+budget_period: month
+
+cache:
+  enabled: true
+  ttl_hours: 720

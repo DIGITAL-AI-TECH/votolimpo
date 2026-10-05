@@ -1,0 +1,120 @@
+# =============================================================================
+# ATENÇÃO: Este pipeline requer:
+#   1. ANTHROPIC_API_KEY definida no ambiente
+#   2. Suporte nativo Anthropic no PE (Frente 2 do Help Core)
+#
+# FALLBACK (para uso imediato sem aguardar Frente 2):
+#   Comentar as linhas llm_provider/llm_model abaixo e descomentar:
+#   # llm_provider: openai
+#   # llm_model: gpt-4.1
+# =============================================================================
+
+id: helpcore-rewrite
+name: helpcore-rewrite
+description: >
+  Reescrita de artigos da base de conhecimento Help Core (Bradesco) em linguagem
+  clara, estruturada e padronizada para operadores de atendimento.
+  Usa Anthropic Claude Sonnet para alta qualidade de reescrita em PT-BR.
+  REQUER Frente 2 (suporte Anthropic no PE). Fallback: OpenAI gpt-4.1.
+
+ingestor_type: auto
+
+# Dedup desativado — reescrita é criativa e cada execução pode gerar resultado diferente
+dedup_strategy: none
+
+# --- LLM (configuração-alvo: Anthropic) ---
+# REQUER: ANTHROPIC_API_KEY + Frente 2 implementada no PE
+llm_provider: anthropic
+llm_model: claude-sonnet-4-5
+llm_temperature: 0.3
+llm_max_tokens: 16384
+
+# --- FALLBACK OpenAI (use se Anthropic ainda não disponível) ---
+# Descomente as 3 linhas abaixo e comente as 3 linhas de LLM acima:
+# llm_provider: openai
+# llm_model: gpt-4.1
+# llm_temperature: 0.3
+
+system_prompt: |
+  Voce e um especialista em redacao corporativa para o setor bancario brasileiro.
+  Sua tarefa e reescrever artigos da base de conhecimento do Bradesco (Help Core)
+  para que sejam mais claros, estruturados e uteis para operadores de atendimento.
+
+  PUBLICO-ALVO: Operadores de atendimento ao cliente do Bradesco que consultam o artigo
+  durante um atendimento ao vivo. O artigo deve ser rapido de ler, facil de seguir e
+  sem ambiguidades.
+
+  DIRETRIZES DE REESCRITA:
+  1. ESTRUTURA: Adicione titulos descritivos e passos numerados quando ausentes.
+     - Use "Passo 1:", "Passo 2:" para procedimentos sequenciais
+     - Use listas com bullet points para opcoes ou pre-requisitos
+     - Destaque informacoes criticas (ex: "IMPORTANTE:", "ATENCAO:")
+
+  2. LINGUAGEM: Adapte para linguagem direta, objetiva e profissional.
+     - Use voz ativa (ex: "Acesse o sistema" em vez de "O sistema deve ser acessado")
+     - Frases curtas e diretas (max 25 palavras por frase sempre que possivel)
+     - Elimine redundancias e informacoes obvias
+     - Corrija erros ortograficos e gramaticais
+
+  3. CONTEUDO: Preserve TODAS as informacoes tecnicas e procedurais originais.
+     - Nao remova passos, numeros de sistema, codigos ou referencias tecnicas
+     - Nao adicione informacoes que nao estejam no original
+     - Mantenha termos tecnicos especificos do Bradesco (ex: BIA, SisBrad, CBC)
+     - Se o artigo mencionar sistemas ou telas especificas, preserve esses detalhes
+
+  4. FORMATO DE SAIDA:
+     - rewritten_content: o artigo reescrito completo em PT-BR
+     - changes_summary: descricao concisa das principais mudancas feitas (max 300 chars)
+     - word_count_original: contagem de palavras do artigo original
+     - word_count_rewritten: contagem de palavras do artigo reescrito
+
+  REGRAS:
+  - Se o artigo for muito curto ou apenas um link, reescreva indicando a limitacao do conteudo
+  - Nao traduza termos tecnicos para ingles
+  - O rewritten_content deve ser um artigo completo, pronto para uso
+  - Responda EXCLUSIVAMENTE com JSON valido no formato do schema
+
+output_schema:
+  type: object
+  required: [rewritten_content, changes_summary, word_count_original, word_count_rewritten]
+  additionalProperties: false
+  properties:
+    rewritten_content:
+      type: string
+      description: "Artigo reescrito completo em PT-BR, pronto para uso"
+    changes_summary:
+      type: string
+      description: "Descricao concisa das principais mudancas feitas (max 300 chars)"
+    word_count_original:
+      type: integer
+      minimum: 0
+    word_count_rewritten:
+      type: integer
+      minimum: 0
+
+validators: [schema]
+
+sink_type: postgresql
+sink_config:
+  database_url_env: HELPCORE_DATABASE_URL
+  table: help_core.rewrites
+  conflict_column: pe_item_id
+  column_mapping:
+    rewritten_content: rewritten_content
+    changes_summary: changes_summary
+    word_count_original: word_count_original
+    word_count_rewritten: word_count_rewritten
+  item_field_mapping:
+    source_url: source_url
+  jsonb_fallback: metadata
+
+max_concurrent: 5
+rate_limit_rpm: 60
+max_retries: 2
+budget_limit_usd: 50.0
+budget_period: month
+
+# Cache desativado — reescrita é criativa, cada execução pode produzir resultado diferente
+# Re-habilitar apenas se quiser reutilizar rewrites em conteúdo idêntico
+cache:
+  enabled: false

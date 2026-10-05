@@ -1,0 +1,118 @@
+# Makefile.helpcore
+# Targets para gerenciar a instância PE Help Core (Bradesco).
+#
+# USO: make -f Makefile.helpcore <target>
+# (não usar `make <target>` diretamente — usa o Makefile principal do PE VotoLimpo se existir)
+#
+# PRIMEIRA VEZ:
+#   cp .env.helpcore.example .env.helpcore
+#   # Editar .env.helpcore com valores reais
+#   make -f Makefile.helpcore up
+#
+# RECRIAR BANCO DO ZERO (remove volumes):
+#   make -f Makefile.helpcore down-v
+#   make -f Makefile.helpcore up
+
+.DEFAULT_GOAL := help
+
+COMPOSE_FILE := docker-compose.helpcore.yml
+PE_CONTAINER := pe-helpcore
+PE_URL := http://localhost:8001
+
+# Carregar variáveis do .env.helpcore se existir
+-include .env.helpcore
+export
+
+# =============================================================================
+# TARGETS PRINCIPAIS
+# =============================================================================
+
+.PHONY: help up down down-v logs migrate ingest test-pilot pipelines status
+
+## Exibe esta mensagem de ajuda
+help:
+	@echo ""
+	@echo "Instância PE Help Core — Targets disponíveis"
+	@echo "Uso: make -f Makefile.helpcore <target>"
+	@echo ""
+	@echo "  up          Sobe a instância (pe-helpcore + pg-helpcore) em background"
+	@echo "  down        Para e remove os containers (preserva volumes/dados)"
+	@echo "  down-v      Para, remove containers E volumes (banco zerado no próximo up)"
+	@echo "  logs        Acompanha os logs do container pe-helpcore em tempo real"
+	@echo "  migrate     Roda migrações Alembic dentro do container pe-helpcore"
+	@echo "  ingest      Ingere TXTs de HC_INGEST_DIR no PE (requer .env.helpcore)"
+	@echo "  test-pilot  Piloto: ingere primeiros 100 artigos de HC_SAMPLE_DIR"
+	@echo "  pipelines   Lista pipelines registrados no PE (GET /v1/pipelines)"
+	@echo "  status      Verifica saúde do PE (GET /health + GET /v1/stats)"
+	@echo ""
+	@echo "Variáveis configuráveis (via .env.helpcore):"
+	@echo "  HC_INGEST_DIR  Diretório com TXTs para ingestão (target: ingest)"
+	@echo "  HC_SAMPLE_DIR  Diretório com TXTs para piloto (target: test-pilot)"
+	@echo "  API_KEY        Chave de autenticação do PE Help Core"
+	@echo ""
+
+## Sobe a instância em background
+up:
+	docker compose -f $(COMPOSE_FILE) up -d
+	@echo ""
+	@echo "Instância PE Help Core iniciando..."
+	@echo "  API: $(PE_URL)/health"
+	@echo "  Logs: make -f Makefile.helpcore logs"
+
+## Para containers (preserva dados)
+down:
+	docker compose -f $(COMPOSE_FILE) down
+
+## Para containers E remove volumes (banco zerado no próximo up)
+down-v:
+	@echo "ATENÇÃO: Este comando remove o volume hc-pgdata (todos os dados serão perdidos)."
+	@echo "Pressione Ctrl+C para cancelar ou Enter para continuar..."
+	@read _confirm
+	docker compose -f $(COMPOSE_FILE) down -v
+
+## Acompanha logs do container pe-helpcore
+logs:
+	docker compose -f $(COMPOSE_FILE) logs -f $(PE_CONTAINER)
+
+## Roda migrações Alembic dentro do container
+migrate:
+	docker compose -f $(COMPOSE_FILE) exec $(PE_CONTAINER) alembic upgrade head
+
+## Ingere TXTs de HC_INGEST_DIR no PE
+ingest:
+	@if [ -z "$(HC_INGEST_DIR)" ]; then \
+		echo "ERRO: HC_INGEST_DIR não definida. Adicione ao .env.helpcore ou exporte no shell."; \
+		exit 1; \
+	fi
+	python scripts/ingest-helpcore.py "$(HC_INGEST_DIR)" \
+		--pe-url $(PE_URL) \
+		--api-key "$(API_KEY)"
+
+## Piloto: ingere primeiros 100 artigos de HC_SAMPLE_DIR
+test-pilot:
+	@if [ -z "$(HC_SAMPLE_DIR)" ]; then \
+		echo "ERRO: HC_SAMPLE_DIR não definida. Adicione ao .env.helpcore ou exporte no shell."; \
+		exit 1; \
+	fi
+	python scripts/ingest-helpcore.py "$(HC_SAMPLE_DIR)" \
+		--batch-size 100 \
+		--pe-url $(PE_URL) \
+		--api-key "$(API_KEY)"; \
+	EXIT_CODE=$$?; \
+	if [ $$EXIT_CODE -ne 0 ]; then \
+		echo "FALHA: test-pilot retornou com erros (exit code $$EXIT_CODE)"; \
+		exit $$EXIT_CODE; \
+	fi
+
+## Lista pipelines registrados no PE
+pipelines:
+	@echo "Pipelines registrados em $(PE_URL)/v1/pipelines:"
+	@curl -s -H "x-api-key: $(API_KEY)" $(PE_URL)/v1/pipelines | python3 -m json.tool
+
+## Verifica saúde do PE
+status:
+	@echo "=== Health ==="
+	@curl -s $(PE_URL)/health | python3 -m json.tool || echo "PE não respondeu"
+	@echo ""
+	@echo "=== Stats ==="
+	@curl -s -H "x-api-key: $(API_KEY)" $(PE_URL)/v1/stats | python3 -m json.tool || echo "Stats indisponível"

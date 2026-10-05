@@ -1,0 +1,86 @@
+id: helpcore-dedup
+name: helpcore-dedup
+description: >
+  Identificacao de artigos duplicados ou quasi-duplicados na base de conhecimento
+  Help Core (Bradesco). Compara o artigo recebido com o contexto disponivel e
+  determina se e uma duplicata de um artigo mais autoritativo.
+
+ingestor_type: auto
+
+# Dedup composto: hash exato + normalização de URL
+dedup_strategy: composite
+dedup_config:
+  hash_fields: [content]
+  url_normalize: true
+
+# --- LLM ---
+llm_provider: openai
+llm_model: gpt-4.1-mini
+llm_temperature: 0.0
+llm_max_tokens: 4096
+
+system_prompt: |
+  Voce e um especialista em gestao de base de conhecimento corporativa do setor bancario.
+  Sua tarefa e identificar se o artigo recebido e uma duplicata ou quasi-duplicata de
+  outro artigo ja existente na base de conhecimento Help Core do Bradesco.
+
+  CRITERIOS DE DUPLICATA:
+  - Duplicata exata: mesmo conteudo com pequenas variacoes (formatacao, data de atualizacao)
+  - Quasi-duplicata: mesmo procedimento descrito com palavras diferentes ou nivel de detalhe diferente
+  - NAO e duplicata: artigos sobre o mesmo tema mas com focos distintos (ex: "bloqueio de cartao pelo app" vs "bloqueio de cartao por telefone")
+
+  AVALIACAO:
+  - is_duplicate: true apenas se o conteudo e substancialmente identico ao de outro artigo
+  - duplicate_of: source_url do artigo mais autoritativo (mais completo, mais recente, mais bem estruturado); null se nao for duplicata
+  - similarity_score: 0.0 (completamente diferente) a 1.0 (identico)
+  - reason: explicacao concisa em PT-BR do motivo da classificacao (max 200 caracteres)
+
+  REGRAS:
+  - Analise o CONTEUDO e o PROPOSITO do artigo, nao apenas palavras em comum
+  - Em caso de duvida, classifique como NAO duplicata (is_duplicate: false)
+  - Se nao houver informacao suficiente para identificar o artigo autoritativo, use null em duplicate_of
+  - Responda EXCLUSIVAMENTE com JSON valido no formato do schema
+
+output_schema:
+  type: object
+  required: [is_duplicate, duplicate_of, similarity_score, reason]
+  additionalProperties: false
+  properties:
+    is_duplicate:
+      type: boolean
+    duplicate_of:
+      type: ["string", "null"]
+      description: "source_url do artigo mais autoritativo, ou null se nao for duplicata"
+    similarity_score:
+      type: number
+      minimum: 0.0
+      maximum: 1.0
+    reason:
+      type: string
+      description: "Explicacao concisa da classificacao em PT-BR (max 200 chars)"
+
+validators: [schema]
+
+sink_type: postgresql
+sink_config:
+  database_url_env: HELPCORE_DATABASE_URL
+  table: help_core.dedup_results
+  conflict_column: pe_item_id
+  column_mapping:
+    is_duplicate: is_duplicate
+    duplicate_of: duplicate_of
+    similarity_score: similarity_score
+    reason: reason
+  item_field_mapping:
+    source_url: source_url
+  jsonb_fallback: metadata
+
+max_concurrent: 5
+rate_limit_rpm: 60
+max_retries: 2
+budget_limit_usd: 50.0
+budget_period: month
+
+cache:
+  enabled: true
+  ttl_hours: 720

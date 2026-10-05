@@ -1,0 +1,67 @@
+# docker-compose.helpcore.yml
+# Instância PE dedicada ao Help Core (Bradesco) — desenvolvimento local.
+#
+# NOTAS DE USO:
+#   cp .env.helpcore.example .env.helpcore  # preencher com valores de dev
+#   make -f Makefile.helpcore up            # subir instância
+#   make -f Makefile.helpcore logs          # acompanhar logs
+#
+# PORTAS (diferentes da instância VotoLimpo para coexistência):
+#   PE API:     http://localhost:8001  (VotoLimpo usa 8000)
+#   PostgreSQL: localhost:5434         (VotoLimpo usa 5432)
+#
+# HOT-RELOAD DE PIPELINES:
+#   Os YAMLs em ./pipelines são bind-montados como read-only.
+#   Após editar um YAML, execute: docker compose -f docker-compose.helpcore.yml restart pe-helpcore
+#   (O PE carrega pipelines na inicialização — não é reload automático em tempo real)
+
+services:
+  pg-helpcore:
+    image: pgvector/pgvector:pg16
+    environment:
+      POSTGRES_DB: processing_engine
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+    ports:
+      - "5434:5432"
+    volumes:
+      - hc-pgdata:/var/lib/postgresql/data
+      # Script de init: cria o database help_core no primeiro boot.
+      # IGNORADO se o volume hc-pgdata já existir (comportamento padrão do PostgreSQL).
+      # Para recriar: make -f Makefile.helpcore down -- e adicione -v para remover volumes.
+      - ./scripts/init-helpcore.sql:/docker-entrypoint-initdb.d/01-init-helpcore.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  pe-helpcore:
+    build: .
+    ports:
+      - "8001:8000"
+    env_file:
+      - .env.helpcore
+    environment:
+      # Sobrescreve variáveis do env_file para apontar para pg-helpcore (nome do serviço interno)
+      DATABASE_URL: postgresql+asyncpg://postgres:${POSTGRES_PASSWORD:-postgres}@pg-helpcore:5432/processing_engine
+      HELPCORE_DATABASE_URL: postgresql+asyncpg://postgres:${POSTGRES_PASSWORD:-postgres}@pg-helpcore:5432/help_core
+      VOTOLIMPO_DATABASE_URL: postgresql+asyncpg://postgres:${POSTGRES_PASSWORD:-postgres}@pg-helpcore:5432/help_core
+    depends_on:
+      pg-helpcore:
+        condition: service_healthy
+    volumes:
+      # Bind-mount dos pipelines helpcore (read-only, hot-reload via restart)
+      # Inclui TODOS os YAMLs em ./pipelines/ — incluindo os helpcore-* e voto-limpo-*
+      - ./pipelines:/app/pipelines:ro
+    healthcheck:
+      # Usar curl (não wget — python:3.12-slim não tem wget)
+      test: ["CMD", "curl", "-sf", "http://localhost:8000/health"]
+      interval: 15s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+
+volumes:
+  hc-pgdata:
+    name: pe-helpcore_hc-pgdata
