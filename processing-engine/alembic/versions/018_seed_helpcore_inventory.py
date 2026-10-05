@@ -117,7 +117,7 @@ def upgrade():
             "llm_max_tokens": 8192,
             "system_prompt": SYSTEM_PROMPT,
             "output_schema": json.dumps(OUTPUT_SCHEMA),
-            "validators": "{schema}",
+            "validators": ["schema"],
             "sink_type": "postgresql",
             "sink_config": json.dumps(SINK_CONFIG),
             "max_concurrent": 5,
