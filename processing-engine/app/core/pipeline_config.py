@@ -152,6 +152,16 @@ def _normalize_yaml(raw: dict) -> dict:
                 normalized.append(v)
         data["validators"] = normalized
 
+    # Post-processors: list of strings → list of PostProcessorEntry dicts
+    if data.get("post_processors"):
+        normalized_pp = []
+        for pp in data["post_processors"]:
+            if isinstance(pp, str):
+                normalized_pp.append({"type": pp, "config": {}})
+            elif isinstance(pp, dict):
+                normalized_pp.append(pp)
+        data["post_processors"] = normalized_pp
+
     # Crons: normalize name/handler format → type/schedule format
     if "crons" in data:
         normalized_crons = []
