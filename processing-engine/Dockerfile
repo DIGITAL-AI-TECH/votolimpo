@@ -16,6 +16,7 @@ COPY app/ app/
 COPY pipelines/ pipelines/
 COPY prompts/ prompts/
 COPY schemas/ schemas/
+COPY db_models/ db_models/
 COPY alembic/ alembic/
 COPY alembic.ini alembic.ini
 
