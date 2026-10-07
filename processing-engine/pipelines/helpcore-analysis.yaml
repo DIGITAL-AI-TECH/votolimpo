@@ -1,6 +1,6 @@
 id: helpcore-analysis
 name: helpcore-analysis
-description: "Analise consolidada de artigos Help Core: inventory + quality + dedup_analysis em 1 chamada LLM"
+description: "Analise consolidada de artigos Help Core: inventory + quality em 1 chamada LLM"
 version: "1.0"
 
 # --- Ingestor ---
@@ -21,7 +21,7 @@ llm_max_tokens: 16384
 # --- System Prompt ---
 system_prompt: |
   Voce e um analista especializado em bases de conhecimento corporativas de atendimento bancario.
-  Voce recebera um artigo da base de conhecimento do Bradesco e deve fazer 3 analises simultaneas:
+  Voce recebera um artigo da base de conhecimento do Bradesco e deve fazer 2 analises simultaneas:
 
   ## ANALISE 1 — INVENTARIO (bloco "inventory")
 
@@ -41,6 +41,10 @@ system_prompt: |
   - language_issues: ate 5 problemas de linguagem (erros gramaticais, ambiguidades, jargao inadequado)
   - confidence: 0.0-1.0 confianca da classificacao
     - steps: passos do procedimento extraidos do artigo, na ordem de execucao. Cada passo deve ser uma instrucao clara e acionavel para o operador de atendimento (ex: "Acessar menu Cartoes > Bloqueio", "Confirmar identidade com CPF e data de nascimento"). Se o artigo NAO descreve um procedimento sequencial (FAQ puro, politica, referencia conceitual), retornar array vazio []. Maximo 20 passos.
+  - area_operacional: area operacional do Bradesco a que o artigo pertence. Use EXATAMENTE um dos valores do enum.
+  - complexity_level: complexidade do procedimento descrito (basico, intermediario, avancado)
+  - mentions_systems: array de sistemas internos citados no artigo (SACL, Plastico, BIA, Internet Banking, etc.). Array vazio se nenhum sistema e citado.
+  - escalation_present: true se o artigo contem fluxo de escalonamento (transferencia para nivel superior, supervisao, ouvidoria)
 
   ## ANALISE 2 — QUALIDADE MULTI-DIMENSIONAL (bloco "quality")
 
@@ -59,25 +63,9 @@ system_prompt: |
   Forneca ate 5 improvement_suggestions concretas em PT-BR.
   Forneca ate 5 actionable_items estruturados com tipo, descricao e impacto.
 
-  ## ANALISE 3 — ANALISE DE DUPLICATAS (bloco "dedup_analysis")
-
-  Analise o artigo INTERNAMENTE (sem comparacao com outros artigos neste momento) para:
-  - Identificar se o conteudo e generico demais (poderia ser duplicata de outro artigo sobre o mesmo tema)
-  - Verificar se ha informacoes conflitantes DENTRO do proprio artigo
-  - Classificar duplicate_type como "not_duplicate" (analise interna apenas)
-  - Definir similarity_score como 0.0 (sera recalculado em fase posterior com embeddings)
-
-  IMPORTANTE sobre dedup_analysis: Nesta fase, a analise de duplicatas e INTRA-ARTIGO apenas.
-  A deteccao real de duplicatas entre artigos sera feita em fase posterior via embeddings semanticos
-  e comparacao entre artigos do mesmo grupo (category + subcategory). Use este bloco para:
-  - is_duplicate: false (sempre, nesta fase)
-  - duplicate_of: null (sempre, nesta fase)
-  - duplicate_type: "not_duplicate" (sempre, nesta fase)
-  - similarity_score: 0.0 (sempre, nesta fase)
-  - reason: breve nota sobre unicidade ou genericidade do conteudo
-  - conflicting_info: true/false se o artigo contem informacoes contradictorias INTERNAS
-  - conflict_details: descricao do conflito interno, ou null
-  - recommended_action: "keep_both" (sempre, nesta fase)
+  Verifique se ha informacoes conflitantes DENTRO do proprio artigo:
+  - has_internal_conflicts: true/false se o artigo contem informacoes contraditorias internas
+  - internal_conflict_details: descricao do conflito interno encontrado, ou null se nao houver
 
   ## REGRAS GERAIS
 
@@ -90,7 +78,7 @@ system_prompt: |
 # --- Output Schema ---
 output_schema:
   type: object
-  required: [inventory, quality, dedup_analysis]
+  required: [inventory, quality]
   additionalProperties: false
   properties:
     inventory:
@@ -111,6 +99,10 @@ output_schema:
         - language_issues
         - confidence
         - steps
+        - area_operacional
+        - complexity_level
+        - mentions_systems
+        - escalation_present
       additionalProperties: false
       properties:
         doc_type:
@@ -192,6 +184,49 @@ output_schema:
           minItems: 0
           maxItems: 20
           description: "Passos do procedimento extraidos do artigo, na ordem de execucao. Array vazio se nao e procedimento."
+        area_operacional:
+          type: string
+          enum:
+            - alto_valor
+            - atendimento_geral
+            - back_office
+            - bia
+            - canais_digitais
+            - cartoes
+            - cash_management
+            - cobranca
+            - comercio_exterior
+            - compliance
+            - consignado
+            - consorcio
+            - correspondente
+            - credito_imobiliario
+            - credito_pj
+            - credito_pessoal
+            - faq_geral
+            - financiamento_veiculos
+            - fraude
+            - investimentos
+            - juridico
+            - open_finance
+            - ouvidoria
+            - pix
+            - previdencia
+            - seguros
+            - tesouraria
+            - nao_identificada
+          description: "Area operacional do Bradesco"
+        complexity_level:
+          type: string
+          enum: [basico, intermediario, avancado]
+          description: "Complexidade do procedimento"
+        mentions_systems:
+          type: array
+          items: { type: string }
+          description: "Sistemas internos citados no artigo"
+        escalation_present:
+          type: boolean
+          description: "Se o artigo contem fluxo de escalonamento"
 
     quality:
       type: object
@@ -206,6 +241,8 @@ output_schema:
         - priority_level
         - estimated_effort
         - actionable_items
+        - has_internal_conflicts
+        - internal_conflict_details
       additionalProperties: false
       properties:
         clarity:
@@ -262,44 +299,13 @@ output_schema:
                 type: string
                 enum: [high, medium, low]
           maxItems: 5
-
-    dedup_analysis:
-      type: object
-      required:
-        - is_duplicate
-        - duplicate_of
-        - duplicate_type
-        - similarity_score
-        - reason
-        - conflicting_info
-        - conflict_details
-        - recommended_action
-      additionalProperties: false
-      properties:
-        is_duplicate:
+        has_internal_conflicts:
           type: boolean
-        duplicate_of:
-          type: ["string", "null"]
-          description: "source_url do artigo mais autoritativo, ou null"
-        duplicate_type:
-          type: string
-          enum: [exact, quasi_duplicate, overlapping, not_duplicate]
-        similarity_score:
-          type: number
-          minimum: 0.0
-          maximum: 1.0
-        reason:
-          type: string
-          maxLength: 300
-          description: "Explicacao em PT-BR"
-        conflicting_info:
-          type: boolean
-        conflict_details:
+          description: "Se o artigo contem informacoes contraditorias internas"
+        internal_conflict_details:
           type: ["string", "null"]
           maxLength: 300
-        recommended_action:
-          type: string
-          enum: [merge, archive_this, archive_other, review, keep_both]
+          description: "Descricao do conflito interno, ou null"
 
 # --- Validators ---
 validators: [schema, range]
@@ -318,7 +324,7 @@ validator_config:
     max: 100
 
 # --- Post-processors ---
-post_processors: []
+post_processors: [markdown_generator]
 
 # --- Sink ---
 sink_type: postgresql
@@ -343,6 +349,10 @@ sink_config:
     inventory.language_issues: language_issues
     inventory.confidence: classification_confidence
     inventory.steps: steps
+    inventory.area_operacional: area_operacional
+    inventory.complexity_level: complexity_level
+    inventory.mentions_systems: mentions_systems
+    inventory.escalation_present: escalation_present
     # Quality
     quality.clarity: clarity
     quality.structure: structure
@@ -354,13 +364,12 @@ sink_config:
     quality.priority_level: priority_level
     quality.estimated_effort: estimated_effort
     quality.actionable_items: actionable_items
-    # Dedup analysis (intra-artigo)
-    dedup_analysis.conflicting_info: has_internal_conflicts
-    dedup_analysis.conflict_details: internal_conflict_details
-    dedup_analysis.reason: content_genericness
+    quality.has_internal_conflicts: has_internal_conflicts
+    quality.internal_conflict_details: internal_conflict_details
+    # Markdown
+    markdown_content: markdown_content
   item_field_mapping:
     source_url: source_url
-    pe_item_id: pe_item_id
   jsonb_fallback: metadata
   array_columns:
     - key_topics
@@ -368,6 +377,7 @@ sink_config:
     - mandatory_fields_missing
     - language_issues
     - steps
+    - mentions_systems
   sql_defaults:
     processed_at: "NOW()"
 
