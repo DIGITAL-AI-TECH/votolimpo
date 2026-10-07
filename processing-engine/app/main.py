@@ -15,6 +15,7 @@ from .storage.database import (
     close_pool,
     get_pool,
     init_engine_schema,
+    init_help_core_analysis_schema,
     init_help_core_schema,
     init_votolimpo_schema,
 )
@@ -61,6 +62,7 @@ async def lifespan(app: FastAPI):
     await init_engine_schema(pool)
     await init_votolimpo_schema()
     await init_help_core_schema()
+    await init_help_core_analysis_schema(pool)
     logger.info("Database pool initialized")
 
     # Load pipeline configs

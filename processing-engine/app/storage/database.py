@@ -251,6 +251,156 @@ async def init_help_core_schema(pool: asyncpg.Pool | None = None):
         await conn.close()
 
 
+async def init_help_core_analysis_schema(pool: asyncpg.Pool | None = None):
+    """Ensure help_core schema and analysis_results table exist in PE database.
+
+    The helpcore-analysis pipeline sink writes to help_core.analysis_results
+    using the PE's default pool (processing_engine database).
+    This is a startup fallback for when alembic migrations 019-021 haven't run.
+    Uses CREATE IF NOT EXISTS — safe to run on every startup.
+    """
+    if pool is None:
+        pool = await get_pool()
+    async with pool.acquire() as conn:
+        await conn.execute("CREATE SCHEMA IF NOT EXISTS help_core")
+
+        # Check if table already exists
+        row = await conn.fetchval("""
+            SELECT COUNT(*) FROM information_schema.tables
+            WHERE table_schema = 'help_core' AND table_name = 'analysis_results'
+        """)
+        if row > 0:
+            logger.info("help_core.analysis_results already exists in PE database")
+            return
+
+        # Create articles master table (from migration 019)
+        await conn.execute("""
+            CREATE TABLE IF NOT EXISTS help_core.articles (
+                id                      UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+                source_url              TEXT NOT NULL,
+                area                    TEXT,
+                lista                   TEXT,
+                title                   TEXT,
+                subtitulo               TEXT,
+                nivel3                  TEXT,
+                iid                     TEXT,
+                classificacao           TEXT,
+                modified_at             TIMESTAMPTZ,
+                source_filename         TEXT,
+                links                   TEXT[],
+                inventory_status        TEXT NOT NULL DEFAULT 'pending'
+                                        CHECK (inventory_status IN ('pending','processing','processed','error','skipped')),
+                dedup_status            TEXT NOT NULL DEFAULT 'pending'
+                                        CHECK (dedup_status IN ('pending','processing','processed','error','skipped')),
+                quality_status          TEXT NOT NULL DEFAULT 'pending'
+                                        CHECK (quality_status IN ('pending','processing','processed','error','skipped')),
+                rewrite_status          TEXT NOT NULL DEFAULT 'pending'
+                                        CHECK (rewrite_status IN ('pending','processing','processed','error','skipped')),
+                analysis_status         TEXT NOT NULL DEFAULT 'pending'
+                                        CHECK (analysis_status IN ('pending','processing','processed','error','skipped')),
+                inventory_pe_item_id    UUID,
+                dedup_pe_item_id        UUID,
+                quality_pe_item_id      UUID,
+                rewrite_pe_item_id      UUID,
+                analysis_pe_item_id     UUID,
+                pipeline_versions       JSONB NOT NULL DEFAULT '{}',
+                total_prompt_tokens     INTEGER NOT NULL DEFAULT 0,
+                total_completion_tokens INTEGER NOT NULL DEFAULT 0,
+                total_cost_usd          NUMERIC(10,6) NOT NULL DEFAULT 0,
+                error_count             INTEGER NOT NULL DEFAULT 0,
+                last_error              TEXT,
+                created_at              TIMESTAMPTZ NOT NULL DEFAULT now(),
+                updated_at              TIMESTAMPTZ NOT NULL DEFAULT now(),
+                CONSTRAINT articles_source_url_unique UNIQUE (source_url)
+            );
+        """)
+
+        # Create analysis_results table (from migrations 019 + 020 + 021)
+        await conn.execute("""
+            CREATE TABLE IF NOT EXISTS help_core.analysis_results (
+                id                          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+                pe_item_id                  UUID NOT NULL,
+                article_id                  UUID REFERENCES help_core.articles(id) ON DELETE SET NULL,
+                source_url                  TEXT,
+
+                -- INVENTORY
+                doc_type                    TEXT
+                                            CHECK (doc_type IN ('procedimento','passo_a_passo','checklist',
+                                                                'faq','referencia','politica','outro')),
+                category                    TEXT,
+                subcategory                 TEXT,
+                target_audience             TEXT
+                                            CHECK (target_audience IN ('operador','supervisor','tecnico',
+                                                                       'cliente','multiplo')),
+                inv_quality_score           NUMERIC(5,2) CHECK (inv_quality_score BETWEEN 0 AND 100),
+                completeness_score          NUMERIC(5,2) CHECK (completeness_score BETWEEN 0 AND 100),
+                key_topics                  TEXT[],
+                summary                     TEXT,
+                requires_update             BOOLEAN NOT NULL DEFAULT false,
+                has_mandatory_fields        BOOLEAN,
+                mandatory_fields_missing    TEXT[],
+                estimated_word_count        INTEGER,
+                language_issues             TEXT[],
+                classification_confidence   NUMERIC(3,2) CHECK (classification_confidence BETWEEN 0 AND 1),
+                steps                       TEXT[] DEFAULT '{}'::TEXT[],
+
+                -- QUALITY
+                clarity                     NUMERIC(5,2) CHECK (clarity BETWEEN 0 AND 100),
+                structure                   NUMERIC(5,2) CHECK (structure BETWEEN 0 AND 100),
+                quality_completeness        NUMERIC(5,2) CHECK (quality_completeness BETWEEN 0 AND 100),
+                accuracy_signals            NUMERIC(5,2) CHECK (accuracy_signals BETWEEN 0 AND 100),
+                readability                 NUMERIC(5,2) CHECK (readability BETWEEN 0 AND 100),
+                overall_score               NUMERIC(5,2) CHECK (overall_score BETWEEN 0 AND 100),
+                improvement_suggestions     TEXT[],
+                priority_level              TEXT CHECK (priority_level IN ('critical','high','medium','low')),
+                estimated_effort            TEXT CHECK (estimated_effort IN ('minor','moderate','major','rewrite')),
+                actionable_items            JSONB,
+
+                -- DEDUP ANALYSIS
+                has_internal_conflicts      BOOLEAN NOT NULL DEFAULT false,
+                internal_conflict_details   TEXT,
+                content_genericness         TEXT,
+
+                -- PM FIELDS (migration 021)
+                area_operacional            TEXT,
+                complexity_level            TEXT CHECK (complexity_level IN ('basico', 'intermediario', 'avancado')),
+                mentions_systems            TEXT[] DEFAULT '{}'::TEXT[],
+                escalation_present          BOOLEAN NOT NULL DEFAULT false,
+                markdown_content            TEXT,
+
+                -- RASTREABILIDADE
+                prompt_version              TEXT,
+                prompt_tokens               INTEGER,
+                completion_tokens           INTEGER,
+                cost_usd                    NUMERIC(10,6),
+                metadata                    JSONB NOT NULL DEFAULT '{}',
+
+                processed_at                TIMESTAMPTZ,
+                created_at                  TIMESTAMPTZ NOT NULL DEFAULT now(),
+                updated_at                  TIMESTAMPTZ NOT NULL DEFAULT now(),
+
+                CONSTRAINT analysis_results_pe_item_id_unique UNIQUE (pe_item_id)
+            );
+        """)
+
+        # Indexes
+        for idx_sql in [
+            "CREATE INDEX IF NOT EXISTS idx_hc_articles_area ON help_core.articles (area)",
+            "CREATE INDEX IF NOT EXISTS idx_hc_articles_analysis_status ON help_core.articles (analysis_status)",
+            "CREATE INDEX IF NOT EXISTS idx_hc_articles_rewrite_status ON help_core.articles (rewrite_status)",
+            "CREATE INDEX IF NOT EXISTS idx_hc_analysis_doc_type ON help_core.analysis_results (doc_type)",
+            "CREATE INDEX IF NOT EXISTS idx_hc_analysis_category ON help_core.analysis_results (category)",
+            "CREATE INDEX IF NOT EXISTS idx_hc_analysis_overall ON help_core.analysis_results (overall_score DESC)",
+            "CREATE INDEX IF NOT EXISTS idx_hc_analysis_priority ON help_core.analysis_results (priority_level)",
+            "CREATE INDEX IF NOT EXISTS idx_hc_analysis_source_url ON help_core.analysis_results (source_url)",
+            "CREATE INDEX IF NOT EXISTS idx_hc_analysis_area_op ON help_core.analysis_results (area_operacional)",
+            "CREATE INDEX IF NOT EXISTS idx_hc_analysis_complexity ON help_core.analysis_results (complexity_level)",
+        ]:
+            await conn.execute(idx_sql)
+
+        logger.info("help_core.analysis_results initialized in PE database (startup fallback)")
+
+
 _SEED_SOURCES = [
     # BRASIL — Mainstream
     ("g1.globo.com", "g1.globo.com", 0.85, "mainstream"),
