@@ -1,0 +1,384 @@
+id: helpcore-analysis
+name: helpcore-analysis
+description: "Analise consolidada de artigos Help Core: inventory + quality + dedup_analysis em 1 chamada LLM"
+version: "1.0"
+
+# --- Ingestor ---
+ingestor_type: auto
+
+# --- Dedup ---
+dedup_strategy: composite
+dedup_config:
+  hash_fields: [content]
+  url_normalize: true
+
+# --- LLM ---
+llm_provider: openai
+llm_model: gpt-4.1-mini
+llm_temperature: 0.0
+llm_max_tokens: 16384
+
+# --- System Prompt ---
+system_prompt: |
+  Voce e um analista especializado em bases de conhecimento corporativas de atendimento bancario.
+  Voce recebera um artigo da base de conhecimento do Bradesco e deve fazer 3 analises simultaneas:
+
+  ## ANALISE 1 — INVENTARIO (bloco "inventory")
+
+  Classifique o artigo nos seguintes eixos:
+  - doc_type: tipo do documento (procedimento, passo_a_passo, checklist, faq, referencia, politica, outro)
+  - category: area de negocio principal (use EXATAMENTE um dos valores do enum)
+  - subcategory: subarea especifica dentro da category (texto livre, max 50 chars)
+  - target_audience: publico-alvo principal (operador, supervisor, tecnico, cliente, multiplo)
+  - quality_score: nota 0-100 para qualidade textual (clareza, organizacao, linguagem profissional)
+  - completeness_score: nota 0-100 para completude (passos claros, informacoes completas)
+  - key_topics: 3-8 topicos principais do artigo
+  - summary: resumo factual de 1-2 frases (max 500 chars)
+  - requires_update: true se o conteudo parece desatualizado (datas antigas, referencias a sistemas descontinuados, etc.)
+  - has_mandatory_fields: true se o artigo tem titulo, corpo e procedimento minimo
+  - mandatory_fields_missing: lista de campos obrigatorios ausentes (titulo, corpo, passos, conclusao)
+  - estimated_word_count: contagem estimada de palavras do artigo
+  - language_issues: ate 5 problemas de linguagem (erros gramaticais, ambiguidades, jargao inadequado)
+  - confidence: 0.0-1.0 confianca da classificacao
+    - steps: passos do procedimento extraidos do artigo, na ordem de execucao. Cada passo deve ser uma instrucao clara e acionavel para o operador de atendimento (ex: "Acessar menu Cartoes > Bloqueio", "Confirmar identidade com CPF e data de nascimento"). Se o artigo NAO descreve um procedimento sequencial (FAQ puro, politica, referencia conceitual), retornar array vazio []. Maximo 20 passos.
+
+  ## ANALISE 2 — QUALIDADE MULTI-DIMENSIONAL (bloco "quality")
+
+  Avalie o artigo em 5 dimensoes independentes, cada uma de 0 a 100:
+  - clarity (peso 30%): linguagem clara, sem ambiguidades, instrucoes compreensiveis
+  - structure (peso 25%): organizacao logica, uso de titulos/subtitulos, sequencia de passos
+  - completeness (peso 25%): cobre todo o procedimento, sem passos faltantes, sem lacunas
+  - accuracy_signals (peso 10%): referencias a sistemas, codigos, telas parecem corretos e atualizados
+  - readability (peso 10%): facilidade de leitura, paragrafos curtos, formatacao adequada
+
+  Calcule overall_score como media ponderada: clarity*0.30 + structure*0.25 + completeness*0.25 + accuracy_signals*0.10 + readability*0.10
+
+  Determine priority_level: critical (<30), high (30-50), medium (50-70), low (>70)
+  Determine estimated_effort: minor (<15min de correcao), moderate (15-60min), major (>1h), rewrite (artigo precisa ser refeito)
+
+  Forneca ate 5 improvement_suggestions concretas em PT-BR.
+  Forneca ate 5 actionable_items estruturados com tipo, descricao e impacto.
+
+  ## ANALISE 3 — ANALISE DE DUPLICATAS (bloco "dedup_analysis")
+
+  Analise o artigo INTERNAMENTE (sem comparacao com outros artigos neste momento) para:
+  - Identificar se o conteudo e generico demais (poderia ser duplicata de outro artigo sobre o mesmo tema)
+  - Verificar se ha informacoes conflitantes DENTRO do proprio artigo
+  - Classificar duplicate_type como "not_duplicate" (analise interna apenas)
+  - Definir similarity_score como 0.0 (sera recalculado em fase posterior com embeddings)
+
+  IMPORTANTE sobre dedup_analysis: Nesta fase, a analise de duplicatas e INTRA-ARTIGO apenas.
+  A deteccao real de duplicatas entre artigos sera feita em fase posterior via embeddings semanticos
+  e comparacao entre artigos do mesmo grupo (category + subcategory). Use este bloco para:
+  - is_duplicate: false (sempre, nesta fase)
+  - duplicate_of: null (sempre, nesta fase)
+  - duplicate_type: "not_duplicate" (sempre, nesta fase)
+  - similarity_score: 0.0 (sempre, nesta fase)
+  - reason: breve nota sobre unicidade ou genericidade do conteudo
+  - conflicting_info: true/false se o artigo contem informacoes contradictorias INTERNAS
+  - conflict_details: descricao do conflito interno, ou null
+  - recommended_action: "keep_both" (sempre, nesta fase)
+
+  ## REGRAS GERAIS
+
+  - Responda em portugues (PT-BR)
+  - Seja conciso nas descricoes (respeite os maxLength)
+  - Use EXATAMENTE os valores dos enums definidos no schema
+  - Nao invente categorias ou subcategorias fora do padrao bancario
+  - Na duvida sobre uma classificacao, reduza o confidence
+
+# --- Output Schema ---
+output_schema:
+  type: object
+  required: [inventory, quality, dedup_analysis]
+  additionalProperties: false
+  properties:
+    inventory:
+      type: object
+      required:
+        - doc_type
+        - category
+        - subcategory
+        - target_audience
+        - quality_score
+        - completeness_score
+        - key_topics
+        - summary
+        - requires_update
+        - has_mandatory_fields
+        - mandatory_fields_missing
+        - estimated_word_count
+        - language_issues
+        - confidence
+        - steps
+      additionalProperties: false
+      properties:
+        doc_type:
+          type: string
+          enum: [procedimento, passo_a_passo, checklist, faq, referencia, politica, outro]
+        category:
+          type: string
+          enum:
+            - cancelamento
+            - bloqueio
+            - credito
+            - fraude
+            - cadastro
+            - contestacao
+            - cartao
+            - pix
+            - transferencia
+            - emprestimo
+            - investimento
+            - seguro
+            - conta
+            - atendimento
+            - cobranca
+            - senha
+            - risco
+            - digital
+            - outro
+        subcategory:
+          type: string
+          description: "Subcategoria especifica dentro da category"
+        target_audience:
+          type: string
+          enum: [operador, supervisor, tecnico, cliente, multiplo]
+        quality_score:
+          type: number
+          minimum: 0
+          maximum: 100
+          description: "Qualidade textual geral: clareza, organizacao, linguagem profissional"
+        completeness_score:
+          type: number
+          minimum: 0
+          maximum: 100
+          description: "Completude: passos claros, informacoes completas, sem lacunas"
+        key_topics:
+          type: array
+          items: { type: string }
+          minItems: 1
+          maxItems: 8
+        summary:
+          type: string
+          maxLength: 500
+          description: "Resumo factual de 1-2 frases"
+        requires_update:
+          type: boolean
+          description: "true se conteudo apresenta indicios de desatualizacao"
+        has_mandatory_fields:
+          type: boolean
+          description: "true se o artigo possui titulo, corpo e procedimento minimo"
+        mandatory_fields_missing:
+          type: array
+          items: { type: string }
+          description: "Campos obrigatorios ausentes"
+        estimated_word_count:
+          type: integer
+          minimum: 0
+        language_issues:
+          type: array
+          items: { type: string }
+          maxItems: 5
+          description: "Problemas de linguagem detectados"
+        confidence:
+          type: number
+          minimum: 0.0
+          maximum: 1.0
+          description: "Confianca da classificacao"
+        steps:
+          type: array
+          items: { type: string }
+          minItems: 0
+          maxItems: 20
+          description: "Passos do procedimento extraidos do artigo, na ordem de execucao. Array vazio se nao e procedimento."
+
+    quality:
+      type: object
+      required:
+        - clarity
+        - structure
+        - completeness
+        - accuracy_signals
+        - readability
+        - overall_score
+        - improvement_suggestions
+        - priority_level
+        - estimated_effort
+        - actionable_items
+      additionalProperties: false
+      properties:
+        clarity:
+          type: number
+          minimum: 0
+          maximum: 100
+        structure:
+          type: number
+          minimum: 0
+          maximum: 100
+        completeness:
+          type: number
+          minimum: 0
+          maximum: 100
+        accuracy_signals:
+          type: number
+          minimum: 0
+          maximum: 100
+        readability:
+          type: number
+          minimum: 0
+          maximum: 100
+        overall_score:
+          type: number
+          minimum: 0
+          maximum: 100
+          description: "Media ponderada: clarity*0.30 + structure*0.25 + completeness*0.25 + accuracy_signals*0.10 + readability*0.10"
+        improvement_suggestions:
+          type: array
+          items: { type: string }
+          maxItems: 5
+        priority_level:
+          type: string
+          enum: [critical, high, medium, low]
+          description: "critical: overall<30, high: 30-50, medium: 50-70, low: >70"
+        estimated_effort:
+          type: string
+          enum: [minor, moderate, major, rewrite]
+          description: "minor=<15min, moderate=15-60min, major=>1h, rewrite=refazer"
+        actionable_items:
+          type: array
+          items:
+            type: object
+            required: [type, description, impact]
+            additionalProperties: false
+            properties:
+              type:
+                type: string
+                enum: [fix_grammar, add_steps, restructure, update_reference, add_context, simplify, remove_redundancy]
+              description:
+                type: string
+                maxLength: 200
+              impact:
+                type: string
+                enum: [high, medium, low]
+          maxItems: 5
+
+    dedup_analysis:
+      type: object
+      required:
+        - is_duplicate
+        - duplicate_of
+        - duplicate_type
+        - similarity_score
+        - reason
+        - conflicting_info
+        - conflict_details
+        - recommended_action
+      additionalProperties: false
+      properties:
+        is_duplicate:
+          type: boolean
+        duplicate_of:
+          type: ["string", "null"]
+          description: "source_url do artigo mais autoritativo, ou null"
+        duplicate_type:
+          type: string
+          enum: [exact, quasi_duplicate, overlapping, not_duplicate]
+        similarity_score:
+          type: number
+          minimum: 0.0
+          maximum: 1.0
+        reason:
+          type: string
+          maxLength: 300
+          description: "Explicacao em PT-BR"
+        conflicting_info:
+          type: boolean
+        conflict_details:
+          type: ["string", "null"]
+          maxLength: 300
+        recommended_action:
+          type: string
+          enum: [merge, archive_this, archive_other, review, keep_both]
+
+# --- Validators ---
+validators: [schema, range]
+validator_config:
+  range:
+    fields:
+      - inventory.quality_score
+      - inventory.completeness_score
+      - quality.clarity
+      - quality.structure
+      - quality.completeness
+      - quality.accuracy_signals
+      - quality.readability
+      - quality.overall_score
+    min: 0
+    max: 100
+
+# --- Post-processors ---
+post_processors: []
+
+# --- Sink ---
+sink_type: postgresql
+sink_config:
+  database_url_env: HELPCORE_DATABASE_URL
+  table: help_core.analysis_results
+  conflict_column: pe_item_id
+  column_mapping:
+    # Inventory
+    inventory.doc_type: doc_type
+    inventory.category: category
+    inventory.subcategory: subcategory
+    inventory.target_audience: target_audience
+    inventory.quality_score: inv_quality_score
+    inventory.completeness_score: completeness_score
+    inventory.key_topics: key_topics
+    inventory.summary: summary
+    inventory.requires_update: requires_update
+    inventory.has_mandatory_fields: has_mandatory_fields
+    inventory.mandatory_fields_missing: mandatory_fields_missing
+    inventory.estimated_word_count: estimated_word_count
+    inventory.language_issues: language_issues
+    inventory.confidence: classification_confidence
+    inventory.steps: steps
+    # Quality
+    quality.clarity: clarity
+    quality.structure: structure
+    quality.completeness: quality_completeness
+    quality.accuracy_signals: accuracy_signals
+    quality.readability: readability
+    quality.overall_score: overall_score
+    quality.improvement_suggestions: improvement_suggestions
+    quality.priority_level: priority_level
+    quality.estimated_effort: estimated_effort
+    quality.actionable_items: actionable_items
+    # Dedup analysis (intra-artigo)
+    dedup_analysis.conflicting_info: has_internal_conflicts
+    dedup_analysis.conflict_details: internal_conflict_details
+    dedup_analysis.reason: content_genericness
+  item_field_mapping:
+    source_url: source_url
+    pe_item_id: pe_item_id
+  jsonb_fallback: metadata
+  array_columns:
+    - key_topics
+    - improvement_suggestions
+    - mandatory_fields_missing
+    - language_issues
+    - steps
+  sql_defaults:
+    processed_at: "NOW()"
+
+# --- Cache ---
+cache:
+  enabled: true
+  ttl_hours: 720
+
+# --- Operational ---
+max_concurrent: 5
+rate_limit_rpm: 60
+max_retries: 2
+budget_limit_usd: 50.0
+budget_period: month

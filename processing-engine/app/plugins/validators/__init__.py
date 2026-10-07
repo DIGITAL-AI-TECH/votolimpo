@@ -59,14 +59,33 @@ class GroundingValidator:
 
 
 class RangeValidator:
-    """Validate numeric fields are within expected range."""
+    """Validate numeric fields are within expected range.
+
+    Supports two config formats:
+    1. Per-field ranges: ``ranges: {"field.path": [min, max]}``
+    2. Global range:    ``fields: ["field.path", ...], min: 0, max: 1``
+    """
 
     def validate(self, output: dict, original_content: str, config: dict) -> list[str]:
         errors = []
+
+        # C-02 fix: support per-field ranges dict (used by voto-limpo pipeline)
+        ranges = config.get("ranges", {})
+        for field_path, bounds in ranges.items():
+            if not isinstance(bounds, (list, tuple)) or len(bounds) < 2:
+                continue
+            r_min, r_max = float(bounds[0]), float(bounds[1])
+            values = _extract_path(output, field_path)
+            for val in values:
+                if isinstance(val, (int, float)) and not (r_min <= val <= r_max):
+                    errors.append(
+                        f"Range: {field_path} value {val} not in [{r_min}, {r_max}]"
+                    )
+
+        # Existing format: global min/max (used by helpcore pipeline)
         fields = config.get("fields", [])
         min_val = config.get("min", 0.0)
         max_val = config.get("max", 1.0)
-
         for field_path in fields:
             values = _extract_path(output, field_path)
             for val in values:

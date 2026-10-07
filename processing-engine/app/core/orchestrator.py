@@ -584,9 +584,12 @@ async def _process_single_item(
             else:
                 all_errors.append(str(result))
 
-        # H1 fix: proper retry loop
+        # H1 fix: proper retry loop (C-04 fix: backoff + temperature variation)
         if all_errors:
             for attempt in range(pipeline.llm.max_retries):
+                # C-04 fix: exponential backoff between retries
+                await asyncio.sleep(min(2 ** attempt, 8))
+
                 async with pool.acquire() as conn:
                     await _log_step(
                         conn,
@@ -596,9 +599,17 @@ async def _process_single_item(
                         "retry",
                         metadata={"errors": all_errors, "attempt": attempt + 1},
                     )
+                # C-04 fix: increase temperature on retries to vary output
+                retry_config = {
+                    **llm_config,
+                    "temperature": min(
+                        llm_config.get("temperature", 0.1) + 0.1 * (attempt + 1),
+                        0.5,
+                    ),
+                }
                 # Retry LLM (NO DB connection held)
                 llm_result = await llm.process(
-                    user_content, system_prompt, output_schema, llm_config
+                    user_content, system_prompt, output_schema, retry_config
                 )
                 output = llm_result["output"]
                 cost += llm_result["cost_usd"]
@@ -669,6 +680,8 @@ async def _process_single_item(
             or metadata.get("source_url")
             or ""
         )
+        # C-01 fix: inject pe_item_id so sinks with conflict_column=pe_item_id can persist
+        metadata["pe_item_id"] = str(item_id)
 
         pre_sink_pps = [
             (t, p, c)

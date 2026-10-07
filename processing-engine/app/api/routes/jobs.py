@@ -89,7 +89,7 @@ async def create_job(job: ProcessingJob):
         raise HTTPException(status_code=400, detail=str(exc))
     except Exception as exc:
         logger.exception("submit_job failed for pipeline=%s", job.pipeline_id)
-        raise HTTPException(status_code=500, detail=f"submit_job error: {type(exc).__name__}: {exc}")
+        raise HTTPException(status_code=500, detail="Internal processing error")
 
     return {"job_id": result_id, "status": "pending", "total_items": len(job.items)}
 

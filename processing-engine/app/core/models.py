@@ -26,7 +26,7 @@ class ProcessingItem(BaseModel):
     """A single item to process."""
 
     item_id: str = Field(default_factory=lambda: str(uuid.uuid4()))
-    content: str
+    content: str = Field(max_length=500_000)  # S-002 fix: 500KB max per item
     content_type: str = "text/plain"
     source_url: str | None = None
     metadata: dict[str, Any] = Field(default_factory=dict)
@@ -37,7 +37,7 @@ class ProcessingJob(BaseModel):
 
     job_id: str = Field(default_factory=lambda: str(uuid.uuid4()))
     pipeline_id: str
-    items: list[ProcessingItem] = Field(min_length=1)
+    items: list[ProcessingItem] = Field(min_length=1, max_length=1000)  # S-002 fix: max 1000 items
     priority: JobPriority = JobPriority.normal
     callback_url: str | None = None
     idempotency_key: str | None = None
