@@ -329,7 +329,6 @@ post_processors: [markdown_generator]
 # --- Sink ---
 sink_type: postgresql
 sink_config:
-  database_url_env: HELPCORE_DATABASE_URL
   table: help_core.analysis_results
   conflict_column: pe_item_id
   column_mapping:
