@@ -93,6 +93,11 @@ async def lifespan(app: FastAPI):
     _worker_tasks.clear()
 
     scheduler.shutdown(wait=False)
+
+    # Close votolimpo pool (separate from PE pool, used by post-processors)
+    from .plugins.post_processors.score_calculator import close_votolimpo_pool
+    await close_votolimpo_pool()
+
     await close_pool()
     logger.info("Processing Engine shut down")
 

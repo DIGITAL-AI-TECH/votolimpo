@@ -384,19 +384,12 @@ async def init_votolimpo_schema():
         await conn.execute("CREATE EXTENSION IF NOT EXISTS pg_trgm;")
         await conn.execute("CREATE SCHEMA IF NOT EXISTS votolimpo;")
 
-        # Detect legacy UUID-based schema and nuke it.
-        # Old tables used UUID PKs + different column names (occurred_at, milestone_type).
-        # Current DDL uses SERIAL INTEGER PKs + renamed columns (date, type).
-        # CREATE TABLE IF NOT EXISTS won't fix the mismatch, so drop+recreate.
-        legacy = await conn.fetchval("""
-            SELECT data_type FROM information_schema.columns
-            WHERE table_schema = 'votolimpo' AND table_name = 'politicians'
-              AND column_name = 'id'
-        """)
-        if legacy and legacy == 'uuid':
-            logger.warning("Detected legacy UUID schema — dropping votolimpo for clean recreation")
-            await conn.execute("DROP SCHEMA votolimpo CASCADE;")
-            await conn.execute("CREATE SCHEMA votolimpo;")
+        # NOTE: Legacy UUID-schema migration was intentionally removed.
+        # DROP SCHEMA CASCADE is too dangerous for a startup routine — it would
+        # destroy all production data on misconfiguration. Schema migrations of
+        # this kind must be done via Alembic or a one-shot manual migration script.
+        # If you still have a UUID-based schema in production, run the manual
+        # migration script instead of relying on automatic schema recreation.
 
         # --- ENUMs (must match NC 001_create_schema_enums.sql exactly) ---
         for enum_name, enum_values in [

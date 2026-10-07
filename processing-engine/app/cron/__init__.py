@@ -279,6 +279,36 @@ async def cron_regenerate_content():
 
 
 # H7 fix: correct schema from votolimpo → processing_engine
+async def cron_recover_stuck_items():
+    """Reset job_items stuck in 'processing' for more than 30 minutes back to 'pending'.
+
+    Worker crashes or pod restarts can leave items with status='processing' indefinitely.
+    This job detects them by updated_at age and resets so they can be reprocessed.
+    Runs every 5 minutes.
+    """
+    pool = await get_pool()
+    async with pool.acquire() as conn:
+        result = await conn.execute("""
+            UPDATE processing_engine.job_items
+            SET status = 'pending', updated_at = NOW()
+            WHERE status = 'processing'
+              AND updated_at < NOW() - INTERVAL '30 minutes'
+        """)
+    # asyncpg returns "UPDATE N" as a string
+    try:
+        recovered = int(result.split()[-1])
+    except (ValueError, IndexError, AttributeError):
+        recovered = 0
+
+    if recovered > 0:
+        logger.warning(
+            "Recovered %d stuck job_items (status=processing, idle>30min) → reset to pending",
+            recovered,
+        )
+    else:
+        logger.debug("Stuck-item recovery: no items found")
+
+
 async def cron_cleanup_logs():
     """Delete processing logs older than 90 days. Monthly."""
     pool = await get_pool()
@@ -341,5 +371,11 @@ def setup_cron_scheduler() -> AsyncIOScheduler:
         id="pe_clusters",
         replace_existing=True,
     )
-    logger.info("Cron scheduler configured (5 jobs)")
+    _scheduler.add_job(
+        cron_recover_stuck_items,
+        CronTrigger(minute="*/5", timezone="UTC"),
+        id="pe_recover_stuck",
+        replace_existing=True,
+    )
+    logger.info("Cron scheduler configured (6 jobs)")
     return _scheduler

@@ -48,6 +48,15 @@ async def _get_votolimpo_pool() -> asyncpg.Pool | None:
         return None
 
 
+async def close_votolimpo_pool() -> None:
+    """Close the votolimpo connection pool on shutdown."""
+    global _votolimpo_pool
+    if _votolimpo_pool is not None:
+        await _votolimpo_pool.close()
+        _votolimpo_pool = None
+        logger.info("Votolimpo pool closed")
+
+
 class ScoreCalculator:
     """Calculate veracity score from 6 weighted signals.
 

@@ -238,16 +238,10 @@ async def _process_job_items(job_id: str, pipeline: PipelineConfig, *, skip_cach
     ingestor = get_ingestor(pipeline.ingestor.type)
     dedup = get_dedup(pipeline.dedup.strategy)
     llm = get_llm_provider(pipeline.llm.provider)
-    validators = [
-        (v.type, get_validator(v.type), v.config) for v in pipeline.validators
-    ]
-    post_processors = [
-        (pp.type, get_post_processor(pp.type), pp.config)
-        for pp in pipeline.post_processors
-    ]
-    sink = get_sink(pipeline.sink.type)
 
-    # Load prompts and schema (file-based takes priority, inline YAML as fallback)
+    # Load prompts and schema FIRST (file-based takes priority, inline YAML as fallback)
+    # Must happen before building validators so output_schema can be injected into
+    # the "schema" validator config (SchemaValidator fix).
     system_prompt = ""
     output_schema = None
     if pipeline.llm.system_prompt_file:
@@ -265,6 +259,22 @@ async def _process_job_items(job_id: str, pipeline: PipelineConfig, *, skip_cach
             logger.error("Output schema not found: %s", pipeline.llm.output_schema_file)
     elif pipeline.output_schema:
         output_schema = pipeline.output_schema
+
+    # Build validator list, injecting output_schema into "schema" validator config
+    # so SchemaValidator can validate against the pipeline's actual output schema
+    # instead of an empty {} (which is a silent NO-OP).
+    validators = []
+    for v in pipeline.validators:
+        v_config = dict(v.config)
+        if v.type == "schema" and output_schema and "output_schema" not in v_config:
+            v_config["output_schema"] = output_schema
+        validators.append((v.type, get_validator(v.type), v_config))
+
+    post_processors = [
+        (pp.type, get_post_processor(pp.type), pp.config)
+        for pp in pipeline.post_processors
+    ]
+    sink = get_sink(pipeline.sink.type)
 
     completed = 0
     failed = 0

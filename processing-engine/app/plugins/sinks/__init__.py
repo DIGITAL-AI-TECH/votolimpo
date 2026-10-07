@@ -58,6 +58,7 @@ class PostgreSQLSink:
             "PE_VOTOLIMPO_DATABASE_URL",
             "PE_DATABASE_URL",
             "VOTOLIMPO_DATABASE_URL",
+            "HELPCORE_DATABASE_URL",
         }
         db_env = config.get("database_url_env")
         if db_env:
