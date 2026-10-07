@@ -369,6 +369,7 @@ sink_config:
     markdown_content: markdown_content
   item_field_mapping:
     source_url: source_url
+    pe_item_id: pe_item_id
   jsonb_fallback: metadata
   array_columns:
     - key_topics
