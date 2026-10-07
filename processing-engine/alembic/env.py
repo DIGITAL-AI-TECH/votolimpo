@@ -9,18 +9,24 @@ from sqlalchemy import pool
 from sqlalchemy.engine import Connection
 from sqlalchemy.ext.asyncio import async_engine_from_config
 
-# Import all models so SQLAlchemy metadata is populated
-import db_models.base  # noqa: F401
-import db_models.cache_entry  # noqa: F401
-import db_models.item  # noqa: F401
-import db_models.job  # noqa: F401
-import db_models.llm_call_log  # noqa: F401
-import db_models.model_pricing  # noqa: F401
-import db_models.pipeline  # noqa: F401
-import db_models.pool  # noqa: F401
-import db_models.processing_log  # noqa: F401
+# Import models for autogenerate (optional — raw-SQL migrations work without them)
+try:
+    import db_models.base  # noqa: F401
+    import db_models.cache_entry  # noqa: F401
+    import db_models.item  # noqa: F401
+    import db_models.job  # noqa: F401
+    import db_models.llm_call_log  # noqa: F401
+    import db_models.model_pricing  # noqa: F401
+    import db_models.pipeline  # noqa: F401
+    import db_models.pool  # noqa: F401
+    import db_models.processing_log  # noqa: F401
+    from db_models.base import Base
+
+    _target_metadata = Base.metadata
+except ImportError:
+    _target_metadata = None
+
 from alembic import context
-from db_models.base import Base
 
 # Alembic Config object — provides access to values in alembic.ini
 config = context.config
@@ -56,8 +62,8 @@ if _db_url:
 if config.config_file_name is not None:
     fileConfig(config.config_file_name)
 
-# Metadata for 'autogenerate' support
-target_metadata = Base.metadata
+# Metadata for 'autogenerate' support (None when db_models not available)
+target_metadata = _target_metadata
 
 
 def run_migrations_offline() -> None:
