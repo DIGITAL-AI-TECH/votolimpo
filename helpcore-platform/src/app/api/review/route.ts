@@ -63,6 +63,6 @@ export async function GET(request: NextRequest) {
     });
   } catch (error) {
     console.error("Review queue error:", error);
-    return NextResponse.json({ error: "Erro ao carregar fila de revisao" }, { status: 500 });
+    return NextResponse.json({ error: "Erro ao carregar fila de revisão" }, { status: 500 });
   }
 }

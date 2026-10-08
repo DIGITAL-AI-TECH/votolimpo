@@ -30,7 +30,7 @@ export function QualityRadar({
     { axis: "Clareza", value: clarity ?? 0 },
     { axis: "Estrutura", value: structure ?? 0 },
     { axis: "Completude", value: completeness ?? 0 },
-    { axis: "Precisao", value: accuracy_signals ?? 0 },
+    { axis: "Precisão", value: accuracy_signals ?? 0 },
     { axis: "Legibilidade", value: readability ?? 0 },
   ];
 

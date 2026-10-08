@@ -100,7 +100,7 @@ export default function ArticlesSearchPage() {
         <form onSubmit={handleSearch} className="space-y-4">
           {/* Search input */}
           <Input
-            placeholder="Buscar por texto (ex: cartao credito, pix, seguro)..."
+            placeholder="Buscar por texto (ex: cartão crédito, pix, seguro)..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
           />
@@ -113,7 +113,7 @@ export default function ArticlesSearchPage() {
               onChange={(e) => setArea(e.target.value)}
               className="rounded-xl border border-[#1F1F1F] bg-[#1A1A1A] px-3 py-2 text-sm text-white focus:border-[#FF5722] focus:outline-none focus:ring-1 focus:ring-[#FF5722]"
             >
-              <option value="">Todas as areas</option>
+              <option value="">Todas as áreas</option>
               {AREAS.map((a) => (
                 <option key={a} value={a}>{a}</option>
               ))}
@@ -139,11 +139,11 @@ export default function ArticlesSearchPage() {
             >
               <option value="">Todos os tipos</option>
               <option value="procedimento">Procedimento</option>
-              <option value="politica">Politica</option>
+              <option value="politica">Política</option>
               <option value="faq">FAQ</option>
               <option value="guia">Guia</option>
-              <option value="referencia">Referencia</option>
-              <option value="formulario">Formulario</option>
+              <option value="referencia">Referência</option>
+              <option value="formulario">Formulário</option>
             </select>
 
             {/* Score range */}
@@ -229,7 +229,7 @@ export default function ArticlesSearchPage() {
                     Anterior
                   </Button>
                   <span className="text-sm text-[#9EA5AC]">
-                    Pagina {page} de {pagination.total_pages}
+                    Página {page} de {pagination.total_pages}
                   </span>
                   <Button
                     variant="outline"
@@ -237,7 +237,7 @@ export default function ArticlesSearchPage() {
                     disabled={page >= pagination.total_pages}
                     onClick={() => setPage((p) => p + 1)}
                   >
-                    Proxima
+                    Próxima
                   </Button>
                 </div>
               )}

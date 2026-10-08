@@ -11,9 +11,9 @@ import {
   YAxis,
   Tooltip,
   ResponsiveContainer,
-  Cell,
   PieChart,
   Pie,
+  Cell,
 } from "recharts";
 
 interface AnalyticsData {
@@ -176,13 +176,10 @@ export default function DashboardPage() {
                 dataKey="not_processed"
                 name="Pendentes"
                 stackId="a"
-                fill="#1A1A1A"
+                fill="#FF8A65"
+                fillOpacity={0.25}
                 radius={[0, 4, 4, 0]}
-              >
-                {data.by_area.slice(0, 15).map((_, i) => (
-                  <Cell key={i} fill="#1A1A1A" />
-                ))}
-              </Bar>
+              />
             </BarChart>
           </ResponsiveContainer>
         </div>
@@ -194,7 +191,7 @@ export default function DashboardPage() {
             {/* Category Distribution */}
             <Card>
               <CardHeader>
-                <CardTitle>Distribuicao por Categoria</CardTitle>
+                <CardTitle>Distribuição por Categoria</CardTitle>
               </CardHeader>
               <div className="h-[280px]">
                 <ResponsiveContainer width="100%" height="100%">
@@ -234,7 +231,7 @@ export default function DashboardPage() {
             {/* Doc Type Distribution */}
             <Card>
               <CardHeader>
-                <CardTitle>Distribuicao por Tipo de Documento</CardTitle>
+                <CardTitle>Distribuição por Tipo de Documento</CardTitle>
               </CardHeader>
               <div className="h-[280px]">
                 <ResponsiveContainer width="100%" height="100%">
@@ -299,16 +296,16 @@ export default function DashboardPage() {
           {/* Areas Ranked Table */}
           <Card>
             <CardHeader>
-              <CardTitle>Areas por Score Medio</CardTitle>
+              <CardTitle>Áreas por Score Médio</CardTitle>
             </CardHeader>
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
                   <tr className="border-b border-[#1F1F1F] text-left text-[#9EA5AC]">
-                    <th className="pb-2 pr-4">Area</th>
+                    <th className="pb-2 pr-4">Área</th>
                     <th className="pb-2 pr-4 text-right">Total</th>
                     <th className="pb-2 pr-4 text-right">Processados</th>
-                    <th className="pb-2 text-right">Score Medio</th>
+                    <th className="pb-2 text-right">Score Médio</th>
                   </tr>
                 </thead>
                 <tbody>

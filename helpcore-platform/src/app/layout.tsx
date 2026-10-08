@@ -11,7 +11,7 @@ const nunitoSans = Nunito_Sans({
 
 export const metadata: Metadata = {
   title: "Help Core Platform",
-  description: "Plataforma de gestao e qualidade da base de conhecimento Help Bradesco",
+  description: "Plataforma de gestão e qualidade da base de conhecimento Help Bradesco",
 };
 
 export default function RootLayout({

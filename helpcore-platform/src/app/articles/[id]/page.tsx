@@ -150,7 +150,7 @@ export default async function ArticleDetailPage({ params }: Props) {
             {analysis.steps && (analysis.steps as Array<Record<string, string>>).length > 0 && (
               <Card>
                 <CardHeader>
-                  <CardTitle>Passos Extraidos</CardTitle>
+                  <CardTitle>Passos Extraídos</CardTitle>
                 </CardHeader>
                 <StepsChecklist
                   steps={analysis.steps as Array<{ order?: number; action: string; detail?: string }>}

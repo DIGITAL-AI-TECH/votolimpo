@@ -10,7 +10,7 @@ export async function POST(
     const { id } = await params;
     const articleId = parseInt(id, 10);
     if (isNaN(articleId)) {
-      return NextResponse.json({ error: "ID invalido" }, { status: 400 });
+      return NextResponse.json({ error: "ID inválido" }, { status: 400 });
     }
 
     const body = await request.json();
@@ -18,14 +18,14 @@ export async function POST(
 
     if (!REVIEW_ACTIONS.includes(action as ReviewActionType)) {
       return NextResponse.json(
-        { error: `Acao invalida. Use: ${REVIEW_ACTIONS.join(", ")}` },
+        { error: `Ação inválida. Use: ${REVIEW_ACTIONS.join(", ")}` },
         { status: 400 }
       );
     }
 
     if (action !== "approved" && (!notes || notes.trim().length === 0)) {
       return NextResponse.json(
-        { error: "Notas sao obrigatorias para rejeicao ou revisao" },
+        { error: "Notas são obrigatórias para rejeição ou revisão" },
         { status: 400 }
       );
     }
@@ -38,7 +38,7 @@ export async function POST(
 
     if (!analysis) {
       return NextResponse.json(
-        { error: "Artigo sem resultado de analise para revisar" },
+        { error: "Artigo sem resultado de análise para revisar" },
         { status: 404 }
       );
     }
@@ -54,6 +54,6 @@ export async function POST(
     return NextResponse.json({ review }, { status: 201 });
   } catch (error) {
     console.error("Review error:", error);
-    return NextResponse.json({ error: "Erro ao registrar revisao" }, { status: 500 });
+    return NextResponse.json({ error: "Erro ao registrar revisão" }, { status: 500 });
   }
 }

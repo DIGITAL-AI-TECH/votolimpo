@@ -49,7 +49,7 @@ export default async function BrowsePage() {
                   </span>
                   <span className="font-semibold text-[#FF5722]">{pct}%</span>
                 </div>
-                <div className="mt-2 h-1.5 w-full overflow-hidden rounded-full bg-[#1A1A1A]">
+                <div className="mt-2 h-1.5 w-full overflow-hidden rounded-full bg-[#2A2A2A]">
                   <div
                     className="h-full rounded-full bg-[#FF5722]"
                     style={{ width: `${pct}%` }}

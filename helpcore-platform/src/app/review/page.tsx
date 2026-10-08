@@ -40,7 +40,7 @@ export default function ReviewQueuePage() {
 
   const submitReview = async (articleId: number, analysisId: number, action: string) => {
     if (action !== "approved" && !notes.trim()) {
-      alert("Notas sao obrigatorias para rejeicao ou revisao.");
+      alert("Notas são obrigatórias para rejeição ou revisão.");
       return;
     }
 
@@ -57,10 +57,10 @@ export default function ReviewQueuePage() {
         fetchQueue();
       } else {
         const data = await res.json();
-        alert(data.error || "Erro ao salvar revisao");
+        alert(data.error || "Erro ao salvar revisão");
       }
     } catch {
-      alert("Erro de conexao");
+      alert("Erro de conexão");
     }
   };
 
@@ -74,7 +74,7 @@ export default function ReviewQueuePage() {
   return (
     <div className="p-6 space-y-6">
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold text-white">Fila de Revisao</h1>
+        <h1 className="text-2xl font-bold text-white">Fila de Revisão</h1>
         <div className="flex gap-2">
           <Button
             size="sm"
@@ -105,7 +105,7 @@ export default function ReviewQueuePage() {
         <Card>
           <div className="py-8 text-center text-[#9EA5AC]">
             <p className="text-lg font-semibold">
-              {filter === "pending" ? "Nenhum artigo pendente de revisao" : "Nenhum artigo processado"}
+              {filter === "pending" ? "Nenhum artigo pendente de revisão" : "Nenhum artigo processado"}
             </p>
           </div>
         </Card>
@@ -157,7 +157,7 @@ export default function ReviewQueuePage() {
                         <textarea
                           value={notes}
                           onChange={(e) => setNotes(e.target.value)}
-                          placeholder="Notas (obrigatorio para rejeicao)..."
+                          placeholder="Notas (obrigatório para rejeição)..."
                           className="h-20 w-64 rounded-lg border border-[#1F1F1F] bg-[#1A1A1A] px-3 py-2 text-sm text-white placeholder-[#9EA5AC] focus:border-[#FF5722] focus:outline-none"
                         />
                         <div className="flex gap-2">

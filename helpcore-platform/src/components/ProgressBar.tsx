@@ -17,7 +17,7 @@ export function ProgressBar({ processed, total, label }: ProgressBarProps) {
           </span>
         </div>
       )}
-      <div className="h-3 w-full overflow-hidden rounded-full bg-[#1A1A1A]">
+      <div className="h-3 w-full overflow-hidden rounded-full bg-[#2A2A2A]">
         <div
           className="h-full rounded-full bg-gradient-to-r from-[#FF5722] to-[#FFC978] transition-all duration-500"
           style={{ width: `${pct}%` }}

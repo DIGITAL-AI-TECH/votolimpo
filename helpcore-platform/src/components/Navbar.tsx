@@ -8,7 +8,7 @@ const NAV_ITEMS = [
   { href: "/dashboard", label: "Dashboard" },
   { href: "/browse", label: "Browse" },
   { href: "/articles", label: "Busca" },
-  { href: "/review", label: "Revisao" },
+  { href: "/review", label: "Revisão" },
 ];
 
 export function Navbar() {
