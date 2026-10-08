@@ -1,0 +1,117 @@
+generator client {
+  provider        = "prisma-client-js"
+  previewFeatures = ["multiSchema"]
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+  schemas  = ["help_core", "processing_engine"]
+}
+
+model Article {
+  id            Int       @id @default(autoincrement())
+  source_url    String    @unique
+  title         String
+  subtitle      String?
+  area          String
+  lista         String?
+  content          String?
+  html_content     String?
+  content_hash     String?
+  classification   String?
+  iid              String?
+  modified_date    DateTime? @db.Timestamptz
+  links            String[]
+  help_title       String?
+  list_url         String?
+  groupstring      String?
+  numero           Int?
+  view_count       Int?
+  image_count      Int?
+  attachment_count Int?
+  http_status      Int?
+  html_hash        String?
+  created_at       DateTime  @default(now()) @db.Timestamptz
+
+  analysis_results AnalysisResult[]
+  source_relationships ArticleRelationship[] @relation("SourceArticle")
+  target_relationships ArticleRelationship[] @relation("TargetArticle")
+
+  @@schema("help_core")
+  @@map("articles")
+  @@index([area])
+  @@index([classification])
+}
+
+model AnalysisResult {
+  id                       Int       @id @default(autoincrement())
+  pe_item_id               String    @unique @db.Uuid
+  article_id               Int?
+  source_url               String?
+  doc_type                 String?
+  category                 String?
+  subcategory              String?
+  target_audience          String?
+  inv_quality_score        Decimal?
+  completeness_score       Decimal?
+  key_topics               Json?
+  summary                  String?
+  requires_update          Boolean?
+  has_mandatory_fields     Boolean?
+  missing_mandatory_fields Json?
+  mentions_systems         Json?
+  escalation_present       Boolean?
+  has_internal_conflicts   Boolean?
+  internal_conflict_details String?
+  area_operacional         String?
+  confidence               Decimal?
+  clarity                  Decimal?
+  structure                Decimal?
+  readability              Decimal?
+  completeness             Decimal?
+  accuracy_signals         Decimal?
+  overall_score            Decimal?
+  priority_level           String?
+  estimated_effort         String?
+  improvement_suggestions  Json?
+  language_issues          Json?
+  steps                    Json?
+  markdown_content         String?
+  prompt_version           String?
+  processed_at             DateTime? @db.Timestamptz
+
+  article       Article?       @relation(fields: [article_id], references: [id])
+  review_actions ReviewAction[]
+
+  @@schema("help_core")
+  @@map("analysis_results")
+}
+
+model ReviewAction {
+  id                 Int      @id @default(autoincrement())
+  analysis_result_id Int
+  action             String
+  notes              String?
+  created_at         DateTime @default(now()) @db.Timestamptz
+
+  analysis_result AnalysisResult @relation(fields: [analysis_result_id], references: [id])
+
+  @@schema("help_core")
+  @@map("review_actions")
+}
+
+model ArticleRelationship {
+  id                Int      @id @default(autoincrement())
+  source_article_id Int
+  target_article_id Int
+  relationship_type String
+  similarity_score  Decimal?
+  created_at        DateTime @default(now()) @db.Timestamptz
+
+  source_article Article @relation("SourceArticle", fields: [source_article_id], references: [id])
+  target_article Article @relation("TargetArticle", fields: [target_article_id], references: [id])
+
+  @@schema("help_core")
+  @@map("article_relationships")
+}

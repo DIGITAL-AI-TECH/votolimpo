@@ -1,0 +1,11 @@
+node_modules/
+.next/
+.git/
+*.log
+.env*
+coverage/
+etl/
+specs/
+__pycache__/
+*.pyc
+.venv/
