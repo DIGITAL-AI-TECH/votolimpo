@@ -16,16 +16,23 @@ model Article {
   subtitle      String?
   area          String
   lista         String?
-  content       String?
-  content_hash  String?
-  classification String?
-  iid           String?
-  modified_date DateTime? @db.Timestamptz
-  links         String[]
-  help_title    String?
-  list_url      String?
-  groupstring   String?
-  created_at    DateTime  @default(now()) @db.Timestamptz
+  content          String?
+  html_content     String?
+  content_hash     String?
+  classification   String?
+  iid              String?
+  modified_date    DateTime? @db.Timestamptz
+  links            String[]
+  help_title       String?
+  list_url         String?
+  groupstring      String?
+  numero           Int?
+  view_count       Int?
+  image_count      Int?
+  attachment_count Int?
+  http_status      Int?
+  html_hash        String?
+  created_at       DateTime  @default(now()) @db.Timestamptz
 
   analysis_results AnalysisResult[]
   source_relationships ArticleRelationship[] @relation("SourceArticle")
