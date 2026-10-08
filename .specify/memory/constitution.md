@@ -236,4 +236,55 @@ conformidade com os principios aqui definidos.
 - O gate de review (engineering-quality-gate) verifica testes,
   seguranca e conformidade com esta constitution.
 
-**Version**: 1.0.0 | **Ratified**: 2026-09-06 | **Last Amended**: 2026-09-06
+## Identidade Visual — Ello Consultoria (Help Core Platform)
+
+A plataforma Help Core Platform DEVE seguir a identidade visual da
+**Ello Consultoria** (`elloconsultoria.com`), cliente contratante do
+projeto Help Bradesco. A referencia canonica esta em
+`/cortex/files/help-core/ello-visual-identity.md`.
+
+### Paleta de Cores (Dark Mode permanente)
+
+| Papel | Hex | Uso |
+|-------|-----|-----|
+| Primary (brand orange) | `#FF5722` | CTAs, links, icones, destaques |
+| Primary dark (hover) | `#E64A19` | Hover de botoes |
+| Primary light | `#FF8A65` | Backgrounds sutis |
+| Accent (yellow/peach) | `#FFC978` | Elementos decorativos, gradients |
+| Background | `#000000` | Base preta |
+| Surface (cards) | `#151515` | Cards e secoes alternadas |
+| Surface alt | `#1A1A1A` | Superficie secundaria |
+| Border | `#1F1F1F` | Divisores |
+| Text primary | `#FFFFFF` | Titulos |
+| Text secondary | `#D4D8DD` | Corpo de texto |
+| Text muted | `#9EA5AC` | Captions, auxiliares |
+
+### Tipografia
+
+- **Fonte**: `Nunito Sans` (Google Fonts)
+- **Pesos**: 300, 400, 500, 600, 700, 800
+- **Stack**: `'Nunito Sans', system-ui, -apple-system, sans-serif`
+- **Escala**: H1-H2 2.5rem/700, H3 2rem/700, body 16px/400
+
+### Logo
+
+- Orange logo (navbar): `https://elloconsultoria.com/images/ello-logo-orange.png`
+- White logo (footer): `https://elloconsultoria.com/images/ello-logo-white.png`
+
+### Padroes de Design
+
+- **Border radius**: 8px (sm), 12px (md), 16px (lg), 20px (xl), pill (9999px)
+- **Shadows**: Deep — `0 20px 45px rgba(0,0,0,0.35)` em cards; orange glow `0 10px 30px rgba(255,87,34,0.3)` em elementos primarios
+- **Cards**: `bg: #151515`, `border: 1px solid #1F1F1F`, `border-radius: 16px`
+- **Botoes primary**: `bg: #FF5722`, texto branco, radius 12px, peso 600
+- **Botoes outline**: bg transparente, border e texto `#FF5722`, preenche laranja no hover
+- **Estetica geral**: Dark mode premium, superficies escuras com destaques laranja de alto contraste
+
+### Regra
+
+Todo componente UI da Help Core Platform DEVE usar esta paleta e
+tipografia. Nenhuma cor ou fonte fora deste sistema entra sem
+justificativa e aprovacao. A plataforma deve parecer criada pela Ello
+Consultoria — nao pela Digital AI.
+
+**Version**: 1.1.0 | **Ratified**: 2026-09-06 | **Last Amended**: 2026-10-08

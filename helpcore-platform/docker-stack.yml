@@ -1,0 +1,27 @@
+version: "3.8"
+
+services:
+  app:
+    image: registry.digital-ai.tech/helpcore-platform:${IMAGE_TAG:-latest}
+    networks:
+      - traefik-public
+    deploy:
+      replicas: 1
+      update_config:
+        parallelism: 1
+        delay: 10s
+        order: start-first
+      labels:
+        - "traefik.enable=true"
+        - "traefik.http.routers.helpcore.rule=Host(`helpcore.digital-ai.tech`)"
+        - "traefik.http.routers.helpcore.entrypoints=websecure"
+        - "traefik.http.routers.helpcore.tls.certresolver=letsencrypt"
+        - "traefik.http.services.helpcore.loadbalancer.server.port=3000"
+    environment:
+      - DATABASE_URL=${DATABASE_URL}
+      - HELPCORE_AUTH_PASSWORD=${HELPCORE_AUTH_PASSWORD}
+      - HELPCORE_AUTH_SECRET=${HELPCORE_AUTH_SECRET}
+
+networks:
+  traefik-public:
+    external: true
