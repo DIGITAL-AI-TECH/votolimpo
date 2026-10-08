@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 
-const SECRET = process.env.HELPCORE_AUTH_SECRET || "dev-secret-change-me";
+const SECRET = process.env.HELPCORE_AUTH_SECRET || (process.env.NODE_ENV === "production" ? (() => { throw new Error("HELPCORE_AUTH_SECRET must be set in production"); })() : "dev-secret-change-me");
 const COOKIE_NAME = "hc_session";
 const MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000;
 
@@ -33,7 +33,13 @@ async function validateTokenEdge(token: string): Promise<boolean> {
   const [timestamp, signature] = parts;
   const expectedSignature = await hmacSha256(SECRET, timestamp);
 
-  if (signature !== expectedSignature) return false;
+  // Constant-time comparison (Edge runtime — no timingSafeEqual)
+  if (signature.length !== expectedSignature.length) return false;
+  let mismatch = 0;
+  for (let i = 0; i < signature.length; i++) {
+    mismatch |= signature.charCodeAt(i) ^ expectedSignature.charCodeAt(i);
+  }
+  if (mismatch !== 0) return false;
 
   const tokenAge = Date.now() - parseInt(timestamp, 10);
   return tokenAge < MAX_AGE_MS;
@@ -47,11 +53,11 @@ export async function middleware(request: NextRequest) {
     return NextResponse.next();
   }
 
-  // Allow static assets
+  // Allow static assets (specific extensions only)
   if (
     pathname.startsWith("/_next") ||
     pathname.startsWith("/favicon") ||
-    pathname.includes(".")
+    /\.(ico|png|jpg|jpeg|svg|gif|webp|css|js|woff2?|ttf|eot|map)$/i.test(pathname)
   ) {
     return NextResponse.next();
   }

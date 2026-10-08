@@ -13,7 +13,7 @@ export async function GET(request: NextRequest) {
         WHERE ar.id IS NOT NULL
         AND NOT EXISTS (
           SELECT 1 FROM help_core.review_actions ra
-          WHERE ra.analysis_id = ar.id
+          WHERE ra.analysis_result_id = ar.id
         )
       `;
     } else {
@@ -30,7 +30,7 @@ export async function GET(request: NextRequest) {
         ar.id as analysis_id,
         (
           SELECT ra.action FROM help_core.review_actions ra
-          WHERE ra.analysis_id = ar.id
+          WHERE ra.analysis_result_id = ar.id
           ORDER BY ra.created_at DESC LIMIT 1
         ) as review_status
       FROM help_core.articles a

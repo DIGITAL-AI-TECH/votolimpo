@@ -1,7 +1,7 @@
 import { cookies } from "next/headers";
-import { createHmac } from "crypto";
+import { createHmac, timingSafeEqual } from "crypto";
 
-const SECRET = process.env.HELPCORE_AUTH_SECRET || "dev-secret-change-me";
+const SECRET = process.env.HELPCORE_AUTH_SECRET || (process.env.NODE_ENV === "production" ? (() => { throw new Error("HELPCORE_AUTH_SECRET must be set in production"); })() : "dev-secret-change-me");
 const COOKIE_NAME = "hc_session";
 const MAX_AGE = 60 * 60 * 24 * 7; // 7 days
 
@@ -22,7 +22,10 @@ export function validateToken(token: string): boolean {
     .update(timestamp)
     .digest("hex");
 
-  if (signature !== expectedSignature) return false;
+  if (
+    signature.length !== expectedSignature.length ||
+    !timingSafeEqual(Buffer.from(signature), Buffer.from(expectedSignature))
+  ) return false;
 
   const tokenAge = Date.now() - parseInt(timestamp, 10);
   return tokenAge < MAX_AGE * 1000;

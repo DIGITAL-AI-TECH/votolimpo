@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { timingSafeEqual } from "crypto";
 import { setSessionCookie } from "@/lib/auth";
 
 export async function POST(request: NextRequest) {
@@ -22,7 +23,9 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    if (password !== correctPassword) {
+    const pwBuf = Buffer.from(password);
+    const correctBuf = Buffer.from(correctPassword);
+    if (pwBuf.length !== correctBuf.length || !timingSafeEqual(pwBuf, correctBuf)) {
       return NextResponse.json(
         { error: "Senha incorreta" },
         { status: 401 }

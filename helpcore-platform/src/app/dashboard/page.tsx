@@ -150,7 +150,7 @@ export default function DashboardPage() {
         <div className="h-[400px]">
           <ResponsiveContainer width="100%" height="100%">
             <BarChart
-              data={data.by_area.slice(0, 15)}
+              data={data.by_area.slice(0, 15).map((a: { area: string; total: number; processed: number }) => ({ ...a, not_processed: a.total - a.processed }))}
               layout="vertical"
               margin={{ left: 120 }}
             >
@@ -173,8 +173,8 @@ export default function DashboardPage() {
               />
               <Bar dataKey="processed" name="Processados" stackId="a" fill="#FF5722" radius={[0, 0, 0, 0]} />
               <Bar
-                dataKey="total"
-                name="Total"
+                dataKey="not_processed"
+                name="Pendentes"
                 stackId="a"
                 fill="#1A1A1A"
                 radius={[0, 4, 4, 0]}

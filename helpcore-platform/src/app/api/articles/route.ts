@@ -30,7 +30,9 @@ export async function GET(request: NextRequest) {
       params.push(area);
     }
 
+    let searchParamIdx = 0;
     if (search) {
+      searchParamIdx = paramIdx;
       conditions.push(`to_tsvector('portuguese', COALESCE(a.title,'') || ' ' || COALESCE(a.content,'')) @@ plainto_tsquery('portuguese', $${paramIdx++})`);
       params.push(search);
     }
@@ -59,7 +61,7 @@ export async function GET(request: NextRequest) {
 
     // Highlight snippet for search
     const highlightCol = search
-      ? `, ts_headline('portuguese', COALESCE(a.content, ''), plainto_tsquery('portuguese', $${params.indexOf(search) + 1}), 'MaxWords=30, MinWords=15, StartSel=<mark>, StopSel=</mark>') as highlight`
+      ? `, ts_headline('portuguese', COALESCE(a.content, ''), plainto_tsquery('portuguese', $${searchParamIdx}), 'MaxWords=30, MinWords=15, StartSel=<mark>, StopSel=</mark>') as highlight`
       : `, '' as highlight`;
 
     // Count query
