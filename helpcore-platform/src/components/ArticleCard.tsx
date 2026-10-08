@@ -53,7 +53,7 @@ export function ArticleCard({
           {highlight && (
             <p
               className="mt-2 text-sm text-[#9EA5AC] line-clamp-2"
-              dangerouslySetInnerHTML={{ __html: highlight }}
+              dangerouslySetInnerHTML={{ __html: highlight.replace(/<(?!\/?mark>)[^>]+>/gi, "") }}
             />
           )}
         </div>
