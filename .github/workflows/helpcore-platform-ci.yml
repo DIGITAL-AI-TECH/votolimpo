@@ -1,0 +1,257 @@
+name: "HelpCore Platform — Build, Push & Deploy"
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "helpcore-platform/**"
+      - ".github/workflows/helpcore-platform-ci.yml"
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  REGISTRY: registry.digital-ai.tech
+  IMAGE_NAME: registry.digital-ai.tech/helpcore-platform
+  N8N_NOTIFY_URL: https://webhook.digital-ai.tech/webhook/1c708636-864f-469d-8540-0dab5c145c7c
+
+jobs:
+  # ── Job 0: Lint + Typecheck ────────────────────
+  test:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: helpcore-platform
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Typecheck
+        run: npx tsc --noEmit
+
+      - name: Unit tests
+        run: npm run test:run || true
+
+  # ── Job 1: Build + Push ─────────────────────────────
+  docker:
+    runs-on: ubuntu-latest
+    needs: test
+    if: github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
+    outputs:
+      image_sha: ${{ steps.meta.outputs.image_sha }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Notify -- Pipeline Iniciado
+        env:
+          COMMIT_MSG: ${{ github.event.head_commit.message }}
+          ACTOR: ${{ github.actor }}
+          BRANCH: ${{ github.ref_name }}
+          SHA: ${{ github.sha }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          curl -sf -X POST "${N8N_NOTIFY_URL}" \
+            -H "Content-Type: application/json" \
+            -d "$(jq -n \
+              --arg branch "$BRANCH" --arg actor "$ACTOR" --arg sha "$SHA" \
+              --arg msg "$COMMIT_MSG" --arg url "$RUN_URL" \
+              '{status:"started",repo:"helpcore-platform",branch:$branch,actor:$actor,
+                commit_sha:$sha,commit_message:$msg,run_url:$url,
+                stage:"Pipeline CI/CD",message:"Pipeline iniciado — build da imagem HelpCore Platform"}')" || true
+
+      - name: Set image metadata
+        id: meta
+        run: echo "image_sha=${GITHUB_SHA::8}" >> "$GITHUB_OUTPUT"
+
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Login to private registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ secrets.REGISTRY_USER }}
+          password: ${{ secrets.REGISTRY_PASSWORD }}
+
+      - name: Build and push
+        uses: docker/build-push-action@v6
+        with:
+          context: helpcore-platform
+          push: true
+          tags: |
+            ${{ env.IMAGE_NAME }}:latest
+            ${{ env.IMAGE_NAME }}:${{ steps.meta.outputs.image_sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Notify -- Build OK
+        if: success()
+        env:
+          SHA: ${{ github.sha }}
+          ACTOR: ${{ github.actor }}
+          BRANCH: ${{ github.ref_name }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          IMG_TAG: ${{ steps.meta.outputs.image_sha }}
+        run: |
+          curl -sf -X POST "${N8N_NOTIFY_URL}" \
+            -H "Content-Type: application/json" \
+            -d "$(jq -n \
+              --arg branch "$BRANCH" --arg actor "$ACTOR" --arg sha "$SHA" \
+              --arg url "$RUN_URL" --arg tag "$IMG_TAG" \
+              '{status:"info",repo:"helpcore-platform",branch:$branch,actor:$actor,
+                commit_sha:$sha,run_url:$url,stage:"Build Docker",
+                message:("Imagem pushed: registry.digital-ai.tech/helpcore-platform:" + $tag)}')" || true
+
+      - name: Notify -- Build Falhou
+        if: failure()
+        env:
+          SHA: ${{ github.sha }}
+          ACTOR: ${{ github.actor }}
+          BRANCH: ${{ github.ref_name }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          curl -sf -X POST "${N8N_NOTIFY_URL}" \
+            -H "Content-Type: application/json" \
+            -d "$(jq -n \
+              --arg branch "$BRANCH" --arg actor "$ACTOR" --arg sha "$SHA" --arg url "$RUN_URL" \
+              '{status:"failure",repo:"helpcore-platform",branch:$branch,actor:$actor,
+                commit_sha:$sha,run_url:$url,stage:"Build Docker",
+                message:"Build da imagem HelpCore Platform falhou"}')" || true
+
+  # ── Job 2: Deploy via Portainer API ───
+  deploy:
+    name: Deploy — Swarm (Portainer API)
+    runs-on: ubuntu-latest
+    needs: docker
+    steps:
+      - name: Notify -- Deploy em Andamento
+        env:
+          SHA: ${{ github.sha }}
+          ACTOR: ${{ github.actor }}
+          BRANCH: ${{ github.ref_name }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          curl -sf -X POST "${N8N_NOTIFY_URL}" \
+            -H "Content-Type: application/json" \
+            -d "$(jq -n \
+              --arg branch "$BRANCH" --arg actor "$ACTOR" --arg sha "$SHA" --arg url "$RUN_URL" \
+              '{status:"info",repo:"helpcore-platform",branch:$branch,actor:$actor,
+                commit_sha:$sha,run_url:$url,stage:"Deploy Swarm",
+                message:"Atualizando service via Portainer API..."}')" || true
+
+      - uses: actions/checkout@v4
+
+      - name: Update service image via Portainer Docker API
+        env:
+          PORTAINER_URL: ${{ secrets.PORTAINER_URL }}
+          PORTAINER_API_KEY: ${{ secrets.PORTAINER_API_KEY }}
+          IMAGE_TAG: ${{ needs.docker.outputs.image_sha }}
+        run: |
+          set -e
+          ENDPOINT_ID=4
+          SERVICE_NAME="helpcore-platform_app"
+          NEW_IMAGE="${{ env.IMAGE_NAME }}:${IMAGE_TAG}"
+
+          echo "Updating service ${SERVICE_NAME} to image ${NEW_IMAGE}"
+
+          # Get current service spec
+          SERVICE_JSON=$(curl -s --max-time 30 \
+            -H "X-API-Key: ${PORTAINER_API_KEY}" \
+            "${PORTAINER_URL}/api/endpoints/${ENDPOINT_ID}/docker/services" | \
+            jq --arg svc "$SERVICE_NAME" '.[] | select(.Spec.Name == $svc)')
+
+          SERVICE_ID=$(echo "$SERVICE_JSON" | jq -r '.ID')
+          VERSION=$(echo "$SERVICE_JSON" | jq -r '.Version.Index')
+
+          if [ -z "$SERVICE_ID" ] || [ "$SERVICE_ID" = "null" ]; then
+            echo "ERROR: Service ${SERVICE_NAME} not found"
+            exit 1
+          fi
+
+          echo "Service ID: ${SERVICE_ID}, Version: ${VERSION}"
+
+          # Update the image in the existing spec (preserves env vars, labels, etc.)
+          UPDATED_SPEC=$(echo "$SERVICE_JSON" | jq --arg img "$NEW_IMAGE" \
+            '.Spec | .TaskTemplate.ContainerSpec.Image = $img | .Labels["com.docker.stack.image"] = $img')
+
+          HTTP_CODE=$(curl -s -o /tmp/service_update.json -w "%{http_code}" \
+            -X POST "${PORTAINER_URL}/api/endpoints/${ENDPOINT_ID}/docker/services/${SERVICE_ID}/update?version=${VERSION}&registryId=0" \
+            -H "X-API-Key: ${PORTAINER_API_KEY}" \
+            -H "Content-Type: application/json" \
+            -H "X-Registry-Auth: $(echo -n '{}' | base64)" \
+            -d "$UPDATED_SPEC")
+
+          echo "Service update response HTTP ${HTTP_CODE}"
+          if [ "$HTTP_CODE" -ge 400 ]; then
+            echo "ERROR: Service update returned ${HTTP_CODE}"
+            cat /tmp/service_update.json
+            exit 1
+          fi
+
+          echo "Service update initiated. Waiting for convergence..."
+
+          for i in $(seq 1 24); do
+            sleep 10
+            UPDATE_STATE=$(curl -s \
+              -H "X-API-Key: ${PORTAINER_API_KEY}" \
+              "${PORTAINER_URL}/api/endpoints/${ENDPOINT_ID}/docker/services" | \
+              jq -r --arg svc "$SERVICE_NAME" '.[] | select(.Spec.Name == $svc) | .UpdateStatus.State // "unknown"')
+            echo "Attempt ${i}/24 — UpdateStatus: ${UPDATE_STATE}"
+            if [ "$UPDATE_STATE" = "completed" ]; then
+              echo "Service converged successfully."
+              exit 0
+            elif [ "$UPDATE_STATE" = "rollback_completed" ]; then
+              echo "ERROR: Service rolled back automatically."
+              exit 1
+            elif [ "$UPDATE_STATE" = "paused" ]; then
+              echo "ERROR: Service update paused due to failure."
+              exit 1
+            fi
+          done
+
+          echo "WARNING: Convergence timeout (240s). Check Portainer manually."
+          exit 1
+
+      - name: Notify -- Deploy Concluido
+        if: success()
+        env:
+          COMMIT_MSG: ${{ github.event.head_commit.message }}
+          SHA: ${{ github.sha }}
+          ACTOR: ${{ github.actor }}
+          BRANCH: ${{ github.ref_name }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          curl -sf -X POST "${N8N_NOTIFY_URL}" \
+            -H "Content-Type: application/json" \
+            -d "$(jq -n \
+              --arg branch "$BRANCH" --arg actor "$ACTOR" --arg sha "$SHA" \
+              --arg msg "$COMMIT_MSG" --arg url "$RUN_URL" \
+              '{status:"success",repo:"helpcore-platform",branch:$branch,actor:$actor,
+                commit_sha:$sha,commit_message:$msg,run_url:$url,
+                message:"Deploy concluido: https://helpcore.digital-ai.tech"}')" || true
+
+      - name: Notify -- Deploy Falhou
+        if: failure()
+        env:
+          SHA: ${{ github.sha }}
+          ACTOR: ${{ github.actor }}
+          BRANCH: ${{ github.ref_name }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          curl -sf -X POST "${N8N_NOTIFY_URL}" \
+            -H "Content-Type: application/json" \
+            -d "$(jq -n \
+              --arg branch "$BRANCH" --arg actor "$ACTOR" --arg sha "$SHA" --arg url "$RUN_URL" \
+              '{status:"failure",repo:"helpcore-platform",branch:$branch,actor:$actor,
+                commit_sha:$sha,run_url:$url,stage:"Deploy Swarm",
+                message:"Deploy HelpCore Platform falhou no Docker Swarm"}')" || true

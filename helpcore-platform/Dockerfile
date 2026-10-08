@@ -9,6 +9,11 @@ FROM node:20-alpine AS builder
 WORKDIR /app
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
+# Next.js collects page data at build time — these env vars are needed
+# but actual values are injected at runtime via docker-stack.yml
+ENV HELPCORE_AUTH_SECRET="build-time-placeholder-replaced-at-runtime"
+ENV HELPCORE_AUTH_PASSWORD="build-time-placeholder-replaced-at-runtime"
+ENV DATABASE_URL="postgresql://placeholder:placeholder@localhost:5432/placeholder"
 RUN npx prisma generate && npm run build
 
 # Stage 3: Runner
