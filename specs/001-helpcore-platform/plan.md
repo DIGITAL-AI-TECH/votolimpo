@@ -25,7 +25,7 @@ Plataforma web monolitica (Next.js 15) para o time Ello/Bradesco visualizar, nav
 
 | Principio | Status | Notas |
 |-----------|--------|-------|
-| I. Monorepo Multi-Service | PASS | helpcore-platform e subpasta do monorepo votolimpo com Dockerfile e deploy independente |
+| I. Monorepo Multi-Service | PASS | helpcore-platform e subpasta do monorepo helpcore com Dockerfile e deploy independente |
 | II. Spec-Driven Development | PASS | Seguindo ciclo Speckit completo |
 | III. Quality Gate Mandatorio | PASS | HOMELAND + QA + SENTINEL antes do merge |
 | IV. Testes Obrigatorios | PASS | Vitest para frontend, pytest para ETL, diff coverage 100% |
