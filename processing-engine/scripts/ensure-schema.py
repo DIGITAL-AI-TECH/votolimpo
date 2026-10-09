@@ -333,7 +333,22 @@ async def main():
             )
             print("[ensure-schema] pipelines: CREATED")
 
-        # --- 2. Ensure help_core schema ---
+        # --- 2. Ensure help_core schema in processing_engine db ---
+        await conn.execute("CREATE SCHEMA IF NOT EXISTS help_core")
+        print("[ensure-schema] help_core schema in pe db: OK")
+
+        print("[ensure-schema] processing_engine DB done. Connecting to help_core DB...")
+        await conn.close()
+
+        # Connect to the help_core DATABASE (separate from processing_engine)
+        # The sink uses HELPCORE_DATABASE_URL which points to db=help_core
+        conn = await asyncpg.connect(
+            host=host, port=port, user=user, password=password,
+            database="help_core", timeout=15
+        )
+        print("[ensure-schema] Connected to help_core database")
+
+        # Ensure help_core schema exists in this database too
         await conn.execute("CREATE SCHEMA IF NOT EXISTS help_core")
         print("[ensure-schema] help_core schema: OK")
 
