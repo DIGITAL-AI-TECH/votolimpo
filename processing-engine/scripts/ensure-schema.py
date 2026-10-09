@@ -115,6 +115,44 @@ async def main():
             elif not items_exists and not job_items_exists:
                 print("[ensure-schema] WARNING: neither items nor job_items exists!")
 
+            # --- 1b2. Ensure job_items has all needed columns ---
+            ji_table = 'job_items' if (job_items_exists or (items_exists and not job_items_exists)) else None
+            if ji_table:
+                ji_actual = ji_table if await conn.fetchval(
+                    "SELECT EXISTS (SELECT 1 FROM information_schema.tables "
+                    "WHERE table_schema='processing_engine' AND table_name='job_items')"
+                ) else 'items'
+                ji_cols = {r["column_name"] for r in await conn.fetch(
+                    "SELECT column_name FROM information_schema.columns "
+                    f"WHERE table_schema='processing_engine' AND table_name='{ji_actual}'"
+                )}
+                ji_needed = {
+                    "content": "TEXT",
+                    "pipeline_id": "UUID",
+                    "prompt_tokens": "INTEGER NOT NULL DEFAULT 0",
+                    "completion_tokens": "INTEGER NOT NULL DEFAULT 0",
+                    "total_tokens": "INTEGER NOT NULL DEFAULT 0",
+                    "cost_usd": "NUMERIC(12,6) NOT NULL DEFAULT 0",
+                    "duration_ms": "INTEGER NOT NULL DEFAULT 0",
+                    "error": "TEXT",
+                    "updated_at": "TIMESTAMPTZ DEFAULT now()",
+                    "validation_errors": "JSONB NOT NULL DEFAULT '[]'",
+                    "usage": "JSONB",
+                }
+                ji_missing = {k: v for k, v in ji_needed.items() if k not in ji_cols}
+                if ji_missing:
+                    parts = [f"ADD COLUMN IF NOT EXISTS {col} {typedef}" for col, typedef in ji_missing.items()]
+                    await conn.execute(f"ALTER TABLE processing_engine.{ji_actual} " + ", ".join(parts))
+                    print(f"[ensure-schema] {ji_actual}: added {list(ji_missing.keys())}")
+
+                # Rename error_message -> error if needed
+                if 'error_message' in ji_cols and 'error' not in ji_cols:
+                    await conn.execute(
+                        f"ALTER TABLE processing_engine.{ji_actual} "
+                        "RENAME COLUMN error_message TO error"
+                    )
+                    print(f"[ensure-schema] {ji_actual}: renamed error_message -> error")
+
             # --- 1c. Rename cache_entries -> cache if needed ---
             ce_exists = await conn.fetchval(
                 "SELECT EXISTS (SELECT 1 FROM information_schema.tables "
@@ -131,6 +169,128 @@ async def main():
                 print("[ensure-schema] renamed cache_entries -> cache")
         else:
             print("[ensure-schema] jobs table not found — alembic will create it")
+
+        # --- 1d. Ensure enum values exist ---
+        # job_status needs 'pending' and 'processing'
+        for val in ('pending', 'processing'):
+            try:
+                await conn.execute(
+                    f"ALTER TYPE processing_engine.job_status ADD VALUE IF NOT EXISTS '{val}'"
+                )
+            except Exception:
+                pass  # enum value already exists or type doesn't exist
+
+        # --- 1e. Ensure dedup_strategy enum exists ---
+        enum_exists = await conn.fetchval(
+            "SELECT EXISTS (SELECT 1 FROM pg_type t JOIN pg_namespace n "
+            "ON t.typnamespace = n.oid WHERE n.nspname='processing_engine' "
+            "AND t.typname='dedup_strategy')"
+        )
+        if not enum_exists:
+            await conn.execute(
+                "CREATE TYPE processing_engine.dedup_strategy AS ENUM "
+                "('hash', 'semantic', 'composite', 'none')"
+            )
+            print("[ensure-schema] dedup_strategy enum: CREATED")
+        else:
+            print("[ensure-schema] dedup_strategy enum: OK")
+
+        # --- 1e. Ensure pipelines table has all columns ---
+        pip_exists = await conn.fetchval(
+            "SELECT EXISTS (SELECT 1 FROM information_schema.tables "
+            "WHERE table_schema='processing_engine' AND table_name='pipelines')"
+        )
+        if pip_exists:
+            pip_cols = {r["column_name"] for r in await conn.fetch(
+                "SELECT column_name FROM information_schema.columns "
+                "WHERE table_schema='processing_engine' AND table_name='pipelines'"
+            )}
+            pip_needed = {
+                "description": "TEXT",
+                "ingestor_type": "TEXT NOT NULL DEFAULT 'auto'",
+                "max_content_chars": "INTEGER DEFAULT 100000",
+                "dedup_strategy": "TEXT DEFAULT 'hash'",
+                "dedup_threshold": "REAL DEFAULT 0.90",
+                "llm_provider": "TEXT NOT NULL DEFAULT 'openai'",
+                "llm_model": "TEXT NOT NULL DEFAULT 'gpt-4.1-mini'",
+                "llm_temperature": "REAL NOT NULL DEFAULT 0.0",
+                "llm_seed": "INTEGER DEFAULT 42",
+                "llm_max_tokens": "INTEGER DEFAULT 16384",
+                "system_prompt": "TEXT NOT NULL DEFAULT ''",
+                "output_schema": "JSONB NOT NULL DEFAULT '{}'",
+                "validators": "TEXT[] NOT NULL DEFAULT '{\"schema\"}'",
+                "sink_type": "TEXT NOT NULL DEFAULT 'postgresql'",
+                "sink_config": "JSONB DEFAULT '{}'",
+                "max_concurrent": "INTEGER NOT NULL DEFAULT 5",
+                "rate_limit_rpm": "INTEGER DEFAULT 60",
+                "budget_limit_usd": "REAL",
+                "budget_period": "TEXT DEFAULT 'month'",
+                "max_retries": "INTEGER NOT NULL DEFAULT 3",
+                "retry_backoff_base": "REAL NOT NULL DEFAULT 2.0",
+                "cache_ttl_hours": "INTEGER NOT NULL DEFAULT 720",
+                "is_active": "BOOLEAN NOT NULL DEFAULT true",
+                "version": "INTEGER NOT NULL DEFAULT 1",
+            }
+            pip_missing = {k: v for k, v in pip_needed.items() if k not in pip_cols}
+            if pip_missing:
+                parts = [f"ADD COLUMN IF NOT EXISTS {col} {typedef}" for col, typedef in pip_missing.items()]
+                await conn.execute("ALTER TABLE processing_engine.pipelines " + ", ".join(parts))
+                print(f"[ensure-schema] pipelines: added {list(pip_missing.keys())}")
+            else:
+                print("[ensure-schema] pipelines: all columns OK")
+
+            # If dedup_strategy column uses the enum type, change to TEXT for flexibility
+            ds_type = await conn.fetchval(
+                "SELECT udt_name FROM information_schema.columns "
+                "WHERE table_schema='processing_engine' AND table_name='pipelines' "
+                "AND column_name='dedup_strategy'"
+            )
+            if ds_type and ds_type == 'dedup_strategy':
+                await conn.execute(
+                    "ALTER TABLE processing_engine.pipelines "
+                    "ALTER COLUMN dedup_strategy TYPE TEXT USING dedup_strategy::TEXT"
+                )
+                print("[ensure-schema] pipelines: dedup_strategy ENUM -> TEXT")
+        else:
+            # Create pipelines table from scratch
+            print("[ensure-schema] Creating processing_engine.pipelines...")
+            await conn.execute("""
+                CREATE TABLE processing_engine.pipelines (
+                    id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+                    name            TEXT NOT NULL UNIQUE,
+                    version         INTEGER NOT NULL DEFAULT 1,
+                    description     TEXT,
+                    ingestor_type   TEXT NOT NULL DEFAULT 'auto',
+                    max_content_chars INTEGER DEFAULT 100000,
+                    dedup_strategy  TEXT DEFAULT 'hash',
+                    dedup_threshold REAL DEFAULT 0.90,
+                    llm_provider    TEXT NOT NULL DEFAULT 'openai',
+                    llm_model       TEXT NOT NULL DEFAULT 'gpt-4.1-mini',
+                    llm_temperature REAL NOT NULL DEFAULT 0.0,
+                    llm_seed        INTEGER DEFAULT 42,
+                    llm_max_tokens  INTEGER DEFAULT 16384,
+                    system_prompt   TEXT NOT NULL DEFAULT '',
+                    output_schema   JSONB NOT NULL DEFAULT '{}',
+                    validators      TEXT[] NOT NULL DEFAULT '{"schema"}',
+                    sink_type       TEXT NOT NULL DEFAULT 'postgresql',
+                    sink_config     JSONB DEFAULT '{}',
+                    max_concurrent  INTEGER NOT NULL DEFAULT 5,
+                    rate_limit_rpm  INTEGER DEFAULT 60,
+                    budget_limit_usd REAL,
+                    budget_period    TEXT DEFAULT 'month',
+                    max_retries     INTEGER NOT NULL DEFAULT 3,
+                    retry_backoff_base REAL NOT NULL DEFAULT 2.0,
+                    cache_ttl_hours INTEGER NOT NULL DEFAULT 720,
+                    is_active       BOOLEAN NOT NULL DEFAULT true,
+                    created_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
+                    updated_at      TIMESTAMPTZ NOT NULL DEFAULT now()
+                )
+            """)
+            await conn.execute(
+                "CREATE INDEX IF NOT EXISTS idx_pipelines_name "
+                "ON processing_engine.pipelines (name)"
+            )
+            print("[ensure-schema] pipelines: CREATED")
 
         # --- 2. Ensure help_core schema ---
         await conn.execute("CREATE SCHEMA IF NOT EXISTS help_core")
