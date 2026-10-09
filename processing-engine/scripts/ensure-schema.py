@@ -468,6 +468,24 @@ async def main():
             else:
                 print("[ensure-schema] analysis_results: all columns OK")
 
+            # Ensure UNIQUE constraint on pe_item_id (needed for ON CONFLICT)
+            has_unique = await conn.fetchval("""
+                SELECT EXISTS (SELECT 1 FROM pg_constraint c
+                JOIN pg_namespace n ON c.connamespace = n.oid
+                WHERE n.nspname = 'help_core'
+                AND c.conrelid = 'help_core.analysis_results'::regclass
+                AND c.contype = 'u'
+                AND EXISTS (SELECT 1 FROM unnest(c.conkey) k
+                JOIN pg_attribute a ON a.attrelid = c.conrelid AND a.attnum = k
+                WHERE a.attname = 'pe_item_id'))
+            """)
+            if not has_unique:
+                await conn.execute(
+                    "ALTER TABLE help_core.analysis_results "
+                    "ADD CONSTRAINT analysis_results_pe_item_id_unique UNIQUE (pe_item_id)"
+                )
+                print("[ensure-schema] analysis_results: added UNIQUE on pe_item_id")
+
         # --- 4. help_core.review_actions ---
         ra_exists = await conn.fetchval(
             "SELECT EXISTS (SELECT 1 FROM information_schema.tables "
