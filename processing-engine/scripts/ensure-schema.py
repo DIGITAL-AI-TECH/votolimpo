@@ -493,16 +493,54 @@ async def main():
                 "WHERE table_schema='help_core' AND table_name='analysis_results'"
             )}
             needed_cols = {
+                # Traceability
+                "pe_item_id": "UUID",
+                "source_url": "TEXT",
+                # Inventory
+                "doc_type": "TEXT",
+                "category": "TEXT",
+                "subcategory": "TEXT",
+                "target_audience": "TEXT",
+                "inv_quality_score": "DECIMAL",
+                "completeness_score": "DECIMAL",
+                "key_topics": "JSONB",
+                "summary": "TEXT",
+                "requires_update": "BOOLEAN",
+                "has_mandatory_fields": "BOOLEAN",
+                "missing_mandatory_fields": "JSONB",
+                "estimated_word_count": "INTEGER",
+                "language_issues": "JSONB",
+                "classification_confidence": "DECIMAL",
+                "confidence": "DECIMAL",
                 "steps": "JSONB",
                 "area_operacional": "TEXT",
                 "complexity_level": "TEXT",
                 "mentions_systems": "JSONB",
                 "escalation_present": "BOOLEAN",
-                "markdown_content": "TEXT",
-                "confidence": "DECIMAL",
+                # Quality
+                "clarity": "DECIMAL",
+                "structure": "DECIMAL",
+                "readability": "DECIMAL",
                 "completeness": "DECIMAL",
-                "missing_mandatory_fields": "JSONB",
+                "accuracy_signals": "DECIMAL",
+                "overall_score": "DECIMAL",
+                "priority_level": "TEXT",
+                "estimated_effort": "TEXT",
+                "improvement_suggestions": "JSONB",
+                "actionable_items": "JSONB",
+                # Dedup
+                "has_internal_conflicts": "BOOLEAN",
+                "internal_conflict_details": "TEXT",
                 "content_genericness": "TEXT",
+                # Content
+                "markdown_content": "TEXT",
+                # Traceability (costs)
+                "prompt_version": "TEXT",
+                "prompt_tokens": "INTEGER",
+                "completion_tokens": "INTEGER",
+                "cost_usd": "DECIMAL",
+                "metadata": "JSONB NOT NULL DEFAULT '{}'",
+                "processed_at": "TIMESTAMPTZ",
                 # Computed fields (calculated by helpcore_compute_fields.py)
                 "char_count": "INTEGER",
                 "word_count": "INTEGER",
