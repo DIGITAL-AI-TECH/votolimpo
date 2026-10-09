@@ -13,8 +13,8 @@ dedup_config:
   url_normalize: true
 
 # --- LLM ---
-llm_provider: openai
-llm_model: gpt-4.1-mini
+llm_provider: anthropic
+llm_model: claude-sonnet-4-20250514
 llm_temperature: 0.0
 llm_max_tokens: 16384
 
