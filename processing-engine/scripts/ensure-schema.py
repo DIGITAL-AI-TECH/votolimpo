@@ -43,6 +43,41 @@ async def main():
                 "SELECT column_name FROM information_schema.columns "
                 "WHERE table_schema='processing_engine' AND table_name='jobs'"
             )}
+
+            # Column renames from migration 016
+            renames = [
+                ("items_total", "total_items"),
+                ("items_completed", "completed_items"),
+                ("items_failed", "failed_items"),
+            ]
+            for old_name, new_name in renames:
+                if old_name in cols and new_name not in cols:
+                    await conn.execute(
+                        f"ALTER TABLE processing_engine.jobs "
+                        f"RENAME COLUMN {old_name} TO {new_name}"
+                    )
+                    cols.discard(old_name)
+                    cols.add(new_name)
+                    print(f"[ensure-schema] jobs: renamed {old_name} -> {new_name}")
+
+            # Priority type change (INTEGER -> TEXT)
+            ptype = await conn.fetchval(
+                "SELECT data_type FROM information_schema.columns "
+                "WHERE table_schema='processing_engine' AND table_name='jobs' "
+                "AND column_name='priority'"
+            )
+            if ptype and ptype == 'integer':
+                await conn.execute(
+                    "ALTER TABLE processing_engine.jobs "
+                    "ALTER COLUMN priority TYPE TEXT USING CASE "
+                    "WHEN priority=0 THEN 'normal' "
+                    "WHEN priority=1 THEN 'high' "
+                    "WHEN priority=2 THEN 'critical' "
+                    "WHEN priority=-1 THEN 'low' "
+                    "ELSE 'normal' END"
+                )
+                print("[ensure-schema] jobs: priority INTEGER -> TEXT")
+
             needed = {
                 "skip_cache": "BOOLEAN NOT NULL DEFAULT false",
                 "skip_dedup": "BOOLEAN NOT NULL DEFAULT false",
@@ -50,6 +85,9 @@ async def main():
                 "override_model": "TEXT",
                 "total_cost_usd": "NUMERIC(10,6) NOT NULL DEFAULT 0",
                 "total_duration_ms": "INTEGER NOT NULL DEFAULT 0",
+                "total_items": "INTEGER NOT NULL DEFAULT 0",
+                "completed_items": "INTEGER NOT NULL DEFAULT 0",
+                "failed_items": "INTEGER NOT NULL DEFAULT 0",
             }
             missing = {k: v for k, v in needed.items() if k not in cols}
             if missing:
@@ -58,6 +96,39 @@ async def main():
                 print(f"[ensure-schema] jobs: added {list(missing.keys())}")
             else:
                 print("[ensure-schema] jobs: all columns OK")
+
+            # --- 1b. Rename items -> job_items if needed ---
+            items_exists = await conn.fetchval(
+                "SELECT EXISTS (SELECT 1 FROM information_schema.tables "
+                "WHERE table_schema='processing_engine' AND table_name='items')"
+            )
+            job_items_exists = await conn.fetchval(
+                "SELECT EXISTS (SELECT 1 FROM information_schema.tables "
+                "WHERE table_schema='processing_engine' AND table_name='job_items')"
+            )
+            if items_exists and not job_items_exists:
+                await conn.execute(
+                    "ALTER TABLE processing_engine.items "
+                    "RENAME TO job_items"
+                )
+                print("[ensure-schema] renamed items -> job_items")
+            elif not items_exists and not job_items_exists:
+                print("[ensure-schema] WARNING: neither items nor job_items exists!")
+
+            # --- 1c. Rename cache_entries -> cache if needed ---
+            ce_exists = await conn.fetchval(
+                "SELECT EXISTS (SELECT 1 FROM information_schema.tables "
+                "WHERE table_schema='processing_engine' AND table_name='cache_entries')"
+            )
+            cache_exists = await conn.fetchval(
+                "SELECT EXISTS (SELECT 1 FROM information_schema.tables "
+                "WHERE table_schema='processing_engine' AND table_name='cache')"
+            )
+            if ce_exists and not cache_exists:
+                await conn.execute(
+                    "ALTER TABLE processing_engine.cache_entries RENAME TO cache"
+                )
+                print("[ensure-schema] renamed cache_entries -> cache")
         else:
             print("[ensure-schema] jobs table not found — alembic will create it")
 
