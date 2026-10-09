@@ -239,6 +239,24 @@ async def main():
             else:
                 print("[ensure-schema] pipelines: all columns OK")
 
+            # Ensure UNIQUE constraint on name (needed for ON CONFLICT)
+            has_unique = await conn.fetchval(
+                "SELECT EXISTS (SELECT 1 FROM pg_constraint c "
+                "JOIN pg_namespace n ON c.connamespace = n.oid "
+                "WHERE n.nspname = 'processing_engine' "
+                "AND c.conrelid = 'processing_engine.pipelines'::regclass "
+                "AND c.contype = 'u' "
+                "AND EXISTS (SELECT 1 FROM unnest(c.conkey) k "
+                "JOIN pg_attribute a ON a.attrelid = c.conrelid AND a.attnum = k "
+                "WHERE a.attname = 'name'))"
+            )
+            if not has_unique:
+                await conn.execute(
+                    "ALTER TABLE processing_engine.pipelines "
+                    "ADD CONSTRAINT pipelines_name_key UNIQUE (name)"
+                )
+                print("[ensure-schema] pipelines: added UNIQUE constraint on name")
+
             # If dedup_strategy column uses the enum type, change to TEXT for flexibility
             ds_type = await conn.fetchval(
                 "SELECT udt_name FROM information_schema.columns "
