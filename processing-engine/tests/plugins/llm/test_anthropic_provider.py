@@ -79,14 +79,14 @@ async def test_process_with_schema_returns_correct_shape():
         content="texto",
         system_prompt="Extraia dados.",
         output_schema={"type": "object", "properties": {"name": {"type": "string"}}},
-        config={"model": "claude-sonnet-4-20250514"},
+        config={"model": "claude-sonnet-4-5-20250929"},
     )
 
     assert result["output"] == expected_output
     assert result["usage"]["prompt_tokens"] == 200
     assert result["usage"]["completion_tokens"] == 100
     assert result["usage"]["total_tokens"] == 300
-    assert result["usage"]["model"] == "claude-sonnet-4-20250514"
+    assert result["usage"]["model"] == "claude-sonnet-4-5-20250929"
     assert result["cost_usd"] > 0
 
 
@@ -126,29 +126,29 @@ async def test_process_without_schema_raises_on_invalid_json():
 # ── custo ────────────────────────────────────────────────────────────────────
 
 def test_estimate_cost_sonnet():
-    cost = _estimate_anthropic_cost("claude-sonnet-4-20250514", 1_000_000, 1_000_000)
+    cost = _estimate_anthropic_cost("claude-sonnet-4-5-20250929", 1_000_000, 1_000_000)
     assert cost == pytest.approx(18.0, rel=1e-3)  # 3.00 + 15.00
 
 
 def test_estimate_cost_haiku():
-    cost = _estimate_anthropic_cost("claude-haiku-3-5-20241022", 1_000_000, 1_000_000)
+    cost = _estimate_anthropic_cost("claude-haiku-4-5-20251001", 1_000_000, 1_000_000)
     assert cost == pytest.approx(4.80, rel=1e-3)  # 0.80 + 4.00
 
 
 def test_estimate_cost_opus():
-    cost = _estimate_anthropic_cost("claude-opus-4-20250514", 1_000_000, 1_000_000)
+    cost = _estimate_anthropic_cost("claude-opus-4-6", 1_000_000, 1_000_000)
     assert cost == pytest.approx(90.0, rel=1e-3)  # 15.00 + 75.00
 
 
 def test_estimate_cost_unknown_model_uses_sonnet_default():
     cost_unknown = _estimate_anthropic_cost("claude-unknown", 1_000_000, 1_000_000)
-    cost_default = _estimate_anthropic_cost("claude-sonnet-4-20250514", 1_000_000, 1_000_000)
+    cost_default = _estimate_anthropic_cost("claude-sonnet-4-5-20250929", 1_000_000, 1_000_000)
     assert cost_unknown == cost_default
 
 
 def test_cost_appears_in_process_result():
     """cost_usd calculado deve ser > 0 para tokens reais."""
-    cost = _estimate_anthropic_cost("claude-sonnet-4-20250514", 500, 300)
+    cost = _estimate_anthropic_cost("claude-sonnet-4-5-20250929", 500, 300)
     assert cost > 0
 
 
