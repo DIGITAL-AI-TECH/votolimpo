@@ -270,7 +270,81 @@ async def init_help_core_analysis_schema(pool: asyncpg.Pool | None = None):
             WHERE table_schema = 'help_core' AND table_name = 'analysis_results'
         """)
         if row > 0:
-            logger.info("help_core.analysis_results already exists in PE database")
+            # Table exists — ensure all columns are present (idempotent ALTER)
+            existing_cols = {r["column_name"] for r in await conn.fetch(
+                "SELECT column_name FROM information_schema.columns "
+                "WHERE table_schema='help_core' AND table_name='analysis_results'"
+            )}
+            needed = {
+                "pe_item_id": "UUID",
+                "source_url": "TEXT",
+                "doc_type": "TEXT",
+                "category": "TEXT",
+                "subcategory": "TEXT",
+                "target_audience": "TEXT",
+                "inv_quality_score": "NUMERIC(5,2)",
+                "completeness_score": "NUMERIC(5,2)",
+                "key_topics": "TEXT[]",
+                "summary": "TEXT",
+                "requires_update": "BOOLEAN",
+                "has_mandatory_fields": "BOOLEAN",
+                "mandatory_fields_missing": "TEXT[]",
+                "estimated_word_count": "INTEGER",
+                "language_issues": "TEXT[]",
+                "classification_confidence": "NUMERIC(3,2)",
+                "confidence": "NUMERIC(3,2)",
+                "steps": "TEXT[] DEFAULT '{}'::TEXT[]",
+                "clarity": "NUMERIC(5,2)",
+                "structure": "NUMERIC(5,2)",
+                "completeness": "NUMERIC(5,2)",
+                "quality_completeness": "NUMERIC(5,2)",
+                "readability": "NUMERIC(5,2)",
+                "accuracy_signals": "NUMERIC(5,2)",
+                "overall_score": "NUMERIC(5,2)",
+                "improvement_suggestions": "TEXT[]",
+                "priority_level": "TEXT",
+                "estimated_effort": "TEXT",
+                "actionable_items": "JSONB",
+                "has_internal_conflicts": "BOOLEAN",
+                "internal_conflict_details": "TEXT",
+                "content_genericness": "TEXT",
+                "area_operacional": "TEXT",
+                "complexity_level": "TEXT",
+                "mentions_systems": "TEXT[] DEFAULT '{}'::TEXT[]",
+                "escalation_present": "BOOLEAN",
+                "markdown_content": "TEXT",
+                "prompt_version": "TEXT",
+                "prompt_tokens": "INTEGER",
+                "completion_tokens": "INTEGER",
+                "cost_usd": "NUMERIC(10,6)",
+                "metadata": "JSONB NOT NULL DEFAULT '{}'",
+                "processed_at": "TIMESTAMPTZ",
+            }
+            missing = {k: v for k, v in needed.items() if k not in existing_cols}
+            if missing:
+                parts = [f"ADD COLUMN IF NOT EXISTS {col} {typedef}" for col, typedef in missing.items()]
+                await conn.execute("ALTER TABLE help_core.analysis_results " + ", ".join(parts))
+                logger.info("help_core.analysis_results: added columns %s", list(missing.keys()))
+            else:
+                logger.info("help_core.analysis_results already exists with all columns in PE database")
+
+            # Ensure UNIQUE constraint on pe_item_id
+            has_unique = await conn.fetchval("""
+                SELECT EXISTS (SELECT 1 FROM pg_constraint c
+                JOIN pg_namespace n ON c.connamespace = n.oid
+                WHERE n.nspname = 'help_core'
+                AND c.conrelid = 'help_core.analysis_results'::regclass
+                AND c.contype = 'u'
+                AND EXISTS (SELECT 1 FROM unnest(c.conkey) k
+                JOIN pg_attribute a ON a.attrelid = c.conrelid AND a.attnum = k
+                WHERE a.attname = 'pe_item_id'))
+            """)
+            if not has_unique and 'pe_item_id' in existing_cols:
+                await conn.execute(
+                    "ALTER TABLE help_core.analysis_results "
+                    "ADD CONSTRAINT analysis_results_pe_item_id_unique UNIQUE (pe_item_id)"
+                )
+                logger.info("help_core.analysis_results: added UNIQUE on pe_item_id")
             return
 
         # Create articles master table (from migration 019)
