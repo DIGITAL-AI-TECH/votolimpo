@@ -5,7 +5,7 @@ const SECRET = process.env.HELPCORE_AUTH_SECRET || (process.env.NODE_ENV === "pr
 const COOKIE_NAME = "hc_session";
 const MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000;
 
-const PUBLIC_PATHS = ["/login", "/api/auth/login", "/api/auth/logout", "/api/health"];
+const PUBLIC_PATHS = ["/login", "/api/auth/login", "/api/auth/logout", "/api/health", "/api/admin/"];
 
 async function hmacSha256(key: string, message: string): Promise<string> {
   const encoder = new TextEncoder();
