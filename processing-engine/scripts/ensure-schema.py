@@ -180,6 +180,39 @@ async def main():
                     "ALTER TABLE processing_engine.cache_entries RENAME TO cache"
                 )
                 print("[ensure-schema] renamed cache_entries -> cache")
+
+            # --- 1c2. Ensure cache composite UNIQUE index ---
+            # Orchestrator uses ON CONFLICT (content_hash, pipeline_id) which requires
+            # a UNIQUE constraint on that pair. The fallback DDL only has PK on content_hash.
+            cache_tbl_exists = await conn.fetchval(
+                "SELECT EXISTS (SELECT 1 FROM information_schema.tables "
+                "WHERE table_schema='processing_engine' AND table_name='cache')"
+            )
+            if cache_tbl_exists:
+                idx_exists = await conn.fetchval(
+                    "SELECT EXISTS (SELECT 1 FROM pg_indexes "
+                    "WHERE schemaname='processing_engine' AND tablename='cache' "
+                    "AND indexname='idx_cache_hash_pipeline')"
+                )
+                if not idx_exists:
+                    # Drop PK on content_hash alone if it exists (incompatible)
+                    pk_name = await conn.fetchval(
+                        "SELECT c.conname FROM pg_constraint c "
+                        "JOIN pg_namespace n ON c.connamespace = n.oid "
+                        "WHERE n.nspname='processing_engine' "
+                        "AND c.conrelid = 'processing_engine.cache'::regclass "
+                        "AND c.contype = 'p'"
+                    )
+                    if pk_name:
+                        await conn.execute(
+                            f"ALTER TABLE processing_engine.cache DROP CONSTRAINT {pk_name}"
+                        )
+                        print(f"[ensure-schema] cache: dropped old PK {pk_name}")
+                    await conn.execute(
+                        "CREATE UNIQUE INDEX idx_cache_hash_pipeline "
+                        "ON processing_engine.cache (content_hash, pipeline_id)"
+                    )
+                    print("[ensure-schema] cache: created UNIQUE index (content_hash, pipeline_id)")
         else:
             print("[ensure-schema] jobs table not found — alembic will create it")
 
