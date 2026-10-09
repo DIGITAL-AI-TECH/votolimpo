@@ -21,12 +21,89 @@ import hashlib
 import json
 import sys
 import time
+import unicodedata
 from pathlib import Path
 from urllib.request import Request, urlopen
 from urllib.error import HTTPError, URLError
 
 
 BATCH_SIZE = 100
+
+# Cache of directory listings for fuzzy matching (dir_path -> {prefix -> full_path})
+_dir_cache: dict[str, dict[str, Path]] = {}
+
+
+def _fuzzy_find_file(conteudos_dir: Path, relative: str) -> Path | None:
+    """Find a file by matching the numeric prefix when exact path fails.
+
+    Handles garbled Unicode from ZIP extraction (e.g., 'pendência' -> 'penda╠Çncia').
+    """
+    parts = relative.rsplit("/", 1)
+    if len(parts) != 2:
+        return None
+    dir_rel, filename = parts
+
+    # Extract numeric prefix (e.g., "027704" from "027704_01. Abertura...")
+    underscore_idx = filename.find("_")
+    if underscore_idx <= 0:
+        return None
+    prefix = filename[:underscore_idx + 1]  # include the underscore
+    ext = filename.rsplit(".", 1)[-1] if "." in filename else ""
+
+    # Walk up directories trying to find the parent (may also have garbled names)
+    dir_parts = dir_rel.split("/")
+    current = conteudos_dir
+
+    for i, part in enumerate(dir_parts):
+        target = current / part
+        if target.is_dir():
+            current = target
+        else:
+            # Try fuzzy match: normalize spaces and pick best match
+            found = False
+            if current.is_dir():
+                # Normalize: collapse multiple spaces to single for comparison
+                part_norm = " ".join(part.split())
+                best_match = None
+                best_score = 0
+                for d in current.iterdir():
+                    if not d.is_dir():
+                        continue
+                    d_norm = " ".join(d.name.split())
+                    if d_norm == part_norm:
+                        # Exact match after space normalization
+                        best_match = d
+                        break
+                    # Fallback: prefix match with longest common prefix
+                    common = 0
+                    for a, b in zip(d_norm, part_norm):
+                        if a == b:
+                            common += 1
+                        else:
+                            break
+                    if common > best_score and common >= min(8, len(part_norm)):
+                        best_score = common
+                        best_match = d
+                if best_match:
+                    current = best_match
+                    found = True
+            if not found:
+                return None
+
+    # Now search in the resolved directory for the file by prefix
+    cache_key = str(current)
+    if cache_key not in _dir_cache:
+        _dir_cache[cache_key] = {}
+        if current.is_dir():
+            for f in current.iterdir():
+                if f.is_file():
+                    _dir_cache[cache_key][f.name] = f
+
+    for fname, fpath in _dir_cache[cache_key].items():
+        if fname.startswith(prefix) and fname.endswith(f".{ext}"):
+            return fpath
+
+    return None
 
 
 def load_file_content(row: dict, field: str, conteudos_dir: Path) -> str | None:
@@ -41,7 +118,11 @@ def load_file_content(row: dict, field: str, conteudos_dir: Path) -> str | None:
     relative = normalized[idx + len(marker):]
     filepath = conteudos_dir / relative
     if not filepath.exists():
-        return None
+        # Filesystem may have garbled encoding from ZIP extraction
+        # Try matching by directory + filename number prefix
+        filepath = _fuzzy_find_file(conteudos_dir, relative)
+        if filepath is None:
+            return None
     for encoding in ("utf-8-sig", "utf-8", "latin-1", "cp1252"):
         try:
             return filepath.read_text(encoding=encoding)
@@ -140,6 +221,8 @@ def main():
     parser.add_argument("--api-key", required=True, help="HELPCORE_AUTH_SECRET value")
     parser.add_argument("--dry-run", action="store_true", help="Parse only, no requests")
     parser.add_argument("--batch-size", type=int, default=BATCH_SIZE)
+    parser.add_argument("--skip-batches", type=int, default=0,
+                        help="Skip first N batches (for resuming)")
     args = parser.parse_args()
 
     manifest_path = Path(args.manifest)
@@ -163,7 +246,29 @@ def main():
     total_updated = 0
     total_not_found = 0
     total_with_content = 0
+    total_errors = 0
     batch_num = 0
+    failed_batches: list[int] = []
+
+    def process_batch(batch_num: int, batch: list[dict]) -> None:
+        nonlocal total_sent, total_updated, total_not_found, total_errors
+        if batch_num <= args.skip_batches:
+            return
+        if args.dry_run:
+            print(f"  [DRY-RUN] Batch {batch_num}: {len(batch)} articles")
+            total_sent += len(batch)
+            return
+        print(f"  Sending batch {batch_num} ({len(batch)} articles)...", end=" ")
+        try:
+            result = send_batch(batch, args.url, args.api_key)
+            total_sent += len(batch)
+            total_updated += result.get("updated", 0)
+            total_not_found += result.get("not_found", 0)
+            print(f"updated={result.get('updated', 0)}, not_found={result.get('not_found', 0)}")
+        except Exception as e:
+            total_errors += len(batch)
+            failed_batches.append(batch_num)
+            print(f"FAILED ({e}), skipping...")
 
     for record in iter_manifest(manifest_path, conteudos_dir):
         total_with_content += 1
@@ -171,31 +276,13 @@ def main():
 
         if len(batch) >= args.batch_size:
             batch_num += 1
-            if args.dry_run:
-                print(f"  [DRY-RUN] Batch {batch_num}: {len(batch)} articles")
-                total_sent += len(batch)
-            else:
-                print(f"  Sending batch {batch_num} ({len(batch)} articles)...", end=" ")
-                result = send_batch(batch, args.url, args.api_key)
-                total_sent += len(batch)
-                total_updated += result.get("updated", 0)
-                total_not_found += result.get("not_found", 0)
-                print(f"updated={result.get('updated', 0)}, not_found={result.get('not_found', 0)}")
+            process_batch(batch_num, batch)
             batch = []
 
     # Send remaining
     if batch:
         batch_num += 1
-        if args.dry_run:
-            print(f"  [DRY-RUN] Batch {batch_num}: {len(batch)} articles")
-            total_sent += len(batch)
-        else:
-            print(f"  Sending batch {batch_num} ({len(batch)} articles)...", end=" ")
-            result = send_batch(batch, args.url, args.api_key)
-            total_sent += len(batch)
-            total_updated += result.get("updated", 0)
-            total_not_found += result.get("not_found", 0)
-            print(f"updated={result.get('updated', 0)}, not_found={result.get('not_found', 0)}")
+        process_batch(batch_num, batch)
 
     print()
     print("=" * 50)
@@ -204,6 +291,9 @@ def main():
     if not args.dry_run:
         print(f"Articles updated in DB:      {total_updated}")
         print(f"Articles not found in DB:    {total_not_found}")
+        print(f"Articles with errors:        {total_errors}")
+        if failed_batches:
+            print(f"Failed batches:              {failed_batches}")
     print("Done!")
 
 
