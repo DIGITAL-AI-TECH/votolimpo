@@ -239,6 +239,16 @@ async def main():
             else:
                 print("[ensure-schema] pipelines: all columns OK")
 
+            # Drop NOT NULL on columns that the orchestrator doesn't populate
+            for col in ['config']:
+                has_col = col in pip_cols
+                if has_col:
+                    await conn.execute(
+                        f"ALTER TABLE processing_engine.pipelines "
+                        f"ALTER COLUMN {col} DROP NOT NULL"
+                    )
+                    print(f"[ensure-schema] pipelines: dropped NOT NULL on {col}")
+
             # Ensure UNIQUE constraint on name (needed for ON CONFLICT)
             has_unique = await conn.fetchval(
                 "SELECT EXISTS (SELECT 1 FROM pg_constraint c "
