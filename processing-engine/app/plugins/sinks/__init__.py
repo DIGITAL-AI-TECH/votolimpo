@@ -160,11 +160,22 @@ class PostgreSQLSink:
 
         # Type casts for enum/custom PostgreSQL types (e.g. {"severity": "votolimpo.severity_level"})
         # Validate all type_cast values to prevent SQL injection (P1-05 fix)
+        # Supports both dict format {"col": "type"} and list format [{"column": "col", "type": "type"}]
         type_casts = {}
-        for tc_col, tc_type in config.get("type_casts", {}).items():
-            validate_sql_identifier(tc_col, "type_cast column")
-            validate_sql_identifier(tc_type, "type_cast type")
-            type_casts[tc_col] = tc_type
+        raw_tc = config.get("type_casts", {})
+        if isinstance(raw_tc, list):
+            for entry in raw_tc:
+                tc_col = entry.get("column", "")
+                tc_type = entry.get("type", "")
+                if tc_col and tc_type:
+                    validate_sql_identifier(tc_col, "type_cast column")
+                    validate_sql_identifier(tc_type, "type_cast type")
+                    type_casts[tc_col] = tc_type
+        elif isinstance(raw_tc, dict):
+            for tc_col, tc_type in raw_tc.items():
+                validate_sql_identifier(tc_col, "type_cast column")
+                validate_sql_identifier(tc_type, "type_cast type")
+                type_casts[tc_col] = tc_type
 
         # Columns that should be passed as native PostgreSQL arrays (not JSON strings)
         array_columns = set(config.get("array_columns", []))
