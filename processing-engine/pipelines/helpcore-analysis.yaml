@@ -355,10 +355,10 @@ sink_config:
     inventory.summary: summary
     inventory.requires_update: requires_update
     inventory.has_mandatory_fields: has_mandatory_fields
-    inventory.mandatory_fields_missing: mandatory_fields_missing
+    inventory.mandatory_fields_missing: missing_mandatory_fields
     inventory.estimated_word_count: estimated_word_count
     inventory.language_issues: language_issues
-    inventory.confidence: classification_confidence
+    inventory.confidence: confidence
     inventory.steps: steps
     inventory.area_operacional: area_operacional
     inventory.complexity_level: complexity_level
@@ -367,7 +367,7 @@ sink_config:
     # Quality
     quality.clarity: clarity
     quality.structure: structure
-    quality.completeness: quality_completeness
+    quality.completeness: completeness
     quality.accuracy_signals: accuracy_signals
     quality.readability: readability
     quality.overall_score: overall_score
@@ -383,13 +383,23 @@ sink_config:
     source_url: source_url
     pe_item_id: pe_item_id
   jsonb_fallback: metadata
-  array_columns:
-    - key_topics
-    - improvement_suggestions
-    - mandatory_fields_missing
-    - language_issues
-    - steps
-    - mentions_systems
+  type_casts:
+    - column: key_topics
+      type: jsonb
+    - column: improvement_suggestions
+      type: jsonb
+    - column: missing_mandatory_fields
+      type: jsonb
+    - column: language_issues
+      type: jsonb
+    - column: steps
+      type: jsonb
+    - column: mentions_systems
+      type: jsonb
+    - column: actionable_items
+      type: jsonb
+    - column: metadata
+      type: jsonb
   static_columns:
     prompt_version: "v2.2"
   sql_defaults:

@@ -62,6 +62,8 @@ model AnalysisResult {
   missing_mandatory_fields Json?
   mentions_systems         Json?
   escalation_present       Boolean?
+  complexity_level         String?
+  estimated_word_count     Int?
   has_internal_conflicts   Boolean?
   internal_conflict_details String?
   area_operacional         String?

@@ -60,6 +60,10 @@ async def test():
 asyncio.run(test())
 ' || echo "WARNING: preflight test script failed (non-fatal)"
 
+# Pre-migration: ensure critical columns/tables exist (idempotent)
+echo "Running pre-migration schema checks..."
+python scripts/ensure-schema.py || echo "WARNING: ensure-schema failed (non-fatal)"
+
 echo "Running database migrations..."
 MAX_RETRIES=30
 RETRY_INTERVAL=2
