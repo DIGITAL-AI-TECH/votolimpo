@@ -148,6 +148,7 @@ def _register_all():
     from .article_matcher import ArticleMatcher
     from .cluster_updater import ClusterUpdater
     from .entity_resolver import EntityResolver
+    from .helpcore_score_recalculator import HelpCoreScoreRecalculator
     from .markdown_generator import MarkdownGenerator
     from .milestone_detector import MilestoneDetector
     from .relationship_builder import RelationshipBuilder
@@ -163,6 +164,7 @@ def _register_all():
             "milestone_detector": MilestoneDetector,
             "article_matcher": ArticleMatcher,
             "cluster_updater": ClusterUpdater,
+            "helpcore_score_recalculator": HelpCoreScoreRecalculator,
             "markdown_generator": MarkdownGenerator,
         }
     )

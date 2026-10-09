@@ -50,9 +50,10 @@ services:
     environment:
       API_KEY: "${HC_API_KEY}"
       DATABASE_URL: "${HC_DATABASE_URL}"
-      HELPCORE_DATABASE_URL: "${HC_HELPCORE_DATABASE_URL}"
-      # VOTOLIMPO_DATABASE_URL mapeado para help_core — compatibilidade com sink do PE
-      VOTOLIMPO_DATABASE_URL: "${HC_HELPCORE_DATABASE_URL}"
+      # HELPCORE + VOTOLIMPO ambos apontam para processing_engine DB
+      # (mesma DB onde Prisma/plataforma lê, schema help_core)
+      HELPCORE_DATABASE_URL: "${HC_DATABASE_URL}"
+      VOTOLIMPO_DATABASE_URL: "${HC_DATABASE_URL}"
       OPENAI_API_KEY: "${HC_OPENAI_API_KEY}"
       # ANTHROPIC_API_KEY: "${HC_ANTHROPIC_API_KEY}"  # descomente quando Frente 2 estiver disponível
       ENGINE_ROLE: "both"

@@ -37,6 +37,7 @@ model Article {
   analysis_results AnalysisResult[]
   source_relationships ArticleRelationship[] @relation("SourceArticle")
   target_relationships ArticleRelationship[] @relation("TargetArticle")
+  changes ArticleChange[]
 
   @@schema("help_core")
   @@map("articles")
@@ -83,6 +84,28 @@ model AnalysisResult {
   prompt_version           String?
   processed_at             DateTime? @db.Timestamptz
 
+  // Computed fields (calculated by helpcore_compute_fields.py, not LLM)
+  char_count               Int?
+  word_count               Int?
+  sentence_count           Int?
+  paragraph_count          Int?
+  line_count               Int?
+  avg_sentence_length      Decimal?
+  reading_time_seconds     Int?
+  has_numbered_steps       Boolean?
+  has_bullet_points        Boolean?
+  has_headers              Boolean?
+  has_tables               Boolean?
+  has_images               Boolean?
+  uppercase_ratio          Decimal?
+  content_hash             String?
+  link_count               Int?
+  title_word_count         Int?
+
+  // Change tracking
+  analyzed_content_hash    String?
+  analysis_status          String   @default("completed")
+
   article       Article?       @relation(fields: [article_id], references: [id])
   review_actions ReviewAction[]
 
@@ -116,4 +139,22 @@ model ArticleRelationship {
 
   @@schema("help_core")
   @@map("article_relationships")
+}
+
+model ArticleChange {
+  id                     Int      @id @default(autoincrement())
+  article_id             Int
+  detected_at            DateTime @default(now()) @db.Timestamptz
+  previous_hash          String
+  new_hash               String
+  change_type            String   @default("content_modified")
+  fields_changed         String[]
+  triggered_reprocessing Boolean  @default(true)
+
+  article Article @relation(fields: [article_id], references: [id])
+
+  @@schema("help_core")
+  @@map("article_changes")
+  @@index([article_id])
+  @@index([detected_at])
 }

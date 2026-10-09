@@ -367,23 +367,12 @@ async def main():
             print("[ensure-schema] pipelines: CREATED")
 
         # --- 2. Ensure help_core schema in processing_engine db ---
+        # ALL help_core tables live in schema help_core WITHIN the processing_engine
+        # database. The helpcore-platform (Prisma) connects to processing_engine with
+        # schemas=["help_core","processing_engine"]. The PE sink also writes here.
+        # There is NO separate "help_core" database — everything is in processing_engine.
         await conn.execute("CREATE SCHEMA IF NOT EXISTS help_core")
-        print("[ensure-schema] help_core schema in pe db: OK")
-
-        print("[ensure-schema] processing_engine DB done. Connecting to help_core DB...")
-        await conn.close()
-
-        # Connect to the help_core DATABASE (separate from processing_engine)
-        # The sink uses HELPCORE_DATABASE_URL which points to db=help_core
-        conn = await asyncpg.connect(
-            host=host, port=port, user=user, password=password,
-            database="help_core", timeout=15
-        )
-        print("[ensure-schema] Connected to help_core database")
-
-        # Ensure help_core schema exists in this database too
-        await conn.execute("CREATE SCHEMA IF NOT EXISTS help_core")
-        print("[ensure-schema] help_core schema: OK")
+        print("[ensure-schema] help_core schema in processing_engine db: OK")
 
         # --- 3. help_core.analysis_results (INT ids, matching Prisma) ---
         ar_exists = await conn.fetchval(
@@ -441,6 +430,10 @@ async def main():
                     -- CONTENT
                     markdown_content            TEXT,
 
+                    -- CHANGE TRACKING
+                    analyzed_content_hash   TEXT,
+                    analysis_status         TEXT NOT NULL DEFAULT 'completed',
+
                     -- TRACEABILITY
                     prompt_version              TEXT,
                     prompt_tokens               INTEGER,
@@ -450,6 +443,24 @@ async def main():
                     processed_at                TIMESTAMPTZ,
                     created_at                  TIMESTAMPTZ NOT NULL DEFAULT now(),
                     updated_at                  TIMESTAMPTZ NOT NULL DEFAULT now(),
+
+                    -- COMPUTED FIELDS (calculated by helpcore_compute_fields.py)
+                    char_count                  INTEGER,
+                    word_count                  INTEGER,
+                    sentence_count              INTEGER,
+                    paragraph_count             INTEGER,
+                    line_count                  INTEGER,
+                    avg_sentence_length         DECIMAL,
+                    reading_time_seconds        INTEGER,
+                    has_numbered_steps          BOOLEAN,
+                    has_bullet_points           BOOLEAN,
+                    has_headers                 BOOLEAN,
+                    has_tables                  BOOLEAN,
+                    has_images                  BOOLEAN,
+                    uppercase_ratio             DECIMAL,
+                    content_hash                TEXT,
+                    link_count                  INTEGER,
+                    title_word_count            INTEGER,
 
                     CONSTRAINT analysis_results_pe_item_id_unique UNIQUE (pe_item_id)
                 )
@@ -492,6 +503,26 @@ async def main():
                 "completeness": "DECIMAL",
                 "missing_mandatory_fields": "JSONB",
                 "content_genericness": "TEXT",
+                # Computed fields (calculated by helpcore_compute_fields.py)
+                "char_count": "INTEGER",
+                "word_count": "INTEGER",
+                "sentence_count": "INTEGER",
+                "paragraph_count": "INTEGER",
+                "line_count": "INTEGER",
+                "avg_sentence_length": "DECIMAL",
+                "reading_time_seconds": "INTEGER",
+                "has_numbered_steps": "BOOLEAN",
+                "has_bullet_points": "BOOLEAN",
+                "has_headers": "BOOLEAN",
+                "has_tables": "BOOLEAN",
+                "has_images": "BOOLEAN",
+                "uppercase_ratio": "DECIMAL",
+                "content_hash": "TEXT",
+                "link_count": "INTEGER",
+                "title_word_count": "INTEGER",
+                # Change tracking
+                "analyzed_content_hash": "TEXT",
+                "analysis_status": "TEXT NOT NULL DEFAULT 'completed'",
             }
             missing = {k: v for k, v in needed_cols.items() if k not in cols}
             if missing:
@@ -559,6 +590,39 @@ async def main():
             print("[ensure-schema] help_core.article_relationships: CREATED")
         else:
             print("[ensure-schema] article_relationships: exists")
+
+        # --- 6. help_core.article_changes ---
+        ac_exists = await conn.fetchval(
+            "SELECT EXISTS (SELECT 1 FROM information_schema.tables "
+            "WHERE table_schema='help_core' AND table_name='article_changes')"
+        )
+        if not ac_exists:
+            print("[ensure-schema] Creating help_core.article_changes...")
+            await conn.execute("""
+                CREATE TABLE help_core.article_changes (
+                    id                      SERIAL PRIMARY KEY,
+                    article_id              INTEGER NOT NULL,
+                    detected_at             TIMESTAMPTZ NOT NULL DEFAULT now(),
+                    previous_hash           TEXT NOT NULL,
+                    new_hash                TEXT NOT NULL,
+                    change_type             TEXT NOT NULL DEFAULT 'content_modified',
+                    fields_changed          TEXT[],
+                    triggered_reprocessing  BOOLEAN NOT NULL DEFAULT true,
+                    CONSTRAINT fk_article_changes_article
+                        FOREIGN KEY (article_id) REFERENCES help_core.articles(id)
+                )
+            """)
+            await conn.execute(
+                "CREATE INDEX IF NOT EXISTS idx_article_changes_article_id "
+                "ON help_core.article_changes (article_id)"
+            )
+            await conn.execute(
+                "CREATE INDEX IF NOT EXISTS idx_article_changes_detected_at "
+                "ON help_core.article_changes (detected_at)"
+            )
+            print("[ensure-schema] help_core.article_changes: CREATED")
+        else:
+            print("[ensure-schema] article_changes: OK")
 
         print("[ensure-schema] Done — all critical tables/columns ensured.")
 
