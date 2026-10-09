@@ -15,12 +15,18 @@ MAX_RETRIES = 3
 
 # Pricing ($/1M tokens: [input, output])
 ANTHROPIC_MODEL_PRICING: dict[str, tuple[float, float]] = {
-    "claude-sonnet-4-20250514": (3.00, 15.00),
-    "claude-haiku-3-5-20241022": (0.80, 4.00),
-    "claude-opus-4-20250514": (15.00, 75.00),
+    "claude-sonnet-4-5-20250929": (3.00, 15.00),
+    "claude-haiku-4-5-20251001": (0.80, 4.00),
+    "claude-sonnet-4-6": (3.00, 15.00),
+    "claude-opus-4-6": (15.00, 75.00),
 }
 
-DEFAULT_MODEL = "claude-sonnet-4-20250514"
+DEFAULT_MODEL = "claude-sonnet-4-5-20250929"
+
+
+def _is_oauth_token(key: str) -> bool:
+    """Detect OAuth tokens (sk-ant-oat*) vs regular API keys (sk-ant-api*)."""
+    return key.startswith("sk-ant-oat")
 
 
 def _estimate_anthropic_cost(model: str, input_tokens: int, output_tokens: int) -> float:
@@ -34,7 +40,12 @@ def _estimate_anthropic_cost(model: str, input_tokens: int, output_tokens: int) 
 
 
 class AnthropicProvider:
-    """Anthropic Claude provider com structured output via tool_use."""
+    """Anthropic Claude provider com structured output via tool_use.
+
+    Supports both regular API keys (sk-ant-api*) and OAuth tokens
+    (sk-ant-oat*) from Anthropic subscriptions. OAuth tokens use
+    Authorization: Bearer header + anthropic-beta: oauth-2025-04-20.
+    """
 
     def __init__(self):
         self._client: AsyncAnthropic | None = None
@@ -42,7 +53,16 @@ class AnthropicProvider:
     @property
     def client(self) -> AsyncAnthropic:
         if self._client is None:
-            self._client = AsyncAnthropic(api_key=settings.anthropic_api_key)
+            key = settings.anthropic_api_key
+            if _is_oauth_token(key):
+                logger.info("Using OAuth token auth (Authorization: Bearer)")
+                self._client = AsyncAnthropic(
+                    auth_token=key,
+                    default_headers={"anthropic-beta": "oauth-2025-04-20"},
+                )
+            else:
+                logger.info("Using API key auth (x-api-key)")
+                self._client = AsyncAnthropic(api_key=key)
         return self._client
 
     async def process(
