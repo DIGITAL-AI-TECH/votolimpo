@@ -129,6 +129,17 @@ async def main():
                 ji_needed = {
                     "content": "TEXT",
                     "pipeline_id": "UUID",
+                    "url_hash": "TEXT",
+                    "content_hash": "TEXT",
+                    "content_type": "TEXT NOT NULL DEFAULT 'text/plain'",
+                    "source_url": "TEXT",
+                    "raw_content": "TEXT",
+                    "output": "JSONB",
+                    "dedup_result": "TEXT",
+                    "dedup_matched_item_id": "UUID",
+                    "metadata": "JSONB DEFAULT '{}'",
+                    "cached": "BOOLEAN NOT NULL DEFAULT false",
+                    "retry_count": "INTEGER NOT NULL DEFAULT 0",
                     "prompt_tokens": "INTEGER NOT NULL DEFAULT 0",
                     "completion_tokens": "INTEGER NOT NULL DEFAULT 0",
                     "total_tokens": "INTEGER NOT NULL DEFAULT 0",
@@ -138,6 +149,8 @@ async def main():
                     "updated_at": "TIMESTAMPTZ DEFAULT now()",
                     "validation_errors": "JSONB NOT NULL DEFAULT '[]'",
                     "usage": "JSONB",
+                    "processing_started_at": "TIMESTAMPTZ",
+                    "processing_completed_at": "TIMESTAMPTZ",
                 }
                 ji_missing = {k: v for k, v in ji_needed.items() if k not in ji_cols}
                 if ji_missing:
